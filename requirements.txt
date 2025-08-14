@@ -1,0 +1,6 @@
+flask
+flask_session
+requests
+numpy
+pandas
+cs50
