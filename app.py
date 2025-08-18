@@ -252,4 +252,4 @@ def lockin():
 @app.route("/admin", methods=["GET", "POST"])
 @admin_login_required
 def admin():
-    return render_template
+    return render_template("placeholder.html")

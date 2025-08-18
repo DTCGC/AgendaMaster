@@ -19,12 +19,11 @@ def login_required(f):
     return decorated_function
 
 def admin_login_required(f):
-    
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if session.get("user_id") is None:
             return redirect("/login")
         elif session.get("user_id") == 2:
             abort(451)
-            return f(*args, **kwargs)
+        return f(*args, **kwargs)
     return decorated_function
