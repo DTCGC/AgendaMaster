@@ -11,7 +11,6 @@ app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 db = SQL("sqlite:///database.db")
 
-
 @app.after_request
 def after_request(response):
     """Ensure responses aren't cached"""
@@ -31,7 +30,13 @@ def baduser(e):
 
 @app.errorhandler(404)
 def not_found(e):
+    print(session["user_id"])
     return render_template("errors/404.html")
+
+@app.errorhandler(451)
+def not_found(e):
+    return render_template("errors/451.html")
+
 
 @app.route("/")
 @login_required

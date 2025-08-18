@@ -1,6 +1,6 @@
 import requests
 
-from flask import redirect, render_template, session
+from flask import redirect, render_template, session, abort
 from functools import wraps
 
 def login_required(f):
@@ -18,3 +18,9 @@ def login_required(f):
 
     return decorated_function
 
+def admin_required(f):
+    
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if session.get("user_id") == 2:
+            abort
