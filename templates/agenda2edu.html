@@ -43,7 +43,7 @@
   </div>
   <script>
     async function loadCSV() {
-      const response = await fetch("/static/temp.csv"); // Make sure the CSV file is in the same directory or adjust path
+      const response = await fetch("/static/temp_edu.csv"); // Make sure the CSV file is in the same directory or adjust path
       const csvText = await response.text();
 
       const rows = csvText.trim().split("\n");

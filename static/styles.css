@@ -1,53 +1,55 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap");
 
 html {
-    font-size: 16px;
-    font-family: "Montserrat", 'Times New Roman';
+  font-size: 16px;
+  font-family: "Montserrat", "Times New Roman";
 }
 body {
-    font-size: 1rem;
-    font-family: "Montserrat", "Times New Roman";
+  font-size: 1rem;
+  font-family: "Montserrat", "Times New Roman";
 }
 .title {
-    margin-top: 20px;
-    font-size: 2rem;
-    text-align: center;
-    font-family: "Montserrat", "Times New Roman";
-    font-weight: bold;
-
+  margin-top: 20px;
+  font-size: 2rem;
+  text-align: center;
+  font-family: "Montserrat", "Times New Roman";
+  font-weight: bold;
 }
 #logo {
-    margin: 0 auto;
-    display: block;
-    margin-bottom: 40px;
+  margin: 0 auto;
+  display: block;
+  margin-bottom: 40px;
 }
 #login-button {
-    display: block;
-    margin: 0 auto;
+  display: block;
+  margin: 0 auto;
 }
 .verdict {
-    color: red;
+  color: red;
 }
 .subheader {
-    margin-top: 200px;
-    margin-bottom: 40px;
+  margin-top: 200px;
+  margin-bottom: 40px;
 }
 .btn {
-    margin: 10px 0px;
+  margin: 10px 0px;
 }
 #loginform {
-   margin-top: 200px;
+  margin-top: 200px;
 }
 #agenda {
-    text-align: center;
+  text-align: center;
 }
 .error {
-    background-color: black;
-    display: block;
-    margin: 0 auto;
-    text-align: center;
+  background-color: black;
+  display: block;
+  margin: 0 auto;
+  text-align: center;
 }
 .agenda {
-    font-size: 2rem;
-    color: red;
+  font-size: 2rem;
+  color: red;
+}
+#education-only {
+  display: none;
 }

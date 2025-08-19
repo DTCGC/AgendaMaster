@@ -22,14 +22,9 @@
   </head>
 
   <body>
-    <h1 class="title">Create New Agenda For Meeting: Step 1/4</h1>
+    <h1 class="title">Create New Agenda For Meeting: Step 1.5/4</h1>
     <form method="get" action="/agenda/2">
-      <select class="form-select" name="meetingType" id="meetingType" required>
-        <option selected disabled value="">Meeting Type:</option>
-        <option value="normal">Normal Meeting</option>
-        <option value="education">Education Session</option>
-        <option disabled value="debate">Debate Meeting</option>
-      </select>
+      <input type="text" class="form-control" id="educator" name="educator" required>
       <button type="submit" class="btn btn-primary">Next</button>
     </form>
   </body>
