@@ -79,6 +79,12 @@ def logout():
 def agenda():
     return render_template("agenda1.html")
 
+@app.route("/agenda/", methods=["GET", "POST"])
+@login_required
+def mistaken_path():
+    return redirect("/agenda")
+
+
 @app.route("/agenda/2", methods=["GET", "POST"])
 def step2():
     meetingType = request.args.get("meetingType")
@@ -128,20 +134,38 @@ def step2():
 
         # Start by populating major roles
         index = 0
-        for i in range(len(roleids[index])):
-            entry = roleids[0][i]
-
+        mjr_df = pd.read_csv("static/majorroles.csv")
+        mjr_df.columns = mjr_df.columns.str.strip()
+        print(mjr_df)
+        # for i in range(len(roleids[index])):
+        #     entry = roleids[0][i]
+        #     # hardcoded with magic numbers, but i kinda dont give a shit
+        #     if isinstance(entry, list):
+        #         if entry[0] == 1:
+        #             for idx in entry:
+        #                 df.at[idx, "Name"] = mjr_df.at[0, 'person']
+        #                 appended = mjr_df.at[0, 'person']
+        #         elif entry[0] == 5:
+        #             for idx in entry:
+        #                 df.at[idx, "Name"] = mjr_df.at[5, 'person']
+        #                 appended = mjr_df.at[5, 'person']
+        #     else:
+        #         df.at[entry, "Name"] = mjr_df.at[i, 'person']
+        #         appended = mjr_df.at[i, 'person']
+        #     takens.append(appended)
+        #     dicttakens.append({"major_role_date":appended})
+        for entry in roleids[index]:
             if isinstance(entry, list):
+                row_id = entry[0]
                 for idx in entry:
-                    df.at[idx, "Name"] = mjr[0]["name"]
-                    print("Successfully added", mjr[0]["name"], "to", df.loc[idx])
-
+                    df.at[idx, "Name"] = mjr_df.at[row_id, 'person']
+                appended = mjr_df.at[row_id, 'person']
             else:
-                df.at[entry, "Name"] = mjr[0]["name"]
-                print("Successfully added", mjr[0]["name"], "to", df.loc[entry])
-            takens.append(mjr[0]["name"])
-            dicttakens.append({"major_role_date":mjr[0]["name"]})
-            mjr.pop(0)
+                df.at[entry, "Name"] = mjr_df.at[entry, 'person']
+                appended = mjr_df.at[entry, 'person']
+
+            takens.append(appended)
+            dicttakens.append({"major_role_date": appended})
         index += 1
         '''Populate Minor Roles, in this order: Timer, Grammarian, FWC, Evaluator'''
 
