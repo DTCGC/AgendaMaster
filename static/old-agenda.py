@@ -132,3 +132,43 @@
 
         df.to_csv("static/temp.csv", index=False)
     return render_template("agenda.html")
+
+
+
+
+@app.route("/lock-in", methods=["GET", "POST"])
+@login_required
+def lockin():
+    if request.method == "POST":
+        for i in range(10): print("posted")
+        df = pd.read_csv("static/temp.csv")
+        print(df.to_string())
+        try:
+            if not dicttakens or not takens:
+                abort(400)
+        except NameError:
+            abort(400)
+        now = str(round(datetime.datetime.now().timestamp()))
+        print(now)
+        for item in dicttakens:
+            key = list(item.keys())
+            key = key[0]
+            print(item)
+            name = item[key]
+            # confirmation = input("About to update db. Continue? (ENTER ANY VALUE TO CONTINUE)")
+            db.execute("UPDATE members SET ? = ? WHERE name = ?", key, now, name)
+        
+        if not pd.isna(df.at[1, "Name"]):
+            now = datetime.datetime.now().strftime("%Y-%m-%d")
+            shutil.copy("static/temp.csv", "static/agendalog/agenda-{}.csv".format(now))
+            agendaname = "agenda-{}.csv".format(now)
+            directory = Path("static/agendalog")
+            latest_file = max(directory.glob("*"), key=lambda f: f.stat().st_mtime)
+            return render_template("lock-in.html", agendaname=agendaname, download=latest_file)
+        else:
+            abort(400)
+        return redirect("/agenda")
+    elif request.method == "GET":
+        return redirect("/agenda")
+    else:
+        abort(405)
