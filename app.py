@@ -108,7 +108,12 @@ def step2():
 # @login_required
 # def edustep2():
 #     return render_template("agenda1edu.html")
-
+@app.route("/agenda/3", methods=["GET", "POST"])
+@login_required
+def step3():
+    if request.method != "POST":
+        abort(400)
+    return render_template("test.html", verdict=request.form.get("meettype"))
 
 
 
