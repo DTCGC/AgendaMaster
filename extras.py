@@ -2,6 +2,9 @@ import requests
 import pandas as pd, random
 from flask import redirect, render_template, session, abort
 from functools import wraps
+import sqlite3, csv, os
+from dataclasses import dataclass
+from typing import List, Dict, Optional
 
 def login_required(f):
     """
@@ -313,12 +316,10 @@ def edumeeting(db):
         df.to_csv("static/temp_edu.csv", index=False)
 
 
-import sqlite3, csv, os
-from dataclasses import dataclass
-from typing import List, Dict, Optional
+
 
 DB_PATH = "database.db"
-MAJOR_ROLES_CSV = "major_roles.csv"
+MAJOR_ROLES_CSV = "static/major_roles.csv"
 
 @dataclass
 class Member:
