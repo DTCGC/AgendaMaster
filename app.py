@@ -34,7 +34,7 @@ def not_found(e):
     return render_template("errors/404.html")
 
 @app.errorhandler(451)
-def not_found(e):
+def fahrenheit(e):
     return render_template("errors/451.html")
 
 
