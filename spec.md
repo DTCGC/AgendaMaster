@@ -55,7 +55,7 @@ Build a full-stack web application to manage club operations, specifically autom
 ## 6. Admin Panel Functions
 * **Access:** Distinct UI space utilising the True Maroon colour scheme.
 * **Calendar Management:** Display a calendar filtered to Fridays. Allow the admin to toggle specific Fridays "Off" (no meeting). Globally disable meetings for July and August.
-* **Role Management:** View upcoming auto-generated meeting dates. The admin must designate the "Toastmaster" for the upcoming meeting; this assignment acts as the permission key unlocking the agenda creation workflow for that specific member. The admin can also pre-assign all other Major Roles for any future meeting.
+* **Role Management:** View upcoming auto-generated meeting dates. The admin must designate the "Toastmaster" for the upcoming meeting; this assignment acts as the permission key unlocking the agenda creation workflow for that specific member. The admin can also pre-assign all other Major Roles for any future meeting (Assign Major Roles).
 * **Account Approval:** View pending member account requests. Accept or deny them, triggering an automated notification email to the requester.
 * **Communications:** A dedicated rich-text editor to draft and send mass business announcements to the club mailing list.
 * **Archive:** View historical agendas and emails.

@@ -31,7 +31,7 @@ export async function getAutoAssignments(meetingId: string) {
   // Query all non-pending members
   const activeUsers = await db.user.findMany({
     where: {
-      role: { in: ['MEMBER', 'ADMIN'] }
+      role: 'MEMBER'
     },
     include: {
       roleAssignments: {

@@ -9,12 +9,7 @@ import { executeAgendaPipeline } from '@/app/actions/execute-agenda'
 import { MINOR_ROLES } from '@/lib/agenda-logic'
 
 // Boilerplate Template 
-const DEFAULT_TEMPLATE = `
-  <p>Good evening Toastmasters,</p>
-  <p>The theme for this week is: <strong>[THEME]</strong>!</p>
-  <p>Please review the attached agenda. If you cannot attend, please reply to this email to let us know immediately.</p>
-  <p>Best,<br>Toastmaster</p>
-`
+const DEFAULT_TEMPLATE = ``
 
 function WizardContent({ meetingId }: { meetingId: string }) {
   const searchParams = useSearchParams()
@@ -135,7 +130,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         const hasMajor = preAssigned.some(a => a.userId === selectedUser.id);
         
         if (hasOtherMinor || hasMajor) {
-            setConflictError(`${selectedUser.displayName} already holds a role. Enable 'Double Role Override' to bypass.`)
+            setConflictError(`${selectedUser.displayName} already holds a role. Enable 'Multiple Role Override' to bypass.`)
             setTimeout(() => setConflictError(null), 5000)
             return;
         }
@@ -161,7 +156,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         try {
           await executeAgendaPipeline(
             meetingId,
-            emailSubject || `DTCGC Agenda: ${meetingTheme}`,
+            emailSubject || `Gavel Club MM/DD - Theme`,
             emailDraft,
             meetingTheme || 'Meeting',
             meetingQotd || 'TBD'
@@ -187,7 +182,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
       // Execute the pipeline
       const result = await executeAgendaPipeline(
         meetingId,
-        emailSubject || `DTCGC Agenda: ${meetingTheme}`,
+        emailSubject || `Gavel Club MM/DD - Theme`,
         emailDraft,
         meetingTheme,
         meetingQotd || 'TBD'
@@ -266,7 +261,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                    {s === 1 && 'Draft'}
                    {s === 2 && 'Settings'}
                    {s === 3 && 'Roles'}
-                   {s === 4 && 'Execute'}
+                   {s === 4 && 'Finalize'}
                </span>
             </div>
           ))}
@@ -280,7 +275,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                 <div className="flex items-center justify-between">
                     <div>
                         <h3 className="text-brand-loyal-blue font-bold text-sm">Roster-Only Update Mode</h3>
-                        <p className="text-xs text-gray-500 max-w-md">Email and Settings will be bypassed. Changes you make here will instantly sync to the club dashboard upon saving.</p>
+                        <p className="text-xs text-gray-500 max-w-md">Email and Settings will be bypassed. Changes you make here will instantly update the club dashboard.</p>
                     </div>
                     <button 
                         onClick={handleFinish}
@@ -297,14 +292,19 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         {step === 1 && (
           <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
             <h2 className="text-xl font-bold border-l-4 pl-3 border-brand-loyal-blue">Email Draft</h2>
-            <p className="text-gray-600 text-sm">Draft the email body here. Progress is auto-saved locally.</p>
+            <div className="flex justify-between items-center text-sm">
+              <p className="text-gray-600">Draft the email body here. Progress is auto-saved locally.</p>
+              <a href="/assets/docs/toastmaster-tutorial.pdf" target="_blank" className="text-brand-loyal-blue font-bold flex items-center gap-1 hover:underline">
+                <AlertCircle size={14} /> How do I write the email?
+              </a>
+            </div>
             <div className="space-y-3">
                 <div>
                     <label className="text-sm font-semibold text-gray-600 block mb-1">Subject Line</label>
                     <input 
                         type="text" 
                         className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-brand-loyal-blue transition text-sm" 
-                        placeholder="DTCGC Agenda: [Theme]"
+                        placeholder="Gavel Club MM/DD - Theme"
                         value={emailSubject}
                         onChange={(e) => setEmailSubject(e.target.value)}
                     />
@@ -320,13 +320,13 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         {/* Step 2: Settings */}
         {step === 2 && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300 max-w-lg">
-             <h2 className="text-xl font-bold border-l-4 pl-3 border-brand-loyal-blue">Agenda Parameters</h2>
+             <h2 className="text-xl font-bold border-l-4 pl-3 border-brand-loyal-blue">Meeting Details</h2>
              <div className="space-y-2">
                  <label className="font-semibold text-sm">Meeting Type</label>
                  <select className="w-full border p-3 rounded" value={meetingType} onChange={(e) => setMeetingType(e.target.value)}>
                      <option value="Regular">Regular Meeting</option>
-                     <option value="Education">Education Session</option>
-                     <option value="Contest">Contest</option>
+                     <option value="Education" disabled>Education Session</option>
+                     <option value="Contest" disabled>Contest</option>
                  </select>
              </div>
              <div className="space-y-2">
@@ -346,14 +346,14 @@ function WizardContent({ meetingId }: { meetingId: string }) {
              <div className="flex justify-between items-center">
                  <h2 className="text-xl font-bold border-l-4 pl-3 border-brand-loyal-blue">Role Assignments</h2>
                  <div className="flex items-center text-sm bg-gray-100 p-2 rounded cursor-pointer border border-gray-200" onClick={() => setAllowDoubleRoles(!allowDoubleRoles)}>
-                     <span className={allowDoubleRoles ? 'text-brand-true-maroon font-bold mr-2' : 'text-gray-600 font-medium mr-2'}>Enable Double Role Override</span>
+                     <span className={allowDoubleRoles ? 'text-brand-true-maroon font-bold mr-2' : 'text-gray-600 font-medium mr-2'}>Allow Multiple Roles</span>
                      <input type="checkbox" className="accent-brand-true-maroon w-4 h-4 cursor-pointer" checked={allowDoubleRoles} readOnly />
                  </div>
              </div>
 
              {allowDoubleRoles && (
                  <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm border border-red-200 shadow-sm font-medium">
-                     <strong>Warning:</strong> Double roles are enabled. The heuristic shuffle has been paused. You must manually assign attendees to resolve conflicts.
+                     <strong>Warning:</strong> Double roles are enabled. Automatic role shuffle is paused. You must manually assign attendees to resolve conflicts.
                  </div>
              )}
 
@@ -365,7 +365,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
              )}
 
              {loadingRoles ? (
-                 <div className="py-12 text-center text-gray-400">Computing Historical Assignments...</div>
+                  <div className="py-12 text-center text-gray-400">Loading Role History...</div>
              ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
@@ -414,10 +414,10 @@ function WizardContent({ meetingId }: { meetingId: string }) {
 
                         <div className="pt-6 border-t border-gray-100">
                             <h3 className="font-bold text-gray-700 mb-2 border-b border-gray-100 pb-2 flex justify-between items-center text-sm">
-                                <span>Bench Roster</span>
+                                <span>Attendance List</span>
                                 <span className="bg-gray-100 text-gray-400 text-[10px] px-2 py-0.5 rounded-full font-normal">{unassigned.length} Available</span>
                             </h3>
-                            <p className="text-xs text-gray-400 mb-3">Members attending without a formal designated action role.</p>
+                            <p className="text-xs text-gray-400 mb-3">Members attending without a formal designated role.</p>
                             <div className="flex flex-wrap gap-1.5 text-xs">
                                 {unassigned.length > 0 ? unassigned.map(u => (
                                     <span key={u.id} className="bg-gray-50 border border-gray-200 px-2.5 py-1 text-gray-500 rounded-lg shadow-sm">{u.displayName}</span>
@@ -436,15 +436,15 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         {step === 4 && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
              <div className="bg-brand-loyal-blue/10 border-l-4 border-brand-loyal-blue p-6 rounded-r">
-                 <h2 className="text-lg font-bold text-brand-loyal-blue mb-1">Final Review & Execution</h2>
-                 <p className="text-sm text-gray-600">Review the summary below, then execute the automated pipeline to generate the Google Sheet and dispatch the email.</p>
+                 <h2 className="text-lg font-bold text-brand-loyal-blue mb-1">Final Review & Finish</h2>
+                 <p className="text-sm text-gray-600">Review the summary below, then create the agenda and send the meeting email.</p>
              </div>
              
              {/* Summary Preview */}
              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-gray-50 p-4 rounded-lg border flex-1">
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Email Subject</h3>
-                    <p className="text-sm font-semibold text-gray-800">{emailSubject || `DTCGC Agenda: ${meetingTheme}`}</p>
+                    <p className="text-sm font-semibold text-gray-800">{emailSubject || `Gavel Club MM/DD - Theme`}</p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg border flex-1">
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Meeting Theme</h3>
@@ -512,7 +512,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                 {initialStepParam === 3 ? 'Updating Sheet...' : 'Generating Sheet & Sending Email...'}
                             </>
                         ) : (
-                            initialStepParam === 3 ? 'Update Google Sheet' : 'Generate Google Sheet & Send Email'
+                            initialStepParam === 3 ? 'Update Agenda Sheet' : 'Create Agenda & Send Email'
                         )}
                     </button>
 
@@ -521,7 +521,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                             <div className="w-full border-t border-gray-200"></div>
                         </div>
                         <div className="relative flex justify-center text-xs">
-                            <span className="bg-white px-4 text-gray-400 font-bold uppercase tracking-widest">Manual Fallback</span>
+                            <span className="bg-white px-4 text-gray-400 font-bold uppercase tracking-widest">Manual Copy</span>
                         </div>
                     </div>
 

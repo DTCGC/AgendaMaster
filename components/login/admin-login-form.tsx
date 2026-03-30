@@ -66,7 +66,7 @@ export default function AdminLoginForm() {
                 <input 
                     name="password" 
                     type="password" 
-                    placeholder="Access Key" 
+                    placeholder="Administrator Password" 
                     required 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

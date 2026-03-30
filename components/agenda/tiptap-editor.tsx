@@ -124,7 +124,17 @@ export default function TiptapEditor({
           <ListOrdered size={18} />
         </button>
       </div>
-      <EditorContent editor={editor} className="flex-grow" />
+      <div className="relative flex-grow">
+        {editor.isEmpty && (
+          <div className="absolute inset-0 p-6 text-gray-400/70 pointer-events-none prose prose-sm sm:prose lg:prose-lg max-w-none">
+            <p>Good evening Toastmasters,</p>
+            <p>The theme for this week is: <strong>[THEME]</strong>!</p>
+            <p>Please review the attached agenda. If you cannot attend, please reply to this email to let us know immediately.</p>
+            <p>Best,<br/>Toastmaster</p>
+          </div>
+        )}
+        <EditorContent editor={editor} className="h-full" />
+      </div>
     </div>
   )
 }

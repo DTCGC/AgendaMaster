@@ -40,7 +40,10 @@ export async function toggleMeeting(dateIso: string, existingId?: string) {
         
         await db.meeting.update({
             where: { id: existingId },
-            data: { status: newStatus as any }
+            data: { 
+                status: newStatus as any,
+                ...(newStatus === 'CANCELLED' ? { theme: null } : {})
+            }
         });
 
         // WIPE initialized agenda when toggled off/on for testing purpose

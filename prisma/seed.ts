@@ -12,7 +12,7 @@ const prisma = new PrismaClient({ adapter })
 
 async function main() {
   // --- 1. Seed Meeting Templates from CSV ---
-  const csvPath = path.join(process.cwd(), 'Gavel Club MM_DD - [MEETING THEME HERE] - Sheet1.csv');
+  const csvPath = path.join(process.cwd(), 'public', 'assets', 'templates', 'agenda-template.csv');
   const csvContent = fs.readFileSync(csvPath, 'utf-8');
 
   const existingRegular = await prisma.meetingTemplate.findFirst({

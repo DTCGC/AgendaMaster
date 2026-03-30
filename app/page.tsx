@@ -36,15 +36,9 @@ export default async function LandingPage() {
             <>
                 <Link 
                     href="/login" 
-                    className="bg-brand-loyal-blue text-white px-10 py-4 rounded-xl font-bold text-lg shadow-2xl hover:scale-105 transition-transform duration-300"
+                    className="bg-brand-loyal-blue text-white px-10 py-4 rounded-xl font-bold text-lg shadow-2xl hover:scale-105 transition-transform duration-300 flex items-center gap-2"
                 >
-                    Member Login
-                </Link>
-                <Link 
-                    href="/login" 
-                    className="bg-white text-brand-true-maroon border-2 border-brand-true-maroon px-10 py-4 rounded-xl font-bold text-lg hover:bg-brand-true-maroon hover:text-white transition-all duration-300"
-                >
-                    Admin Access
+                    Portal Access
                 </Link>
             </>
           )}
@@ -52,16 +46,16 @@ export default async function LandingPage() {
 
         <div className="pt-20 grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
             <div className="p-6 bg-white/50 backdrop-blur-sm rounded-2xl border border-gray-200">
-                <h3 className="font-bold text-brand-loyal-blue mb-2">Automated Roles</h3>
-                <p className="text-sm text-gray-500">Heuristic-based role assignment based on historical participation data.</p>
+                <h3 className="font-bold text-brand-loyal-blue mb-2">Automatic Roles</h3>
+                <p className="text-sm text-gray-500">Smart role scheduling based on past participation.</p>
             </div>
             <div className="p-6 bg-white/50 backdrop-blur-sm rounded-2xl border border-gray-200">
                 <h3 className="font-bold text-brand-loyal-blue mb-2">Agenda Engine</h3>
-                <p className="text-sm text-gray-500">One-click Google Sheet generation and Gmail automation for Toastmasters.</p>
+                <p className="text-sm text-gray-500">One-click Google Sheet generation and Gmail automation for meetings.</p>
             </div>
             <div className="p-6 bg-white/50 backdrop-blur-sm rounded-2xl border border-gray-200">
-                <h3 className="font-bold text-brand-loyal-blue mb-2">Member Matrix</h3>
-                <p className="text-sm text-gray-500">Manage subscriptions, account approvals, and club-wide communications.</p>
+                <h3 className="font-bold text-brand-loyal-blue mb-2">Member Management</h3>
+                <p className="text-sm text-gray-500">Manage member lists, account approvals, and club communications.</p>
             </div>
         </div>
       </div>

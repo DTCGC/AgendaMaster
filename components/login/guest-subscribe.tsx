@@ -37,7 +37,7 @@ export default function GuestSubscribe() {
 
     return (
         <div className="space-y-3">
-            <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest text-center">Public Observer Enrollment</p>
+            <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest text-center">Guest Mailing List</p>
             <form onSubmit={handleSubmit} className="flex gap-2">
                 <input 
                     type="email" 

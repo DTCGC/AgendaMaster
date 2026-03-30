@@ -39,8 +39,8 @@ export default async function AccountsPage() {
         
         <div className="flex justify-between items-end border-b pb-4">
           <div>
-            <h1 className="text-3xl font-extrabold text-brand-loyal-blue tracking-tight hover:scale-[1.01] transition-transform origin-left cursor-default">Access Control</h1>
-            <p className="text-gray-600">Review pending registrations and moderate portal scope.</p>
+            <h1 className="text-3xl font-extrabold text-brand-loyal-blue tracking-tight hover:scale-[1.01] transition-transform origin-left cursor-default">Member Management</h1>
+            <p className="text-gray-600">Review new sign-up requests and manage member accounts.</p>
           </div>
           <div className="flex items-center gap-2 bg-white px-4 py-2 rounded shadow-sm border text-sm font-semibold text-brand-loyal-blue">
             <Users size={18} />
@@ -50,13 +50,13 @@ export default async function AccountsPage() {
 
         {/* Pending Approvals */}
         <div className="space-y-4">
-            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Pending Request Queue</h2>
+            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">New Sign-up Requests</h2>
             <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
                 {pendingUsers.length === 0 ? (
                     <div className="p-12 text-center text-gray-400 flex flex-col items-center">
                         <Check size={40} className="mb-4 text-green-200" />
-                        <p className="font-medium text-gray-500 text-lg">Queue Clear</p>
-                        <p className="text-sm mt-1">Direct recruits to <Link href="/login" className="text-brand-loyal-blue font-semibold hover:underline decoration-brand-true-maroon">/login</Link> to apply.</p>
+                        <p className="font-medium text-gray-500 text-lg">No pending requests</p>
+                        <p className="text-sm mt-1">New members can sign up at <Link href="/login" className="text-brand-loyal-blue font-semibold hover:underline decoration-brand-true-maroon">/login</Link>.</p>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -103,7 +103,7 @@ export default async function AccountsPage() {
             
             {/* Active Members Directory */}
             <div className="space-y-4">
-                <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Approved Club Roster</h2>
+                <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Active Member List</h2>
                 <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
                     <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
                         {activeUsers.map((user: any) => (
@@ -136,7 +136,7 @@ export default async function AccountsPage() {
 
             {/* Guest Subscriber Directory */}
             <div className="space-y-4">
-                <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Public Mailing List</h2>
+                <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Guest List</h2>
                 <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
                     {guestSubscribers.length === 0 ? (
                         <div className="p-12 text-center text-gray-400 text-sm italic">

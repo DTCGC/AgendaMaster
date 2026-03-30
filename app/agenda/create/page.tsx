@@ -55,7 +55,7 @@ export default async function CreateAgendaPage() {
             <div className="max-w-md bg-white p-8 rounded-xl shadow-lg border border-red-100 text-center space-y-4">
                 <AlertCircle size={48} className="mx-auto text-red-500" />
                 <h2 className="text-2xl font-bold text-gray-800">Toastmaster Access Only</h2>
-                <p className="text-gray-600 font-medium">You are not designated as the Toastmaster for the meeting on <strong>{nextMeeting.date.toLocaleDateString()}</strong>.</p>
+                <p className="text-gray-600 font-medium">You aren't listed as the Toastmaster for the meeting on <strong>{nextMeeting.date.toLocaleDateString()}</strong>.</p>
                 <p className="text-xs text-gray-400">Administrators may assign themselves the Toastmaster role via the Role Panel to gain access.</p>
                 <div className="pt-4 px-8">
                     <Link href="/agenda" className="block w-full bg-brand-loyal-blue text-white py-3 rounded-xl font-bold hover:bg-opacity-90 transition-all shadow-md">
@@ -73,7 +73,7 @@ export default async function CreateAgendaPage() {
         <div className="mb-8 border-b pb-6">
             <h1 className="text-4xl font-extrabold text-brand-loyal-blue tracking-tight">Agenda Engine</h1>
             <div className="mt-2 flex items-center gap-2 text-brand-true-maroon font-bold text-sm bg-brand-true-maroon/5 w-fit px-3 py-1 rounded-full border border-brand-true-maroon/20">
-                <Calendar size={14} /> Targeting Meeting: {nextMeeting.date.toLocaleDateString()}
+                <Calendar size={14} /> Preparing for meeting on: {nextMeeting.date.toLocaleDateString()}
             </div>
         </div>
         

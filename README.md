@@ -2,19 +2,19 @@
 
 > **The ultimate command center for the Downtown Coquitlam Gavel Club.**
 
-AgendaMaster is a comprehensive management platform designed to automate the operational overhead of the **Downtown Coquitlam Gavel Club (DTCGC)**. From heuristic-based role assignments to automated Google Sheets agenda generation, it is the club's definitive command center.
+AgendaMaster is a comprehensive management platform designed to automate the operational overhead of the **Downtown Coquitlam Gavel Club (DTCGC)**. From automated role assignments to Google Sheets agenda generation, it is the club's definitive **Agenda Engine**.
 
 ---
 
 ## 🚀 Core Features
 
-### 📅 Agenda Wizard
+### 📅 Agenda Engine Wizard
 - **Automated Generation**: One-click meeting agenda creation via Google Sheets integration.
 - **Tiptap Editor**: A rich-text interface for fine-tuning meeting themes and details before generation.
 - **Gmail Automation**: Automated meeting notifications and agenda delivery for Toastmasters and members.
 
-### 👥 Member & Role Matrix
-- **Heuristic Sequencing**: Intelligent role assignment based on historical participation and club-specific sequencing rules.
+### 👥 Member & Role Management
+- **Automated Sequencing**: Intelligent role assignment based on historical participation and club-specific sequencing rules.
 - **Guest Subscription**: Dedicated system for managing guest subscribers and converted members.
 - **Admin Dashboard**: Centralized control for account approvals, role overrides, and meeting scheduling.
 

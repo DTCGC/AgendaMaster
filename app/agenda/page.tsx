@@ -36,7 +36,7 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
             <div className="bg-white p-8 rounded-xl shadow-md border-t-8 border-gray-300">
                 <h1 className="text-4xl font-black text-gray-800 mb-2 tracking-tight">Meeting Dashboard</h1>
                 <p className="text-gray-500 mb-12 border-b pb-4 flex items-center gap-2">
-                    Welcome, <span className="text-brand-true-maroon font-bold">{userFirstName}</span>. Review the operating schedule below.
+                    Welcome, <span className="text-brand-true-maroon font-bold">{userFirstName}</span>. View the upcoming meeting schedule below.
                 </p>
                 <div className="p-20 text-center text-gray-300 border-4 border-dashed rounded-2xl bg-gray-50/50 flex flex-col items-center gap-4">
                     <Calendar size={48} className="opacity-20" />
@@ -96,13 +96,13 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
                         <FileText size={24} />
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold text-gray-800 mb-1 tracking-tight">Toastmaster Designation</h2>
-                        <p className="text-sm text-gray-600 mb-6 max-w-md">You are the lead for the meeting on <strong className="text-brand-true-maroon">{nextMeeting.date.toLocaleDateString()}</strong>. Access the automated workflow to build the agenda.</p>
+                        <h2 className="text-xl font-bold text-gray-800 mb-1 tracking-tight">Your Role: Toastmaster</h2>
+                        <p className="text-sm text-gray-600 mb-6 max-w-md">You are the lead for the meeting on <strong className="text-brand-true-maroon">{nextMeeting.date.toLocaleDateString()}</strong>. Start the workflow below to prepare the agenda.</p>
                         <Link 
                             href={`/agenda/create${hasFinalized ? '?step=3' : ''}`} 
                             className="bg-brand-loyal-blue text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:bg-brand-loyal-blue/90 transition-all inline-block hover:-translate-y-0.5 transform"
                         >
-                            {hasFinalized ? 'Update Roles' : 'Start Workflow'}
+                            {hasFinalized ? 'Update Agenda' : 'Begin Meeting Prep'}
                         </Link>
                     </div>
                 </div>
@@ -112,13 +112,13 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
             {!hasFinalized ? (
                 <div className="p-20 text-center text-gray-300 border-4 border-dashed rounded-2xl bg-gray-50/50 flex flex-col items-center gap-4">
                     <Calendar size={48} className="opacity-20" />
-                    <div className="font-mono text-sm uppercase tracking-widest opacity-50 font-bold">Agenda Data Stream Pending</div>
-                    <p className="text-xs max-w-xs text-gray-400">The assigned Toastmaster has not yet finalized the attendee roster for the upcoming meeting.</p>
+                    <div className="font-mono text-sm uppercase tracking-widest opacity-50 font-bold">Waiting for Agenda Details</div>
+                    <p className="text-xs max-w-xs text-gray-400">The assigned Toastmaster hasn't finished setting up the meeting details yet.</p>
                 </div>
             ) : (
                 <div className="space-y-4">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-black text-gray-400 uppercase tracking-widest text-xs">{archivedId ? 'Historical Roster' : 'Live Agenda Stream'}</h3>
+                        <h3 className="font-black text-gray-400 uppercase tracking-widest text-xs">{archivedId ? 'Historical Roster' : 'Meeting Roster'}</h3>
                         <div className={`flex items-center gap-2 text-[10px] font-bold px-2 py-0.5 rounded-full border ${archivedId ? 'text-gray-600 bg-gray-50 border-gray-200' : 'text-green-600 bg-green-50 border-green-200'}`}>
                             {!archivedId && <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />}
                             {archivedId ? 'LOCKED' : 'FINALIZED'}

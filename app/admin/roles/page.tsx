@@ -40,7 +40,7 @@ export default async function RolesPage({
 
   // Grab active roster
   const members = await db.user.findMany({
-    where: { role: { in: ['MEMBER', 'ADMIN'] } },
+    where: { role: 'MEMBER' },
     include: {
         roleAssignments: {
             orderBy: { assignedAt: 'desc' },
@@ -55,8 +55,8 @@ export default async function RolesPage({
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b pb-6 gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold text-brand-loyal-blue tracking-tight">Major Role Governance</h1>
-            <p className="text-gray-600">Assign key operational roles for any upcoming scheduled meeting.</p>
+            <h1 className="text-3xl font-extrabold text-brand-loyal-blue tracking-tight">Assign Major Roles</h1>
+            <p className="text-gray-600">Assign key roles (like Toastmaster) for any upcoming meetings.</p>
           </div>
         </div>
 
@@ -65,14 +65,14 @@ export default async function RolesPage({
                  <AlertCircle size={48} className="mx-auto text-yellow-700" opacity={0.5} />
                  <h2 className="text-xl font-bold text-yellow-900">No Scheduled Meetings Found</h2>
                  <p className="text-yellow-800 max-w-lg mx-auto">
-                     The assignment engine requires an active temporal anchor. Please navigate to the <b>Master Calendar</b> and construct the upcoming schedule block first.
+                     No upcoming meetings found. Please schedule a meeting in the <b>Master Calendar</b> first.
                  </p>
             </div>
         ) : (
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                 {/* Meeting Selector Sidebar */}
                 <div className="lg:col-span-1 space-y-4">
-                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Scheduled Cycle</h3>
+                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Upcoming Meetings</h3>
                     <div className="space-y-2">
                         {upcomingMeetings.map((meeting: any) => (
                             <a 
@@ -124,11 +124,11 @@ export default async function RolesPage({
                     </div>
 
                     <div className="bg-white shadow-sm border rounded-xl p-6">
-                        <h3 className="font-bold text-lg mb-6 text-gray-800">Historical Saturation</h3>
+                        <h3 className="font-bold text-lg mb-6 text-gray-800">Participation History</h3>
                         <p className="text-sm text-gray-500 mb-6 border-b pb-4 leading-relaxed">
-                            Members are prioritized based on the longest interval since their last designated role. Lower in the list = Higher availability.
+                            Members who haven't had a role in a while are prioritized. Lower in the list = Higher availability.
                         </p>
-                        
+ streams                        
                         <div className="space-y-2 overflow-y-auto max-h-[600px] pr-2">
                             {members.sort((a: any, b: any) => {
                                 const dateA = a.roleAssignments[0]?.assignedAt ? new Date(a.roleAssignments[0].assignedAt).getTime() : 0;
