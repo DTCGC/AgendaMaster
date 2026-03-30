@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id              String           @id @default(uuid())
+  firstName       String
+  lastName        String
+  email           String           @unique
+  role            String           @default("PENDING")
+  passwordHash    String?
+  createdAt       DateTime         @default(now())
+  roleAssignments RoleAssignment[]
+}
+
+model MeetingTemplate {
+  id              String    @id @default(uuid())
+  type            String
+  schemaStructure String
+  meetings        Meeting[]
+}
+
+model Meeting {
+  id              String           @id @default(uuid())
+  date            DateTime
+  typeId          String
+  theme           String?
+  status          String           @default("SCHEDULED")
+  template        MeetingTemplate  @relation(fields: [typeId], references: [id])
+  roleAssignments RoleAssignment[]
+}
+
+model RoleAssignment {
+  id         String   @id @default(uuid())
+  meetingId  String
+  userId     String?
+  roleName   String
+  assignedAt DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+  meeting    Meeting  @relation(fields: [meetingId], references: [id])
+}
+
+model Subscriber {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  subscribedAt DateTime @default(now())
+}
+
+model Subscriber {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  subscribedAt DateTime @default(now())
+}
