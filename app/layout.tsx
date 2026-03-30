@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   title: "AgendaMaster | Downtown Coquitlam Gavel Club Portal",
   description: "The ultimate command center for DTCGC. Automating meeting agendas, member roles, and club-wide communications with heuristic-based sequencing and Google Cloud integration.",
   keywords: ["DTCGC", "Gavel Club", "Toastmasters", "Agenda Generator", "Meeting Management"],
+  icons: {
+    icon: "/icon.png",
+  },
 };
 
 export default async function RootLayout({
