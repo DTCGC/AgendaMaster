@@ -10,8 +10,9 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "AgendaMaster - DTCGC",
-  description: "Downtown Coquitlam Gavel Club Management App",
+  title: "AgendaMaster | Downtown Coquitlam Gavel Club Portal",
+  description: "The ultimate command center for DTCGC. Automating meeting agendas, member roles, and club-wide communications with heuristic-based sequencing and Google Cloud integration.",
+  keywords: ["DTCGC", "Gavel Club", "Toastmasters", "Agenda Generator", "Meeting Management"],
 };
 
 export default async function RootLayout({
