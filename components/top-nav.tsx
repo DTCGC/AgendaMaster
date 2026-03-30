@@ -11,29 +11,41 @@ import {
   NavigationMenuList,
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
+import { usePathname } from "next/navigation";
 import { LogOut, X } from "lucide-react";
 
 export function TopNav({ role }: { role?: string }) {
+  const pathname = usePathname();
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const isAdmin = role === 'ADMIN';
   const isMember = role === 'MEMBER' || role === 'ADMIN';
 
   // Toggle based on Admin vs Standard view semantics prescribed by the design system
   const bgColor = isAdmin ? 'bg-brand-true-maroon' : 'bg-brand-loyal-blue';
+  const activeTextColor = isAdmin ? 'text-brand-true-maroon' : 'text-brand-loyal-blue';
+
+  const isActive = (path: string) => pathname === path;
+
+  const getNavLinkClass = (path: string) => {
+    const active = isActive(path);
+    return `${navigationMenuTriggerStyle()} transition-all duration-200 cursor-pointer ${
+      active 
+        ? `bg-white ${activeTextColor} shadow-sm font-bold` 
+        : "bg-transparent text-white hover:bg-white/10 hover:text-white"
+    }`;
+  };
 
   return (
     <>
     <div className={`w-full ${bgColor} text-white px-6 py-4 shadow-md flex justify-between items-center z-40 relative`}>
         <Link href="/" className="flex items-center gap-3 group">
-            <div className="bg-white/10 p-1.5 rounded shadow-sm group-hover:scale-105 transition-transform backdrop-blur-sm border border-white/20">
-                <Image 
-                    src={isAdmin ? "/assets/GavelClubLogo/TrueMaroon/GavelClubLogoTrueMaroon.svg" : "/assets/GavelClubLogo/LoyalBlue/GavelClubLogoLoyalBlue.svg"} 
-                    alt="Logo" 
-                    width={100} 
-                    height={30} 
-                    className="h-8 w-auto"
-                />
-            </div>
+            <Image 
+                src={isAdmin ? "/assets/images/TrueMaroon/GavelClubLogoTrueMaroon-RGB.png" : "/assets/images/LoyalBlue/GavelClubLogoLoyalBlue-RGB.png"} 
+                alt="Logo" 
+                width={1140} 
+                height={1140} 
+                className="h-10 w-auto group-hover:scale-105 transition-transform drop-shadow-sm"
+            />
             <div className="font-bold text-xl tracking-wider select-none hidden sm:block">
                 DTCGC
             </div>
@@ -45,7 +57,7 @@ export function TopNav({ role }: { role?: string }) {
                     <NavigationMenuItem>
                     <Link 
                         href="/agenda" 
-                        className={`${navigationMenuTriggerStyle()} bg-transparent text-white hover:bg-white/20 hover:text-white cursor-pointer`}
+                        className={getNavLinkClass("/agenda")}
                     >
                         Agenda
                     </Link>
@@ -57,7 +69,7 @@ export function TopNav({ role }: { role?: string }) {
                         <NavigationMenuItem>
                         <Link 
                             href="/admin/calendar" 
-                            className={`${navigationMenuTriggerStyle()} bg-transparent text-white hover:bg-white/20 hover:text-white cursor-pointer`}
+                            className={getNavLinkClass("/admin/calendar")}
                         >
                             Calendar
                         </Link>
@@ -66,7 +78,7 @@ export function TopNav({ role }: { role?: string }) {
                         <NavigationMenuItem>
                         <Link 
                             href="/admin/roles" 
-                            className={`${navigationMenuTriggerStyle()} bg-transparent text-white hover:bg-white/20 hover:text-white cursor-pointer`}
+                            className={getNavLinkClass("/admin/roles")}
                         >
                             Roles
                         </Link>
@@ -75,7 +87,7 @@ export function TopNav({ role }: { role?: string }) {
                         <NavigationMenuItem className="hidden md:block">
                         <Link 
                             href="/admin/accounts" 
-                            className={`${navigationMenuTriggerStyle()} bg-transparent text-white hover:bg-white/20 hover:text-white cursor-pointer`}
+                            className={getNavLinkClass("/admin/accounts")}
                         >
                             Approvals
                         </Link>
@@ -84,7 +96,7 @@ export function TopNav({ role }: { role?: string }) {
                         <NavigationMenuItem className="hidden md:block">
                         <Link 
                             href="/admin/comms" 
-                            className={`${navigationMenuTriggerStyle()} bg-transparent text-white hover:bg-white/20 hover:text-white cursor-pointer`}
+                            className={getNavLinkClass("/admin/comms")}
                         >
                             Comms
                         </Link>

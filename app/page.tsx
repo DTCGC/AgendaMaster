@@ -12,7 +12,7 @@ export default async function LandingPage() {
 
       <div className="max-w-4xl w-full text-center z-10 space-y-8">
         <div className="inline-block px-4 py-1.5 bg-brand-happy-yellow/20 text-yellow-800 rounded-full text-xs font-bold tracking-widest uppercase mb-4 animate-bounce">
-          Est. 1996 - Downtown Coquitlam
+          2023 - Downtown Coquitlam Gavel Club
         </div>
         
         <h1 className="text-6xl md:text-7xl font-extrabold text-brand-loyal-blue tracking-tighter leading-none">

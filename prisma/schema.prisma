@@ -50,8 +50,7 @@ model Subscriber {
   subscribedAt DateTime @default(now())
 }
 
-model Subscriber {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  subscribedAt DateTime @default(now())
+model Settings {
+  key   String @id
+  value String
 }

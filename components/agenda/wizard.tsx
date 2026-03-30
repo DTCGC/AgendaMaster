@@ -1,8 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
+import { AlertCircle, CheckCircle2, ExternalLink, Copy, Loader2 } from 'lucide-react'
 import TiptapEditor from './tiptap-editor'
 import { fetchRoleAssignments, formatDraft, saveFinalAgenda } from '@/app/actions/agenda'
+import { executeAgendaPipeline } from '@/app/actions/execute-agenda'
 import { MINOR_ROLES } from '@/lib/agenda-logic'
 
 // Boilerplate Template 
@@ -13,8 +16,13 @@ const DEFAULT_TEMPLATE = `
   <p>Best,<br>Toastmaster</p>
 `
 
-export default function AgendaWizard({ meetingId }: { meetingId: string }) {
-  const [step, setStep] = useState(1)
+function WizardContent({ meetingId }: { meetingId: string }) {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const initialStepParam = parseInt(searchParams.get('step') || '1')
+
+  const [step, setStep] = useState(initialStepParam)
+  const [emailSubject, setEmailSubject] = useState('')
   const [emailDraft, setEmailDraft] = useState('')
   const [meetingType, setMeetingType] = useState('Regular')
   const [meetingTheme, setMeetingTheme] = useState('')
@@ -27,14 +35,28 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
   
   const [allowDoubleRoles, setAllowDoubleRoles] = useState(false)
   const [clipboardStatus, setClipboardStatus] = useState('Copy to Clipboard')
+  const [isSaving, setIsSaving] = useState(false)
+  const [conflictError, setConflictError] = useState<string | null>(null)
+
+  // Step 4 execution state
+  const [isExecuting, setIsExecuting] = useState(false)
+  const [executionResult, setExecutionResult] = useState<{
+    success: boolean;
+    sheetUrl?: string;
+    error?: string;
+  } | null>(null)
 
   // Load Initial Setup on Mount
   useEffect(() => {
     const savedDraft = localStorage.getItem('dtcgc_email_draft')
+    const savedSubject = localStorage.getItem('dtcgc_email_subject')
     if (savedDraft) {
       setEmailDraft(savedDraft)
     } else {
       setEmailDraft(DEFAULT_TEMPLATE)
+    }
+    if (savedSubject) {
+      setEmailSubject(savedSubject)
     }
 
     const loadRoles = async () => {
@@ -58,7 +80,6 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
         const pool = [...unassigned];
         const alreadyAssigned = new Set();
         
-        // Major roles are primary, add them to the "already occupied" set first
         preAssigned.forEach(a => {
             if (a.userId) alreadyAssigned.add(a.userId);
         });
@@ -67,7 +88,6 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
         Object.keys(newMinorRoles).forEach(role => {
             const user = newMinorRoles[role];
             if (user && alreadyAssigned.has(user.id)) {
-                // Conflict! This person already has a role. Revert this specific minor assignment.
                 pool.push(user);
                 newMinorRoles[role] = null;
                 changed = true;
@@ -81,14 +101,19 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
             setUnassigned(pool);
         }
     }
-  }, [allowDoubleRoles]);
+  }, [allowDoubleRoles, preAssigned]);
 
-  // Save draft incrementally
   useEffect(() => {
     if (emailDraft) {
         localStorage.setItem('dtcgc_email_draft', emailDraft)
     }
   }, [emailDraft])
+
+  useEffect(() => {
+    if (emailSubject) {
+        localStorage.setItem('dtcgc_email_subject', emailSubject)
+    }
+  }, [emailSubject])
 
   const handleNextStep = async () => {
       if (step === 1) {
@@ -99,16 +124,17 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
   }
 
   const handleRoleChange = (roleName: string, userId: string) => {
-    const selectedUser = unassigned.find(u => u.id === userId) || null;
+    const allUsers = [...unassigned, ...Object.values(minorRoles).filter(Boolean), ...preAssigned.map(a => a.user).filter(Boolean)];
+    const selectedUser = allUsers.find(u => u.id === userId) || null;
     const displacedUser = minorRoles[roleName];
 
-    // Enforcement: If double roles are disabled, check for existing commitments
     if (!allowDoubleRoles && selectedUser) {
         const hasOtherMinor = Object.values(minorRoles).some(u => u?.id === selectedUser.id);
         const hasMajor = preAssigned.some(a => a.userId === selectedUser.id);
         
         if (hasOtherMinor || hasMajor) {
-            alert(`Conflict: ${selectedUser.displayName} is already assigned to another role. Please enable 'Allow Double Roles' or unassign their other commitment first.`);
+            setConflictError(`${selectedUser.displayName} already holds a role. Enable 'Double Role Override' to bypass.`)
+            setTimeout(() => setConflictError(null), 5000)
             return;
         }
     }
@@ -126,12 +152,48 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
   }
 
   const handleFinish = async () => {
+    setIsSaving(true);
     try {
         await saveFinalAgenda(meetingId, minorRoles);
-        window.location.href = '/agenda';
+        router.push('/agenda');
     } catch (e) {
         console.error("Failed to save final agenda:", e);
         alert("Persistence Error: Could not save the finalized roles to the server.");
+        setIsSaving(false);
+    }
+  }
+
+  // --- Step 4: Execute the full pipeline (Google Sheet + Gmail) ---
+  const handleExecute = async () => {
+    setIsExecuting(true)
+    setExecutionResult(null)
+
+    try {
+      // Save the roles first
+      await saveFinalAgenda(meetingId, minorRoles)
+
+      // Execute the pipeline
+      const result = await executeAgendaPipeline(
+        meetingId,
+        emailSubject || `DTCGC Agenda: ${meetingTheme}`,
+        emailDraft,
+        meetingTheme
+      )
+
+      setExecutionResult(result)
+
+      if (result.success) {
+        // Clear localStorage drafts on success
+        localStorage.removeItem('dtcgc_email_draft')
+        localStorage.removeItem('dtcgc_email_subject')
+      }
+    } catch (error: any) {
+      setExecutionResult({
+        success: false,
+        error: error.message || 'Pipeline execution failed.'
+      })
+    } finally {
+      setIsExecuting(false)
     }
   }
 
@@ -144,45 +206,31 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
       textData += `\n[MEETING ROLES - CHRONOLOGICAL]\n`;
       
       const roleSequence = [
-          "Sergeant at Arms",
-          "Toastmaster",
-          "Timer",
-          "Grammarian",
-          "Filler Word Counter",
-          "Quizmaster",
-          "Speaker 1",
-          "Speaker 2",
-          "Speaker 3",
-          "Evaluator 1",
-          "Evaluator 2",
-          "Evaluator 3",
-          "Roles For Next Meeting",
-          "Business Meeting",
-          "Table Topics Master",
-          "Table Topics Evaluator 1",
-          "Table Topics Evaluator 2"
+          "Sergeant at Arms", "Toastmaster", "Timer", "Grammarian", "Filler Word Counter", "Quizmaster",
+          "Speaker 1", "Speaker 2", "Speaker 3", "Evaluator 1", "Evaluator 2", "Evaluator 3",
+          "Roles For Next Meeting", "Business Meeting", "Table Topics Master", "Table Topics Evaluator 1", "Table Topics Evaluator 2"
       ];
 
       roleSequence.forEach(roleName => {
           let holder = "TBD";
-          
           if (roleName === "Roles For Next Meeting") holder = "John";
           else if (roleName === "Business Meeting") holder = "Andrew";
           else {
-              // Check Major roles
               const major = preAssigned.find((a: any) => a.roleName === roleName);
               if (major) {
                   const u = (major as any).user;
                   holder = u?.displayName || "TBD";
               } else {
-                  // Check Minor roles
                   const user = minorRoles[roleName];
                   if (user) holder = user.displayName;
               }
           }
-          
           textData += `${roleName}: ${holder}\n`;
       });
+
+      if (executionResult?.sheetUrl) {
+        textData += `\n📋 Agenda Sheet: ${executionResult.sheetUrl}\n`;
+      }
 
       navigator.clipboard.writeText(textData.trim()).then(() => {
           setClipboardStatus("Copied!")
@@ -193,29 +241,66 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
   return (
     <div className="bg-white rounded-xl shadow-lg border p-8">
       {/* Progress Indicator */}
-      <div className="flex justify-between border-b pb-4 mb-8">
-        {[1, 2, 3, 4].map(s => (
-          <div key={s} className="flex flex-col items-center">
-             <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white transition-colors duration-300 ${step >= s ? 'bg-brand-loyal-blue' : 'bg-gray-200'}`}>
-                {s}
-             </div>
-             <span className="text-xs text-gray-500 mt-2 font-medium">
-                 {s === 1 && 'Draft'}
-                 {s === 2 && 'Settings'}
-                 {s === 3 && 'Roles'}
-                 {s === 4 && 'Execute'}
-             </span>
-          </div>
-        ))}
+      <div className="relative mb-12 mt-4">
+        <div className="absolute top-5 left-[12%] right-[12%] border-t-2 border-dashed border-gray-300 z-0"></div>
+        <div className="flex justify-between relative z-10 px-4">
+          {[1, 2, 3, 4].map(s => (
+            <div key={s} className="flex flex-col items-center w-16 bg-white">
+               <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-colors duration-300 ${step >= s ? 'bg-brand-loyal-blue text-white shadow-md' : 'bg-gray-200 text-gray-500 border border-transparent'}`}>
+                  {s}
+               </div>
+               <span className={`text-xs mt-2 font-medium ${step >= s ? 'text-brand-loyal-blue font-bold tracking-tight' : 'text-gray-400'}`}>
+                   {s === 1 && 'Draft'}
+                   {s === 2 && 'Settings'}
+                   {s === 3 && 'Roles'}
+                   {s === 4 && 'Execute'}
+               </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="min-h-[400px]">
+        {/* Step 3 Update Mode Info */}
+        {initialStepParam === 3 && step === 3 && (
+            <div className="mb-6 p-4 bg-brand-loyal-blue/5 border border-brand-loyal-blue/20 rounded-xl animate-in fade-in slide-in-from-top-2 duration-500">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-brand-loyal-blue font-bold text-sm">Roster-Only Update Mode</h3>
+                        <p className="text-xs text-gray-500 max-w-md">Email and Settings will be bypassed. Changes you make here will instantly sync to the club dashboard upon saving.</p>
+                    </div>
+                    <button 
+                        onClick={handleFinish}
+                        disabled={isSaving}
+                        className="bg-brand-loyal-blue text-white text-xs font-bold px-5 py-2 rounded-lg hover:bg-opacity-90 shadow-sm transition-all disabled:opacity-50"
+                    >
+                        {isSaving ? 'Saving...' : 'Save & Close'}
+                    </button>
+                </div>
+            </div>
+        )}
+
         {/* Step 1: WYSIWYG Editor */}
         {step === 1 && (
           <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
             <h2 className="text-xl font-bold border-l-4 pl-3 border-brand-loyal-blue">Email Draft</h2>
-            <p className="text-gray-600 text-sm">Draft the email body here. Progress is auto-saved locally. <span className="font-semibold text-brand-true-maroon cursor-help underline underline-offset-4 decoration-dashed" title="Use the [THEME] tag to dynamically inject the chosen theme in step 2. Be warm and welcoming!">How do I write this?</span></p>
-            <TiptapEditor content={emailDraft} onChange={setEmailDraft} />
+            <p className="text-gray-600 text-sm">Draft the email body here. Progress is auto-saved locally.</p>
+            <div className="space-y-3">
+                <div>
+                    <label className="text-sm font-semibold text-gray-600 block mb-1">Subject Line</label>
+                    <input 
+                        type="text" 
+                        className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-brand-loyal-blue transition text-sm" 
+                        placeholder="DTCGC Agenda: [Theme]"
+                        value={emailSubject}
+                        onChange={(e) => setEmailSubject(e.target.value)}
+                    />
+                </div>
+                <div>
+                    <label className="text-sm font-semibold text-gray-600 block mb-1">Email Body</label>
+                    <TiptapEditor content={emailDraft} onChange={setEmailDraft} />
+                </div>
+            </div>
           </div>
         )}
 
@@ -225,11 +310,7 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
              <h2 className="text-xl font-bold border-l-4 pl-3 border-brand-loyal-blue">Agenda Parameters</h2>
              <div className="space-y-2">
                  <label className="font-semibold text-sm">Meeting Type</label>
-                 <select 
-                     className="w-full border p-3 rounded"
-                     value={meetingType}
-                     onChange={(e) => setMeetingType(e.target.value)}
-                 >
+                 <select className="w-full border p-3 rounded" value={meetingType} onChange={(e) => setMeetingType(e.target.value)}>
                      <option value="Regular">Regular Meeting</option>
                      <option value="Education">Education Session</option>
                      <option value="Contest">Contest</option>
@@ -237,13 +318,7 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
              </div>
              <div className="space-y-2">
                  <label className="font-semibold text-sm">Meeting Theme (Required)</label>
-                 <input 
-                     type="text"
-                     placeholder="e.g., Spring Forward"
-                     className="w-full border p-3 rounded focus:ring-2 focus:ring-brand-loyal-blue outline-none transition"
-                     value={meetingTheme}
-                     onChange={(e) => setMeetingTheme(e.target.value)}
-                 />
+                 <input type="text" placeholder="e.g., Spring Forward" className="w-full border p-3 rounded" value={meetingTheme} onChange={(e) => setMeetingTheme(e.target.value)} />
              </div>
           </div>
         )}
@@ -253,87 +328,89 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
              <div className="flex justify-between items-center">
                  <h2 className="text-xl font-bold border-l-4 pl-3 border-brand-loyal-blue">Role Assignments</h2>
-                 
-                 <label className="flex items-center space-x-2 text-sm bg-gray-100 p-2 rounded cursor-pointer">
-                     <input 
-                        type="checkbox" 
-                        className="accent-brand-true-maroon w-4 h-4"
-                        checked={allowDoubleRoles}
-                        onChange={(e) => setAllowDoubleRoles(e.target.checked)}
-                     />
-                     <span className={allowDoubleRoles ? 'text-brand-true-maroon font-bold' : 'text-gray-600'}>
-                         Allow Double Roles
-                     </span>
-                 </label>
+                 <div className="flex items-center text-sm bg-gray-100 p-2 rounded cursor-pointer border border-gray-200" onClick={() => setAllowDoubleRoles(!allowDoubleRoles)}>
+                     <span className={allowDoubleRoles ? 'text-brand-true-maroon font-bold mr-2' : 'text-gray-600 font-medium mr-2'}>Enable Double Role Override</span>
+                     <input type="checkbox" className="accent-brand-true-maroon w-4 h-4 cursor-pointer" checked={allowDoubleRoles} readOnly />
+                 </div>
              </div>
 
              {allowDoubleRoles && (
-                 <div className="bg-red-50 text-red-700 p-3 rounded text-sm border border-red-200">
-                     <strong>Warning:</strong> Double roles are enabled. The heuristic shuffle has been paused. You must manually assign attendees.
+                 <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm border border-red-200 shadow-sm font-medium">
+                     <strong>Warning:</strong> Double roles are enabled. The heuristic shuffle has been paused. You must manually assign attendees to resolve conflicts.
+                 </div>
+             )}
+
+             {conflictError && (
+                 <div className="bg-red-100 text-red-800 p-4 rounded-lg text-sm border-l-4 border-red-500 shadow-sm font-medium flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                     <AlertCircle size={20} />
+                     <span>{conflictError}</span>
                  </div>
              )}
 
              {loadingRoles ? (
                  <div className="py-12 text-center text-gray-400">Computing Historical Assignments...</div>
              ) : (
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                     <div>
-                         <h3 className="font-bold text-gray-700 mb-4 bg-gray-100 p-2 rounded">Minor Roles (Auto-Shuffled)</h3>
-                         <div className="space-y-2">
-                             {Object.entries(minorRoles).map(([role, user]) => (
-                                 <div key={role} className="flex justify-between items-center text-sm border-b pb-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <h3 className="font-bold text-gray-700 mb-4 bg-gray-100 p-2 rounded text-sm">Minor Roles</h3>
+                        <div className="space-y-2">
+                             {Object.entries(minorRoles).map(([role, user]) => {
+                                 // Safely construct a unique list of all known users
+                                 const staticUsers = [...unassigned];
+                                 Object.values(minorRoles).forEach(u => { if (u && !staticUsers.some(existing => existing.id === u.id)) staticUsers.push(u); });
+                                 preAssigned.forEach(a => { if (a.user && !staticUsers.some(existing => existing.id === a.user.id)) staticUsers.push(a.user); });
+                                 staticUsers.sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+                                 return (
+                                 <div key={role} className="flex justify-between items-center text-sm border-b border-gray-100 pb-2">
                                      <span className="font-medium text-gray-600">{role}</span>
                                      <select 
-                                        className={`px-2 py-1 rounded text-xs outline-none border ${user ? 'bg-brand-happy-yellow/30 border-brand-happy-yellow/50 text-yellow-800' : 'bg-red-50 border-red-200 text-red-800'}`}
-                                        value={user?.id || ""}
+                                        className={`px-2 py-1 rounded text-xs border bg-white focus:ring-2 focus:ring-brand-loyal-blue outline-none transition-shadow ${user ? 'bg-brand-happy-yellow/10 border-brand-happy-yellow/50' : 'bg-red-50 border-red-200 border-dashed'}`} 
+                                        value={user?.id || ""} 
                                         onChange={(e) => handleRoleChange(role, e.target.value)}
                                      >
-                                        <option value="">-- UNASSIGNED --</option>
-                                        {user && <option value={user.id}>{user.displayName}</option>}
-                                        {unassigned.map(u => (
-                                            <option key={u.id} value={u.id}>{u.displayName}</option>
-                                        ))}
+                                         <option value="">-- UNASSIGNED --</option>
+                                         {(allowDoubleRoles ? staticUsers : [...unassigned, ...(user ? [user] : [])]).filter((u, i, arr) => arr.findIndex(t => t.id === u.id) === i).map((u: any) => (
+                                             <option key={u.id} value={u.id}>{u.displayName}</option>
+                                         ))}
                                      </select>
                                  </div>
-                             ))}
-                         </div>
-                     </div>
+                                 )
+                             })}
+                        </div>
+                    </div>
+                    <div className="space-y-6">
+                        <div>
+                            <h3 className="font-bold text-gray-700 mb-4 bg-brand-true-maroon text-white p-2 rounded text-sm flex justify-between">
+                                <span>Major Roles</span>
+                                <span className="text-[10px] font-normal opacity-75">Admin Entry</span>
+                            </h3>
+                            <div className="space-y-3 text-sm">
+                                {preAssigned.map((a: any) => (
+                                    <div key={a.id} className="flex justify-between items-center border-b pb-2 last:border-0">
+                                        <span className="font-semibold text-gray-600">{a.roleName}</span>
+                                        <span className="text-brand-loyal-blue font-black bg-brand-loyal-blue/5 px-2 py-0.5 rounded">{a.user ? `${a.user.firstName} ${a.user.lastName}` : "TBD"}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
 
-                     <div className="space-y-6">
-                         <div>
-                             <h3 className="font-bold text-gray-700 mb-4 bg-brand-true-maroon text-white p-2 rounded flex justify-between">
-                                 <span>Major Roles</span>
-                                 <span className="text-xs opacity-75 font-normal self-center">(Admin Controlled)</span>
-                             </h3>
-                             {preAssigned.length === 0 ? (
-                                 <p className="text-sm text-gray-500 italic">No major roles assigned yet.</p>
-                             ) : (
-                                 <div className="space-y-3 text-sm">
-                                      {preAssigned.map((a: any) => (
-                                          <div key={a.id} className="flex justify-between items-center border-b pb-2 last:border-0">
-                                              <span className="font-semibold text-gray-600">{a.roleName}</span>
-                                              <span className="text-brand-loyal-blue font-black tracking-tight bg-brand-loyal-blue/5 px-2 py-0.5 rounded">
-                                                  {a.user ? `${a.user.firstName} ${a.user.lastName}` : "TBD"}
-                                              </span>
-                                          </div>
-                                      ))}
-                                 </div>
-                             )}
-                         </div>
-
-                         <div>
-                             <h3 className="font-bold text-gray-700 mb-2 border-b border-gray-300 pb-1">Unassigned Members</h3>
-                             <p className="text-xs text-gray-400 mb-2">Members attending without a formal designated action role.</p>
-                             <div className="flex flex-wrap gap-2 text-xs">
-                                 {unassigned.length > 0 ? unassigned.map(u => (
-                                     <span key={u.id} className="bg-gray-100 border px-2 py-1 text-gray-600 rounded-full">{u.displayName}</span>
-                                 )) : (
-                                     <span className="text-gray-400 italic">Everyone is participating!</span>
-                                 )}
-                             </div>
-                         </div>
-                     </div>
-                 </div>
+                        <div className="pt-6 border-t border-gray-100">
+                            <h3 className="font-bold text-gray-700 mb-2 border-b border-gray-100 pb-2 flex justify-between items-center text-sm">
+                                <span>Bench Roster</span>
+                                <span className="bg-gray-100 text-gray-400 text-[10px] px-2 py-0.5 rounded-full font-normal">{unassigned.length} Available</span>
+                            </h3>
+                            <p className="text-xs text-gray-400 mb-3">Members attending without a formal designated action role.</p>
+                            <div className="flex flex-wrap gap-1.5 text-xs">
+                                {unassigned.length > 0 ? unassigned.map(u => (
+                                    <span key={u.id} className="bg-gray-50 border border-gray-200 px-2.5 py-1 text-gray-500 rounded-lg shadow-sm">{u.displayName}</span>
+                                )) : (
+                                    <span className="text-gray-400 italic">Everyone is currently participating!</span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
              )}
           </div>
         )}
@@ -341,52 +418,146 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
         {/* Step 4: Execution */}
         {step === 4 && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
-             <div className="bg-brand-loyal-blue/10 border-l-4 border-brand-loyal-blue p-4 rounded-r flex justify-between items-center">
-                 <div>
-                     <h2 className="text-lg font-bold text-brand-loyal-blue">Final Review</h2>
-                     <p className="text-sm text-gray-600">The agenda schema is fully mapped. The Google API is currently pending integration.</p>
-                 </div>
-                 <button className="bg-gray-300 text-gray-500 px-6 py-2 rounded font-bold cursor-not-allowed" disabled>
-                     Generate & Send via API
-                 </button>
+             <div className="bg-brand-loyal-blue/10 border-l-4 border-brand-loyal-blue p-6 rounded-r">
+                 <h2 className="text-lg font-bold text-brand-loyal-blue mb-1">Final Review & Execution</h2>
+                 <p className="text-sm text-gray-600">Review the summary below, then execute the automated pipeline to generate the Google Sheet and dispatch the email.</p>
+             </div>
+             
+             {/* Summary Preview */}
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 p-4 rounded-lg border">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Email Subject</h3>
+                    <p className="text-sm font-semibold text-gray-800">{emailSubject || `DTCGC Agenda: ${meetingTheme}`}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg border">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Meeting Theme</h3>
+                    <p className="text-sm font-semibold text-gray-800">{meetingTheme || 'Not set'}</p>
+                </div>
              </div>
 
-             <div className="bg-gray-50 p-6 rounded border border-gray-200 text-center space-y-4">
-                 <h3 className="font-bold text-xl text-brand-true-maroon text-center">Manual Fallback Pipeline</h3>
-                 <p className="text-gray-600">Use the manual clipboard functionality to bypass the API restrictions.</p>
-                 <button 
-                     onClick={handleCopy}
-                     className="bg-brand-true-maroon text-white px-8 py-3 rounded-lg shadow-md hover:bg-opacity-90 transition font-bold"
-                 >
-                     {clipboardStatus}
-                 </button>
-             </div>
+             {/* Execution Result */}
+             {executionResult && (
+                <div className={`p-6 rounded-xl border-2 animate-in fade-in zoom-in-95 duration-300 ${executionResult.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    {executionResult.success ? (
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                                <CheckCircle2 size={28} className="text-green-600" />
+                                <div>
+                                    <h3 className="font-bold text-green-800 text-lg">Pipeline Executed Successfully</h3>
+                                    <p className="text-sm text-green-700">Google Sheet created and email dispatched to all club members.</p>
+                                </div>
+                            </div>
+                            {executionResult.sheetUrl && (
+                                <a 
+                                    href={executionResult.sheetUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 bg-white px-4 py-3 rounded-lg border border-green-200 text-brand-loyal-blue font-bold text-sm hover:bg-green-50 transition-colors w-fit"
+                                >
+                                    <ExternalLink size={16} />
+                                    Open Agenda Sheet
+                                </a>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-3">
+                            <AlertCircle size={28} className="text-red-600" />
+                            <div>
+                                <h3 className="font-bold text-red-800">Execution Failed</h3>
+                                <p className="text-sm text-red-700">{executionResult.error}</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+             )}
+
+             {/* Action Buttons */}
+             {!executionResult?.success && (
+                <div className="space-y-3">
+                    <button 
+                        onClick={handleExecute}
+                        disabled={isExecuting}
+                        className="w-full flex items-center justify-center gap-2 bg-brand-loyal-blue text-white font-bold py-4 rounded-xl shadow-lg hover:bg-opacity-90 transition-all disabled:opacity-50 text-lg"
+                    >
+                        {isExecuting ? (
+                            <>
+                                <Loader2 size={22} className="animate-spin" />
+                                Generating Sheet & Sending Email...
+                            </>
+                        ) : (
+                            'Generate Google Sheet & Send Email'
+                        )}
+                    </button>
+
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-gray-200"></div>
+                        </div>
+                        <div className="relative flex justify-center text-xs">
+                            <span className="bg-white px-4 text-gray-400 font-bold uppercase tracking-widest">Manual Fallback</span>
+                        </div>
+                    </div>
+
+                    <button 
+                        onClick={handleCopy} 
+                        className="w-full flex items-center justify-center gap-2 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl border border-gray-200 hover:bg-gray-200 transition-all text-sm"
+                    >
+                        <Copy size={16} />
+                        {clipboardStatus}
+                    </button>
+                </div>
+             )}
+
+             {executionResult?.success && (
+                <div className="flex gap-3">
+                    <button 
+                        onClick={() => router.push('/agenda')}
+                        className="flex-1 bg-brand-loyal-blue text-white font-bold py-3 rounded-xl shadow hover:bg-opacity-90 transition-all"
+                    >
+                        Return to Dashboard
+                    </button>
+                    <button 
+                        onClick={handleCopy} 
+                        className="flex items-center justify-center gap-2 bg-gray-100 text-gray-600 font-bold py-3 px-6 rounded-xl border border-gray-200 hover:bg-gray-200 transition-all text-sm"
+                    >
+                        <Copy size={16} />
+                        {clipboardStatus}
+                    </button>
+                </div>
+             )}
           </div>
         )}
       </div>
 
-      {/* Navigation Buttons */}
+      {initialStepParam !== 3 && (
       <div className="mt-8 flex justify-between border-t pt-4">
-          <button 
-              onClick={() => setStep(prev => prev - 1)} 
-              disabled={step === 1}
-              className={`px-6 py-2 rounded font-medium ${step === 1 ? 'opacity-0 cursor-default' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-          >
-              Back
-          </button>
+          <button onClick={() => setStep(prev => prev - 1)} disabled={step === 1} className={`px-6 py-2 rounded font-medium ${step === 1 ? 'opacity-0 cursor-default' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Back</button>
           
           {step < 4 ? (
               <button 
                   onClick={handleNextStep}
-                  disabled={(step === 2 && !meetingTheme)} // Require theme
-                  className={`px-6 py-2 rounded font-bold transition-opacity ${step === 2 && !meetingTheme ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-brand-loyal-blue text-white shadow hover:opacity-90'}`}
+                  disabled={(step === 2 && !meetingTheme)}
+                  className={`px-6 py-2 rounded font-bold transition-all ${step === 2 && !meetingTheme ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-brand-loyal-blue text-white shadow hover:opacity-90 active:scale-95'}`}
               >
                   Next Step
               </button>
           ) : (
-              <button className="bg-green-600 px-6 py-2 text-white font-bold rounded shadow hover:opacity-90" onClick={handleFinish}>Finish</button>
+              !executionResult?.success && (
+                <button disabled={isSaving} className="bg-green-600 px-8 py-2 text-white font-bold rounded shadow hover:opacity-90 active:scale-95 disabled:bg-gray-400" onClick={handleFinish}>
+                    {isSaving ? 'Processing...' : 'Save Roles Only'}
+                </button>
+              )
           )}
       </div>
+      )}
     </div>
+  )
+}
+
+export default function AgendaWizard({ meetingId }: { meetingId: string }) {
+  return (
+    <Suspense fallback={<div className="p-20 text-center text-gray-400">Loading Wizard Environment...</div>}>
+      <WizardContent meetingId={meetingId} />
+    </Suspense>
   )
 }

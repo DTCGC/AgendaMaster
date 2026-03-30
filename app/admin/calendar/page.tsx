@@ -2,7 +2,8 @@ import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { redirect } from 'next/navigation'
 import { getFutureFridays, toggleMeeting, deleteMeeting } from '@/app/actions/calendar'
-import { Calendar as CalendarIcon, Clock, Trash2, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, Trash2, CheckCircle, XCircle, AlertCircle, FileText } from 'lucide-react'
+import Link from 'next/link'
 
 export const metadata = {
   title: 'Master Calendar - DTCGC',
@@ -22,6 +23,10 @@ export default async function CalendarPage() {
 
   // Generate potential Fridays
   const potentialFridays = await getFutureFridays()
+
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  const pastMeetings = existingMeetings.filter((m: any) => new Date(m.date) < todayMidnight).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
     <div className="flex-1 p-8 bg-brand-cool-grey/10 min-h-screen">
@@ -97,6 +102,47 @@ export default async function CalendarPage() {
             <div className="text-sm text-blue-800 space-y-2">
                 <p className="font-bold">Manual Overrides</p>
                 <p>As per school district variations, breaks (Winter/Spring) must be manually "Disabled" above. Once a meeting is disabled, the Agenda Engine will skip it and target the next active Friday automatically.</p>
+            </div>
+        </div>
+
+        <div className="mt-12">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4 border-b pb-2 tracking-tight">Meeting Archive</h2>
+            <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                            <th className="p-4 font-semibold border-b">Meeting Date</th>
+                            <th className="p-4 font-semibold border-b text-center">Status</th>
+                            <th className="p-4 font-semibold border-b text-right">Records</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {pastMeetings.length === 0 ? (
+                            <tr><td colSpan={3} className="p-8 text-center text-gray-400 italic">No past meetings recorded.</td></tr>
+                        ) : pastMeetings.map((m: any) => (
+                            <tr key={m.id} className="hover:bg-gray-50/50 transition-colors">
+                                <td className="p-4">
+                                    <div className="font-bold text-gray-700">
+                                        {new Date(m.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                                    </div>
+                                    <div className="text-xs text-gray-500">Scheduled Time: 6:45 PM</div>
+                                </td>
+                                <td className="p-4 text-center">
+                                    <span className={`px-3 py-1 rounded-full text-xs font-bold border ${m.status === 'COMPLETED' ? 'bg-purple-50 text-purple-700 border-purple-200' : m.status === 'CANCELLED' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                        {m.status}
+                                    </span>
+                                </td>
+                                <td className="p-4 flex justify-end">
+                                    {m.status !== 'CANCELLED' && (
+                                        <Link href={`/agenda?archivedId=${m.id}`} className="flex items-center gap-1 text-brand-true-maroon hover:text-red-900 font-bold text-sm bg-brand-true-maroon/10 px-4 py-2 rounded-lg transition-colors">
+                                            <FileText size={16} /> View Records
+                                        </Link>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
       </div>

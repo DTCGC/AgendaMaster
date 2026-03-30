@@ -21,10 +21,22 @@ export default function TiptapEditor({
 
   const editor = useEditor({
     extensions: [
-        StarterKit,
-        BulletList,
-        OrderedList,
-        ListItem
+      StarterKit.configure({
+        bulletList: false, // Override to use explicit extensions
+        orderedList: false,
+        listItem: false,
+      }),
+      BulletList.configure({
+        HTMLAttributes: {
+          class: 'list-disc ml-4',
+        },
+      }),
+      OrderedList.configure({
+        HTMLAttributes: {
+          class: 'list-decimal ml-4',
+        },
+      }),
+      ListItem,
     ],
     content: content,
     immediatelyRender: false,
@@ -55,6 +67,25 @@ export default function TiptapEditor({
 
   return (
     <div className="flex flex-col shadow-sm rounded-lg overflow-hidden group">
+      <style jsx global>{`
+        .prose ul {
+          list-style-type: disc !important;
+          padding-left: 1.5rem !important;
+          margin-top: 0.5rem !important;
+          margin-bottom: 0.5rem !important;
+        }
+        .prose ol {
+          list-style-type: decimal !important;
+          padding-left: 1.5rem !important;
+          margin-top: 0.5rem !important;
+          margin-bottom: 0.5rem !important;
+        }
+        .prose li {
+          margin-top: 0.25rem !important;
+          margin-bottom: 0.25rem !important;
+        }
+      `}</style>
+
       <div className="flex gap-1 p-2 bg-gray-50 border border-gray-200 border-b-0 rounded-t-lg opacity-80 group-focus-within:opacity-100 transition-opacity">
         <button
           type="button"
@@ -93,26 +124,6 @@ export default function TiptapEditor({
           <ListOrdered size={18} />
         </button>
       </div>
-
-      <style jsx global>{`
-        .prose ul {
-          list-style-type: disc !important;
-          padding-left: 1.5rem !important;
-          margin-top: 0.5rem !important;
-          margin-bottom: 0.5rem !important;
-        }
-        .prose ol {
-          list-style-type: decimal !important;
-          padding-left: 1.5rem !important;
-          margin-top: 0.5rem !important;
-          margin-bottom: 0.5rem !important;
-        }
-        .prose li {
-          margin-top: 0.25rem !important;
-          margin-bottom: 0.25rem !important;
-        }
-      `}</style>
-
       <EditorContent editor={editor} className="flex-grow" />
     </div>
   )

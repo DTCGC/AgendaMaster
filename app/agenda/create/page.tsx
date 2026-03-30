@@ -36,12 +36,15 @@ export default async function CreateAgendaPage() {
             <div className="max-w-md bg-white p-8 rounded-xl shadow-lg border border-gray-200 text-center space-y-4">
                 <Calendar size={48} className="mx-auto text-brand-loyal-blue/30" />
                 <h2 className="text-2xl font-bold text-gray-800">No Meetings Scheduled</h2>
-                <p className="text-gray-600">The Agenda Engine requires an upcoming active meeting block. An administrator must first schedule a Friday in the Master Calendar.</p>
-                <button onClick={() => redirect('/agenda')} className="w-full bg-brand-loyal-blue text-white py-2 rounded-lg font-bold">Return to Dashboard</button>
+                <div className="pt-4">
+                    <Link href="/agenda" className="block w-full bg-brand-loyal-blue text-white py-3 rounded-xl font-bold hover:bg-opacity-90 transition-all shadow-md">
+                        Return to Dashboard
+                    </Link>
+                </div>
             </div>
         </div>
     )
-  }
+}
 
   // Authorization: STRICTLY enforced Toastmaster-only access.
   const isToastmaster = nextMeeting.roleAssignments[0]?.userId === session.user.id;

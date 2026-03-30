@@ -11,50 +11,52 @@ const adapter = new PrismaBetterSqlite3({ url: dbUrl })
 const prisma = new PrismaClient({ adapter })
 
 async function main() {
+  // --- 1. Seed Meeting Templates from CSV ---
   const csvPath = path.join(process.cwd(), 'Gavel Club MM_DD - [MEETING THEME HERE] - Sheet1.csv');
   const csvContent = fs.readFileSync(csvPath, 'utf-8');
 
-  // Check if template already exists to avoid duplication on re-seeding
-  const existing = await prisma.meetingTemplate.findFirst({
+  const existingRegular = await prisma.meetingTemplate.findFirst({
     where: { type: 'Regular' }
   });
 
-  if (!existing) {
+  if (!existingRegular) {
     await prisma.meetingTemplate.create({
       data: {
         type: 'Regular',
         schemaStructure: csvContent,
       },
     });
-    console.log('Database seeded with standard "Regular" Meeting Template.')
+    console.log('✓ Seeded "Regular" Meeting Template from CSV.')
   } else {
-    console.log('Template already exists. Skipping meeting template seed.')
+    console.log('• Regular template already exists, skipping.')
   }
 
-  // Create Test Admin User
-  const adminEmail = 'admin@test.com'
+  // --- 2. Create Production Admin Account ---
+  const adminEmail = 'coquitlamgavel@gmail.com'
   const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } })
   
   if (!existingAdmin) {
-    const passwordHash = await bcrypt.hash('password123', 10)
+    const passwordHash = await bcrypt.hash('gcgm1450', 12)
     await prisma.user.create({
       data: {
         email: adminEmail,
-        firstName: 'Test',
-        lastName: 'Admin',
+        firstName: 'Admin',
+        lastName: 'DTCGC',
         role: 'ADMIN',
         passwordHash,
       }
     })
-    console.log(`Test admin created: ${adminEmail} (password: password123)`)
+    console.log(`✓ Production admin created: ${adminEmail}`)
   } else {
-    console.log('Admin user already exists.')
+    console.log(`• Admin ${adminEmail} already exists, skipping.`)
   }
+
+  console.log('\n✓ Database seed completed successfully.')
 }
 
 main()
   .catch((e) => {
-    console.error(e)
+    console.error('Seed failed:', e)
     process.exit(1)
   })
   .finally(async () => {

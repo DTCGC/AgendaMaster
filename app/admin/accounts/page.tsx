@@ -2,7 +2,7 @@ import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { approveAccount, rejectAccount, seedMockMembers, removeUser, removeSubscriber } from '@/app/actions/accounts'
+import { approveAccount, rejectAccount, removeUser, removeSubscriber } from '@/app/actions/accounts'
 import { Check, X, Users, Mail, Trash2, ShieldCheck } from 'lucide-react'
 
 export const metadata = {
@@ -132,15 +132,6 @@ export default async function AccountsPage() {
                         ))}
                     </div>
                 </div>
-                
-                {/* Seed Logic */}
-                {activeUsers.length < 5 && (
-                    <form action={async () => { await seedMockMembers(); }} className="pt-2">
-                        <button className="text-[10px] uppercase font-bold text-yellow-700 bg-brand-happy-yellow/20 px-4 py-2 border border-brand-happy-yellow rounded hover:bg-yellow-100 transition-colors">
-                            Populate Mock Roster (12 Individuals)
-                        </button>
-                    </form>
-                )}
             </div>
 
             {/* Guest Subscriber Directory */}

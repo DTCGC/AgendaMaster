@@ -2,6 +2,7 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
+import { MINOR_ROLES } from '@/lib/agenda-logic'
 
 export async function getFutureFridays() {
     const today = new Date();
@@ -41,6 +42,16 @@ export async function toggleMeeting(dateIso: string, existingId?: string) {
             where: { id: existingId },
             data: { status: newStatus as any }
         });
+
+        // WIPE initialized agenda when toggled off/on for testing purpose
+        if (newStatus === 'CANCELLED') {
+            await db.roleAssignment.deleteMany({
+                where: {
+                    meetingId: existingId,
+                    roleName: { in: MINOR_ROLES }
+                }
+            });
+        }
     } else {
         // Create new
         let standardTemplate = await db.meetingTemplate.findFirst({
