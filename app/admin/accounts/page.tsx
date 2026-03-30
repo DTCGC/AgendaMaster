@@ -77,12 +77,12 @@ export default async function AccountsPage() {
                             <td className="p-4 text-sm text-gray-600 italic font-mono">{user.email}</td>
                             <td className="p-4">
                                 <div className="flex gap-2 justify-end">
-                                    <form action={async () => { 'use server'; await approveAccount(user.id); }}>
+                                    <form action={approveAccount.bind(null, user.id)}>
                                     <button className="bg-green-600 text-white px-4 py-2 rounded shadow-sm hover:bg-green-700 transition-colors text-xs font-bold flex items-center gap-1">
                                         <Check size={14} /> Approve
                                     </button>
                                     </form>
-                                    <form action={async () => { 'use server'; await rejectAccount(user.id); }}>
+                                    <form action={rejectAccount.bind(null, user.id)}>
                                     <button className="border border-red-200 text-red-600 px-4 py-2 rounded hover:bg-red-50 transition-colors text-xs font-bold flex items-center gap-1">
                                         <X size={14} /> Deny
                                     </button>
@@ -122,7 +122,7 @@ export default async function AccountsPage() {
                                 </div>
                                 
                                 {user.id !== session.user.id && (
-                                    <form action={async () => { 'use server'; await removeUser(user.id); }} onSubmit={(e) => { if(!confirm(`Permanently purge ${user.firstName} from the roster?`)) e.preventDefault(); }}>
+                                    <form action={removeUser.bind(null, user.id)}>
                                         <button className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50">
                                             <Trash2 size={16} />
                                         </button>
@@ -135,7 +135,7 @@ export default async function AccountsPage() {
                 
                 {/* Seed Logic */}
                 {activeUsers.length < 5 && (
-                    <form action={async () => { 'use server'; await seedMockMembers(); }} className="pt-2">
+                    <form action={async () => { await seedMockMembers(); }} className="pt-2">
                         <button className="text-[10px] uppercase font-bold text-yellow-700 bg-brand-happy-yellow/20 px-4 py-2 border border-brand-happy-yellow rounded hover:bg-yellow-100 transition-colors">
                             Populate Mock Roster (12 Individuals)
                         </button>
@@ -164,7 +164,7 @@ export default async function AccountsPage() {
                                             <div className="text-[10px] text-gray-400">Enrolled: {new Date(sub.subscribedAt).toLocaleDateString()}</div>
                                         </div>
                                     </div>
-                                    <form action={async () => { 'use server'; await removeSubscriber(sub.id); }} onSubmit={(e) => { if(!confirm(`Remove ${sub.email} from list?`)) e.preventDefault(); }}>
+                                    <form action={removeSubscriber.bind(null, sub.id)}>
                                         <button className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50">
                                             <Trash2 size={16} />
                                         </button>

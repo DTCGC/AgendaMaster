@@ -2,6 +2,9 @@
 
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
+import BulletList from '@tiptap/extension-bullet-list'
+import OrderedList from '@tiptap/extension-ordered-list'
+import ListItem from '@tiptap/extension-list-item'
 import { Bold, Italic, Strikethrough, List, ListOrdered } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -17,14 +20,18 @@ export default function TiptapEditor({
   const [tick, setTick] = useState(0);
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+        StarterKit,
+        BulletList,
+        OrderedList,
+        ListItem
+    ],
     content: content,
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML())
-      setTick(t => t + 1)
     },
-    onSelectionUpdate: () => {
+    onTransaction: () => {
       setTick(t => t + 1)
     },
     editorProps: {
@@ -86,6 +93,26 @@ export default function TiptapEditor({
           <ListOrdered size={18} />
         </button>
       </div>
+
+      <style jsx global>{`
+        .prose ul {
+          list-style-type: disc !important;
+          padding-left: 1.5rem !important;
+          margin-top: 0.5rem !important;
+          margin-bottom: 0.5rem !important;
+        }
+        .prose ol {
+          list-style-type: decimal !important;
+          padding-left: 1.5rem !important;
+          margin-top: 0.5rem !important;
+          margin-bottom: 0.5rem !important;
+        }
+        .prose li {
+          margin-top: 0.25rem !important;
+          margin-bottom: 0.25rem !important;
+        }
+      `}</style>
+
       <EditorContent editor={editor} className="flex-grow" />
     </div>
   )

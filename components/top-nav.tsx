@@ -25,13 +25,13 @@ export function TopNav({ role }: { role?: string }) {
     <>
     <div className={`w-full ${bgColor} text-white px-6 py-4 shadow-md flex justify-between items-center z-40 relative`}>
         <Link href="/" className="flex items-center gap-3 group">
-            <div className="bg-white p-1.5 rounded shadow-sm group-hover:scale-105 transition-transform">
+            <div className="bg-white/10 p-1.5 rounded shadow-sm group-hover:scale-105 transition-transform backdrop-blur-sm border border-white/20">
                 <Image 
-                    src={isAdmin ? "/assets/images/TrueMaroon/GavelClubLogoTrueMaroon-RGB.png" : "/assets/images/LoyalBlue/GavelClubLogoLoyalBlue-RGB.png"} 
+                    src={isAdmin ? "/assets/GavelClubLogo/TrueMaroon/GavelClubLogoTrueMaroon.svg" : "/assets/GavelClubLogo/LoyalBlue/GavelClubLogoLoyalBlue.svg"} 
                     alt="Logo" 
                     width={100} 
                     height={30} 
-                    className="mix-blend-multiply"
+                    className="h-8 w-auto"
                 />
             </div>
             <div className="font-bold text-xl tracking-wider select-none hidden sm:block">

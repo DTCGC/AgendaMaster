@@ -29,31 +29,18 @@ export async function getFutureFridays() {
 
 export async function toggleMeeting(dateIso: string, existingId?: string) {
     if (existingId) {
-        // Fetch current state
         const meeting = await db.meeting.findUnique({
-            where: { id: existingId },
-            include: { roleAssignments: true }
+            where: { id: existingId }
         });
 
-        if (!meeting) return; // Already gone
+        if (!meeting) return;
 
-        if (meeting.status === 'CANCELLED') {
-            // Re-enable
-            await db.meeting.update({
-                where: { id: existingId },
-                data: { status: 'SCHEDULED' }
-            });
-        } else {
-            // Currently SCHEDULED -> Try to delete or Cancel
-            if (meeting.roleAssignments.length === 0) {
-                await db.meeting.delete({ where: { id: existingId } });
-            } else {
-                await db.meeting.update({
-                    where: { id: existingId },
-                    data: { status: 'CANCELLED' }
-                });
-            }
-        }
+        const newStatus = meeting.status === 'SCHEDULED' ? 'CANCELLED' : 'SCHEDULED';
+        
+        await db.meeting.update({
+            where: { id: existingId },
+            data: { status: newStatus as any }
+        });
     } else {
         // Create new
         let standardTemplate = await db.meetingTemplate.findFirst({

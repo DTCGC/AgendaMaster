@@ -16,11 +16,11 @@ export default async function LoginPage() {
         
         <div className="mb-8">
             <Image 
-                src="/assets/images/LoyalBlue/GavelClubLogoLoyalBlue-RGB.png" 
+                src="/assets/GavelClubLogo/LoyalBlue/GavelClubLogoLoyalBlue.svg" 
                 alt="DTCGC Logo" 
                 width={180} 
                 height={60} 
-                className="mix-blend-multiply"
+                className="w-48 h-auto"
             />
         </div>
 

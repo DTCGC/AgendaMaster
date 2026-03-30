@@ -1,4 +1,5 @@
 import { db } from './db';
+import { getDisplayName } from './user-logic';
 
 export const MINOR_ROLES = [
   "Sergeant at Arms",
@@ -42,11 +43,13 @@ export async function getAutoAssignments(meetingId: string) {
     }
   });
 
-  // Attach heuristic timestamp
+  // Attach heuristic timestamp and compute privacy-compliant display names
   const userStats = activeUsers.map((user: any) => {
     const lastAssignment = user.roleAssignments[0]?.assignedAt;
-    // 0 epoch forces never-assigned users to the front of the queue
     const lastAssignedAt = lastAssignment ? new Date(lastAssignment).getTime() : 0;
+    
+    // Add computed name for privacy
+    user.displayName = getDisplayName(user, activeUsers);
     
     return {
       user,
@@ -81,7 +84,6 @@ export async function getAutoAssignments(meetingId: string) {
       assignments[role] = eligibleUsers[userIndex];
       userIndex++;
     } else {
-      // Per constraints: Empty placeholders if no members left (avoid double roles)
       assignments[role] = null;
     }
   }
@@ -94,9 +96,10 @@ export async function getAutoAssignments(meetingId: string) {
     preAssignedMajor: existingAssignments.filter((a: any) => MAJOR_ROLES.includes(a.roleName)).map((a: any) => {
         // Find the user object from the activeUsers list we already fetched
         const u = activeUsers.find((user: any) => user.id === a.userId);
+        if (u) (u as any).displayName = getDisplayName(u, activeUsers);
         return {
             ...a,
-            user: u ? { firstName: u.firstName, lastName: u.lastName } : null
+            user: u ? { firstName: u.firstName, lastName: u.lastName, displayName: (u as any).displayName } : null
         };
     })
   };

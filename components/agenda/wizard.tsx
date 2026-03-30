@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import TiptapEditor from './tiptap-editor'
-import { fetchRoleAssignments, formatDraft } from '@/app/actions/agenda'
+import { fetchRoleAssignments, formatDraft, saveFinalAgenda } from '@/app/actions/agenda'
+import { MINOR_ROLES } from '@/lib/agenda-logic'
 
 // Boilerplate Template 
 const DEFAULT_TEMPLATE = `
@@ -50,6 +51,38 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
     loadRoles()
   }, [meetingId])
 
+  // --- Double Role Cleansing ---
+  useEffect(() => {
+    if (!allowDoubleRoles) {
+        const newMinorRoles = { ...minorRoles };
+        const pool = [...unassigned];
+        const alreadyAssigned = new Set();
+        
+        // Major roles are primary, add them to the "already occupied" set first
+        preAssigned.forEach(a => {
+            if (a.userId) alreadyAssigned.add(a.userId);
+        });
+
+        let changed = false;
+        Object.keys(newMinorRoles).forEach(role => {
+            const user = newMinorRoles[role];
+            if (user && alreadyAssigned.has(user.id)) {
+                // Conflict! This person already has a role. Revert this specific minor assignment.
+                pool.push(user);
+                newMinorRoles[role] = null;
+                changed = true;
+            } else if (user) {
+                alreadyAssigned.add(user.id);
+            }
+        });
+
+        if (changed) {
+            setMinorRoles(newMinorRoles);
+            setUnassigned(pool);
+        }
+    }
+  }, [allowDoubleRoles]);
+
   // Save draft incrementally
   useEffect(() => {
     if (emailDraft) {
@@ -66,31 +99,40 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
   }
 
   const handleRoleChange = (roleName: string, userId: string) => {
-    // Find the chosen user from either currently assigned or unassigned pools
-    const allAvailableUsers = [
-        ...Object.values(minorRoles).filter(u => u !== null),
-        ...unassigned
-    ];
-    
-    // The user they selected
-    const selectedUser = allAvailableUsers.find(u => u.id === userId) || null;
-    
-    // The user who used to have this role (could be null)
+    const selectedUser = unassigned.find(u => u.id === userId) || null;
     const displacedUser = minorRoles[roleName];
+
+    // Enforcement: If double roles are disabled, check for existing commitments
+    if (!allowDoubleRoles && selectedUser) {
+        const hasOtherMinor = Object.values(minorRoles).some(u => u?.id === selectedUser.id);
+        const hasMajor = preAssigned.some(a => a.userId === selectedUser.id);
+        
+        if (hasOtherMinor || hasMajor) {
+            alert(`Conflict: ${selectedUser.displayName} is already assigned to another role. Please enable 'Allow Double Roles' or unassign their other commitment first.`);
+            return;
+        }
+    }
 
     setMinorRoles(prev => ({
         ...prev,
         [roleName]: selectedUser
     }));
 
-    // If a user was displaced, put them back in the unassigned pool
     setUnassigned(prev => {
-        let newUnassigned = [...prev].filter(u => u.id !== userId); // remove newly grabbed user
-        if (displacedUser && displacedUser.id !== userId) {
-            newUnassigned.push(displacedUser);
-        }
+        let newUnassigned = [...prev].filter(u => u.id !== userId);
+        if (displacedUser) newUnassigned.push(displacedUser);
         return newUnassigned;
     });
+  }
+
+  const handleFinish = async () => {
+    try {
+        await saveFinalAgenda(meetingId, minorRoles);
+        window.location.href = '/agenda';
+    } catch (e) {
+        console.error("Failed to save final agenda:", e);
+        alert("Persistence Error: Could not save the finalized roles to the server.");
+    }
   }
 
   const handleCopy = () => {
@@ -131,11 +173,11 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
               const major = preAssigned.find((a: any) => a.roleName === roleName);
               if (major) {
                   const u = (major as any).user;
-                  holder = u ? `${u.firstName} ${u.lastName}` : "TBD";
+                  holder = u?.displayName || "TBD";
               } else {
                   // Check Minor roles
                   const user = minorRoles[roleName];
-                  if (user) holder = `${user.firstName} ${user.lastName}`;
+                  if (user) holder = user.displayName;
               }
           }
           
@@ -247,9 +289,9 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
                                         onChange={(e) => handleRoleChange(role, e.target.value)}
                                      >
                                         <option value="">-- UNASSIGNED --</option>
-                                        {user && <option value={user.id}>{user.firstName} {user.lastName}</option>}
+                                        {user && <option value={user.id}>{user.displayName}</option>}
                                         {unassigned.map(u => (
-                                            <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
+                                            <option key={u.id} value={u.id}>{u.displayName}</option>
                                         ))}
                                      </select>
                                  </div>
@@ -284,7 +326,7 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
                              <p className="text-xs text-gray-400 mb-2">Members attending without a formal designated action role.</p>
                              <div className="flex flex-wrap gap-2 text-xs">
                                  {unassigned.length > 0 ? unassigned.map(u => (
-                                     <span key={u.id} className="bg-gray-100 border px-2 py-1 text-gray-600 rounded-full">{u.firstName} {u.lastName}</span>
+                                     <span key={u.id} className="bg-gray-100 border px-2 py-1 text-gray-600 rounded-full">{u.displayName}</span>
                                  )) : (
                                      <span className="text-gray-400 italic">Everyone is participating!</span>
                                  )}
@@ -342,7 +384,7 @@ export default function AgendaWizard({ meetingId }: { meetingId: string }) {
                   Next Step
               </button>
           ) : (
-              <button className="bg-green-600 px-6 py-2 text-white font-bold rounded shadow hover:opacity-90" onClick={() => window.location.href = '/agenda'}>Finish</button>
+              <button className="bg-green-600 px-6 py-2 text-white font-bold rounded shadow hover:opacity-90" onClick={handleFinish}>Finish</button>
           )}
       </div>
     </div>
