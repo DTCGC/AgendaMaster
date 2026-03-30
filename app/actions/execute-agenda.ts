@@ -76,7 +76,8 @@ export async function executeAgendaPipeline(
   meetingId: string,
   emailSubject: string,
   emailHtmlBody: string,
-  meetingTheme: string
+  meetingTheme: string,
+  qotd: string
 ): Promise<{ success: boolean; sheetUrl?: string; error?: string; isUpdate?: boolean }> {
   const session = await auth();
 
@@ -138,6 +139,7 @@ export async function executeAgendaPipeline(
         accessToken,
         meeting.googleSheetId!,
         meetingTheme,
+        qotd,
         roleMap,
         csvTemplate,
         unassignedNames
@@ -149,6 +151,7 @@ export async function executeAgendaPipeline(
         accessToken,
         meeting.date,
         meetingTheme,
+        qotd,
         roleMap,
         csvTemplate,
         unassignedNames

@@ -29,6 +29,7 @@ function parseCSVRow(line: string): string[] {
 export function populateTemplate(
   csvTemplate: string,
   theme: string,
+  qotd: string,
   roleMap: Record<string, string>,
   unassignedNames: string[]
 ): string[][] {
@@ -37,9 +38,9 @@ export function populateTemplate(
     .filter(line => line.length > 0)
     .map(line => parseCSVRow(line));
 
-  // Row 0: inject theme
+  // Row 0: inject theme/qotd
   if (rows[0]?.[1]) {
-    rows[0][1] = rows[0][1].replace('[QUESTION HERE]', theme);
+    rows[0][1] = rows[0][1].replace('[QUESTION HERE]', qotd || theme);
   }
 
   let inNoRolesSection = false;
@@ -99,6 +100,7 @@ export async function createAgendaSheet(
   accessToken: string,
   meetingDate: Date,
   theme: string,
+  qotd: string,
   roleMap: Record<string, string>,
   csvTemplate: string,
   unassignedNames: string[]
@@ -107,7 +109,7 @@ export async function createAgendaSheet(
   const day = String(meetingDate.getDate()).padStart(2, '0');
   const title = `Gavel Club ${month}/${day} - ${theme}`;
 
-  const populatedRows = populateTemplate(csvTemplate, theme, roleMap, unassignedNames);
+  const populatedRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames);
 
   // Step 1: Create an empty spreadsheet
   console.log('[GoogleAPI] Creating spreadsheet:', title);
@@ -162,11 +164,12 @@ export async function updateAgendaSheet(
   accessToken: string,
   existingSheetId: string,
   theme: string,
+  qotd: string,
   roleMap: Record<string, string>,
   csvTemplate: string,
   unassignedNames: string[]
 ): Promise<void> {
-  const populatedRows = populateTemplate(csvTemplate, theme, roleMap, unassignedNames);
+  const populatedRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames);
   await writeSheetData(accessToken, existingSheetId, populatedRows);
 }
 

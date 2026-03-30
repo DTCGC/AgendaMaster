@@ -26,6 +26,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
   const [emailDraft, setEmailDraft] = useState('')
   const [meetingType, setMeetingType] = useState('Regular')
   const [meetingTheme, setMeetingTheme] = useState('')
+  const [meetingQotd, setMeetingQotd] = useState('')
   
   // Roles Data
   const [loadingRoles, setLoadingRoles] = useState(true)
@@ -162,7 +163,8 @@ function WizardContent({ meetingId }: { meetingId: string }) {
             meetingId,
             emailSubject || `DTCGC Agenda: ${meetingTheme}`,
             emailDraft,
-            meetingTheme || 'Meeting'
+            meetingTheme || 'Meeting',
+            meetingQotd || 'TBD'
           );
         } catch { /* silent — sheet update is best-effort */ }
         router.push('/agenda');
@@ -187,7 +189,8 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         meetingId,
         emailSubject || `DTCGC Agenda: ${meetingTheme}`,
         emailDraft,
-        meetingTheme
+        meetingTheme,
+        meetingQotd || 'TBD'
       )
 
       setExecutionResult(result)
@@ -330,6 +333,10 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                  <label className="font-semibold text-sm">Meeting Theme (Required)</label>
                  <input type="text" placeholder="e.g., Spring Forward" className="w-full border p-3 rounded" value={meetingTheme} onChange={(e) => setMeetingTheme(e.target.value)} />
              </div>
+             <div className="space-y-2">
+                 <label className="font-semibold text-sm">Question of The Day (QOTD)</label>
+                 <input type="text" placeholder="e.g., What is your favorite season?" className="w-full border p-3 rounded" value={meetingQotd} onChange={(e) => setMeetingQotd(e.target.value)} />
+             </div>
           </div>
         )}
 
@@ -434,14 +441,18 @@ function WizardContent({ meetingId }: { meetingId: string }) {
              </div>
              
              {/* Summary Preview */}
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-4 rounded-lg border">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-gray-50 p-4 rounded-lg border flex-1">
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Email Subject</h3>
                     <p className="text-sm font-semibold text-gray-800">{emailSubject || `DTCGC Agenda: ${meetingTheme}`}</p>
                 </div>
-                <div className="bg-gray-50 p-4 rounded-lg border">
+                <div className="bg-gray-50 p-4 rounded-lg border flex-1">
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Meeting Theme</h3>
                     <p className="text-sm font-semibold text-gray-800">{meetingTheme || 'Not set'}</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg border flex-1">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Question Of The Day</h3>
+                    <p className="text-sm font-semibold text-gray-800">{meetingQotd || 'Not set'}</p>
                 </div>
              </div>
 
