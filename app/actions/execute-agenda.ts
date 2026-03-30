@@ -2,23 +2,82 @@
 
 import { auth } from '@/auth'
 import { db } from '@/lib/db'
-import { createAgendaSheet, sendGmailAsUser } from '@/lib/google-api'
-import { getDisplayName } from '@/lib/user-logic'
+import { createAgendaSheet, updateAgendaSheet, sendGmailAsUser } from '@/lib/google-api'
+import { getDisplayName, type NameableUser } from '@/lib/user-logic'
 import { MINOR_ROLES, MAJOR_ROLES, FIXED_ROLES } from '@/lib/agenda-logic'
 import { revalidatePath } from 'next/cache'
 
 /**
- * Full execution pipeline for Step 4 of the Agenda Wizard:
- * 1. Create a Google Sheet from the template, populated with role assignments
- * 2. Send the email to all members/subscribers with the sheet link
- * 3. Mark the meeting as COMPLETED
+ * Builds the complete CSV role label → display name map.
+ * This maps EVERY role label that appears in col[1] of the CSV template
+ * to the person who should fill that slot.
+ */
+function buildRoleMap(
+  roleAssignments: { roleName: string; user: NameableUser | null }[],
+  allMembers: NameableUser[]
+): Record<string, string> {
+  const map: Record<string, string> = {};
+
+  // 1. Fixed roles (hardcoded people per spec)
+  map['Roles For Next Meeting'] = 'John';
+  map['Business Meeting'] = 'Andrew';
+
+  // 2. DB assignments (major + minor roles assigned in the app)
+  for (const a of roleAssignments) {
+    if (a.user) {
+      const name = getDisplayName(a.user, allMembers);
+      map[a.roleName] = name;
+    }
+  }
+
+  // 3. CSV alias mappings — the CSV uses "#" notation and has some quirky labels
+  // Map them to the internal role names we already have
+  const alias = (csvLabel: string, internalRole: string) => {
+    if (!map[csvLabel] && map[internalRole]) {
+      map[csvLabel] = map[internalRole];
+    }
+  };
+
+  alias('Speaker #1', 'Speaker 1');
+  alias('Speaker #2', 'Speaker 2');
+  // "Speaker 3" in CSV matches internal name directly — no alias needed
+  alias('Evaluator #1', 'Evaluator 1');
+  alias('Evaluator #2', 'Evaluator 2');
+  alias('Evaluator #3', 'Evaluator 3');
+  alias('Table Topics Evaluator #1', 'Table Topics Evaluator 1');
+  alias('Table Topics Evaluator #2', 'Table Topics Evaluator 2');
+
+  // General Feedback rows — same person as the speaker they follow
+  alias('General Feedback #1', 'Speaker 1');    // Speaker #1's feedback slot
+  alias('General Feadback #2', 'Speaker 2');    // typo is in the actual CSV
+  alias('General Feedback  #3', 'Speaker 3');   // double space is in the actual CSV
+
+  // Recurring roles in the second half of the meeting
+  // Timer, Grammarian, FWC, Quizmaster, Toastmaster appear twice — same person
+  // They already match by exact name from DB assignments
+
+  // Derived roles (same person as another role)
+  alias('Comments and Closing Remarks', 'Toastmaster');
+  alias('Dismissal', 'Sergeant at Arms');
+
+  // Break Time has no person
+  map['Break Time'] = '';
+
+  return map;
+}
+
+/**
+ * Full execution pipeline for Step 4 of the Agenda Wizard.
+ * 
+ * First execution:  Create Google Sheet + Send email + Store sheet ID
+ * Re-execution:     Update existing Google Sheet (silently, no email re-send)
  */
 export async function executeAgendaPipeline(
   meetingId: string,
   emailSubject: string,
   emailHtmlBody: string,
   meetingTheme: string
-): Promise<{ success: boolean; sheetUrl?: string; error?: string }> {
+): Promise<{ success: boolean; sheetUrl?: string; error?: string; isUpdate?: boolean }> {
   const session = await auth();
 
   if (!session?.user?.accessToken) {
@@ -31,7 +90,7 @@ export async function executeAgendaPipeline(
   const accessToken = session.user.accessToken;
 
   try {
-    // --- 1. Fetch meeting data and build role map ---
+    // Fetch meeting with all assignments
     const meeting = await db.meeting.findUnique({
       where: { id: meetingId },
       include: {
@@ -44,91 +103,107 @@ export async function executeAgendaPipeline(
       return { success: false, error: 'Meeting not found.' };
     }
 
-    // Build the complete role → display name mapping
+    // All approved members
     const allMembers = await db.user.findMany({
       where: { role: { in: ['MEMBER', 'ADMIN'] } }
     });
 
-    const roleMap: Record<string, string> = {};
+    // Build the role map
+    const roleMap = buildRoleMap(
+      meeting.roleAssignments.map((a: { roleName: string; user: NameableUser | null }) => ({
+        roleName: a.roleName,
+        user: a.user as NameableUser | null
+      })),
+      allMembers
+    );
 
-    // Fixed roles
-    for (const [role, name] of Object.entries(FIXED_ROLES)) {
-      roleMap[role] = name;
-    }
+    // Compute unassigned members
+    const assignedUserIds = new Set(
+      meeting.roleAssignments.map((a: { userId: string | null }) => a.userId).filter(Boolean)
+    );
+    const unassignedNames = allMembers
+      .filter((m: { id: string }) => !assignedUserIds.has(m.id))
+      .map((m: NameableUser) => getDisplayName(m, allMembers));
 
-    // Major + Minor roles from DB assignments
-    for (const assignment of meeting.roleAssignments) {
-      if (assignment.user) {
-        roleMap[assignment.roleName] = getDisplayName(assignment.user, allMembers);
-      }
-    }
-
-    // Also map "Speaker #1" → "Speaker 1" etc for CSV template compatibility
-    const csvAliases: Record<string, string> = {
-      'Speaker #1': roleMap['Speaker 1'] || 'TBD',
-      'Speaker #2': roleMap['Speaker 2'] || 'TBD',
-      'Speaker 3': roleMap['Speaker 3'] || 'TBD',
-      'Evaluator #1': roleMap['Evaluator 1'] || 'TBD',
-      'Evaluator #2': roleMap['Evaluator 2'] || 'TBD',
-      'Evaluator #3': roleMap['Evaluator 3'] || 'TBD',
-      'Table Topics Evaluator #1': roleMap['Table Topics Evaluator 1'] || 'TBD',
-      'Table Topics Evaluator #2': roleMap['Table Topics Evaluator 2'] || 'TBD',
-    };
-
-    const fullRoleMap = { ...roleMap, ...csvAliases };
-
-    // --- 2. Create the Google Sheet ---
     const csvTemplate = meeting.template.schemaStructure;
-    const { sheetUrl } = await createAgendaSheet(
-      accessToken,
-      meeting.date,
-      meetingTheme,
-      fullRoleMap,
-      csvTemplate
-    );
 
-    // --- 3. Build the email with the sheet link appended ---
-    const emailWithLink = `
-      ${emailHtmlBody}
-      <div style="margin-top: 24px; padding: 16px; background: #f0f4f8; border-radius: 8px; border-left: 4px solid #004165;">
-        <p style="margin: 0; font-size: 14px; color: #333;">
-          <strong>📋 Agenda Sheet:</strong><br/>
-          <a href="${sheetUrl}" style="color: #004165; font-weight: bold;">${sheetUrl}</a>
+    // --- Check if this is a first-time creation or an update ---
+    const isUpdate = !!meeting.googleSheetId;
+
+    let sheetUrl: string;
+
+    if (isUpdate) {
+      // SILENT UPDATE: just re-populate the existing sheet
+      await updateAgendaSheet(
+        accessToken,
+        meeting.googleSheetId!,
+        meetingTheme,
+        roleMap,
+        csvTemplate,
+        unassignedNames
+      );
+      sheetUrl = meeting.googleSheetUrl!;
+    } else {
+      // FIRST TIME: create the sheet + send email
+      const result = await createAgendaSheet(
+        accessToken,
+        meeting.date,
+        meetingTheme,
+        roleMap,
+        csvTemplate,
+        unassignedNames
+      );
+      sheetUrl = result.sheetUrl;
+
+      // Store sheet IDs in the meeting record
+      await db.meeting.update({
+        where: { id: meetingId },
+        data: {
+          googleSheetId: result.sheetId,
+          googleSheetUrl: result.sheetUrl,
+          theme: meetingTheme
+        }
+      });
+
+      // Build the email with the sheet link appended
+      const emailWithLink = `
+        ${emailHtmlBody}
+        <div style="margin-top: 24px; padding: 16px; background: #f0f4f8; border-radius: 8px; border-left: 4px solid #004165;">
+          <p style="margin: 0; font-size: 14px; color: #333;">
+            <strong>📋 Agenda Sheet:</strong><br/>
+            <a href="${sheetUrl}" style="color: #004165; font-weight: bold;">${sheetUrl}</a>
+          </p>
+        </div>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+        <p style="font-size: 11px; color: #999;">
+          Sent via DTCGC AgendaMaster — Downtown Coquitlam Gavel Club
         </p>
-      </div>
-      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-      <p style="font-size: 11px; color: #999;">
-        Sent via DTCGC AgendaMaster — Downtown Coquitlam Gavel Club
-      </p>
-    `;
+      `;
 
-    // --- 4. Collect all recipients ---
-    const memberEmails = allMembers.map((m: { email: string }) => m.email);
-    const subscribers = await db.subscriber.findMany({ select: { email: true } });
-    const subscriberEmails = subscribers.map((s: { email: string }) => s.email);
-    const allRecipients = Array.from(new Set([...memberEmails, ...subscriberEmails]));
+      // Collect all recipients
+      const memberEmails = allMembers.map((m: { email: string }) => m.email);
+      const subscribers = await db.subscriber.findMany({ select: { email: true } });
+      const subscriberEmails = subscribers.map((s: { email: string }) => s.email);
+      const allRecipients = Array.from(new Set([...memberEmails, ...subscriberEmails]));
 
-    // --- 5. Send via Gmail API (as the logged-in Toastmaster) ---
-    await sendGmailAsUser(
-      accessToken,
-      allRecipients,
-      emailSubject,
-      emailWithLink
-    );
+      // Send via Gmail API (as the logged-in Toastmaster)
+      await sendGmailAsUser(accessToken, allRecipients, emailSubject, emailWithLink);
+    }
 
-    // --- 6. Update meeting state ---
-    await db.meeting.update({
-      where: { id: meetingId },
-      data: { 
-        theme: meetingTheme,
-        status: 'COMPLETED' 
-      }
-    });
+    // Save theme (if not already saved)
+    if (!isUpdate) {
+      // Already saved above
+    } else {
+      await db.meeting.update({
+        where: { id: meetingId },
+        data: { theme: meetingTheme }
+      });
+    }
 
     revalidatePath('/agenda');
     revalidatePath('/admin/calendar');
 
-    return { success: true, sheetUrl };
+    return { success: true, sheetUrl, isUpdate };
   } catch (error: any) {
     console.error('Agenda execution pipeline error:', error);
     return {

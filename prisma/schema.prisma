@@ -30,6 +30,8 @@ model Meeting {
   typeId          String
   theme           String?
   status          String           @default("SCHEDULED")
+  googleSheetId   String?
+  googleSheetUrl  String?
   template        MeetingTemplate  @relation(fields: [typeId], references: [id])
   roleAssignments RoleAssignment[]
 }

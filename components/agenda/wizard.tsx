@@ -44,6 +44,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
     success: boolean;
     sheetUrl?: string;
     error?: string;
+    isUpdate?: boolean;
   } | null>(null)
 
   // Load Initial Setup on Mount
@@ -155,6 +156,15 @@ function WizardContent({ meetingId }: { meetingId: string }) {
     setIsSaving(true);
     try {
         await saveFinalAgenda(meetingId, minorRoles);
+        // If a sheet already exists, silently update it with the new roles
+        try {
+          await executeAgendaPipeline(
+            meetingId,
+            emailSubject || `DTCGC Agenda: ${meetingTheme}`,
+            emailDraft,
+            meetingTheme || 'Meeting'
+          );
+        } catch { /* silent — sheet update is best-effort */ }
         router.push('/agenda');
     } catch (e) {
         console.error("Failed to save final agenda:", e);
@@ -443,8 +453,14 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                             <div className="flex items-center gap-3">
                                 <CheckCircle2 size={28} className="text-green-600" />
                                 <div>
-                                    <h3 className="font-bold text-green-800 text-lg">Pipeline Executed Successfully</h3>
-                                    <p className="text-sm text-green-700">Google Sheet created and email dispatched to all club members.</p>
+                                    <h3 className="font-bold text-green-800 text-lg">
+                                        {executionResult.isUpdate ? 'Agenda Sheet Updated' : 'Pipeline Executed Successfully'}
+                                    </h3>
+                                    <p className="text-sm text-green-700">
+                                        {executionResult.isUpdate 
+                                            ? 'The existing Google Sheet has been updated with the latest role assignments.'
+                                            : 'Google Sheet created and email dispatched to all club members.'}
+                                    </p>
                                 </div>
                             </div>
                             {executionResult.sheetUrl && (
@@ -482,10 +498,10 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                         {isExecuting ? (
                             <>
                                 <Loader2 size={22} className="animate-spin" />
-                                Generating Sheet & Sending Email...
+                                {initialStepParam === 3 ? 'Updating Sheet...' : 'Generating Sheet & Sending Email...'}
                             </>
                         ) : (
-                            'Generate Google Sheet & Send Email'
+                            initialStepParam === 3 ? 'Update Google Sheet' : 'Generate Google Sheet & Send Email'
                         )}
                     </button>
 
@@ -541,13 +557,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
               >
                   Next Step
               </button>
-          ) : (
-              !executionResult?.success && (
-                <button disabled={isSaving} className="bg-green-600 px-8 py-2 text-white font-bold rounded shadow hover:opacity-90 active:scale-95 disabled:bg-gray-400" onClick={handleFinish}>
-                    {isSaving ? 'Processing...' : 'Save Roles Only'}
-                </button>
-              )
-          )}
+          ) : null}
       </div>
       )}
     </div>
