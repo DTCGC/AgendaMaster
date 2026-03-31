@@ -4,7 +4,8 @@ import { db } from '@/lib/db'
 import { quietlySendEmail } from '@/lib/email'
 import { revalidatePath } from 'next/cache'
 
-export async function approveAccount(userId: string) {
+export async function approveAccount(formData: FormData) {
+  const userId = formData.get('userId') as string;
   const user = await db.user.update({
     where: { id: userId },
     data: { role: 'MEMBER' }
@@ -30,7 +31,8 @@ export async function approveAccount(userId: string) {
   revalidatePath('/admin/accounts');
 }
 
-export async function rejectAccount(userId: string) {
+export async function rejectAccount(formData: FormData) {
+  const userId = formData.get('userId') as string;
   const user = await db.user.delete({
     where: { id: userId }
   });
@@ -67,14 +69,16 @@ export async function subscribeGuest(email: string) {
   }
 }
 
-export async function removeUser(userId: string) {
+export async function removeUser(formData: FormData) {
+  const userId = formData.get('userId') as string;
   await db.user.delete({
     where: { id: userId }
   });
   revalidatePath('/admin/accounts');
 }
 
-export async function removeSubscriber(subscriberId: string) {
+export async function removeSubscriber(formData: FormData) {
+  const subscriberId = formData.get('subscriberId') as string;
   await db.subscriber.delete({
     where: { id: subscriberId }
   });

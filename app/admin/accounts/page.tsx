@@ -77,15 +77,17 @@ export default async function AccountsPage() {
                             <td className="p-4 text-sm text-gray-600 italic font-mono">{user.email}</td>
                             <td className="p-4">
                                 <div className="flex gap-2 justify-end">
-                                    <form action={approveAccount.bind(null, user.id)}>
-                                    <button className="bg-green-600 text-white px-4 py-2 rounded shadow-sm hover:bg-green-700 transition-colors text-xs font-bold flex items-center gap-1">
-                                        <Check size={14} /> Approve
-                                    </button>
+                                    <form action={approveAccount}>
+                                        <input type="hidden" name="userId" value={user.id} />
+                                        <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded shadow-sm hover:bg-green-700 transition-colors text-xs font-bold flex items-center gap-1">
+                                            <Check size={14} /> Approve
+                                        </button>
                                     </form>
-                                    <form action={rejectAccount.bind(null, user.id)}>
-                                    <button className="border border-red-200 text-red-600 px-4 py-2 rounded hover:bg-red-50 transition-colors text-xs font-bold flex items-center gap-1">
-                                        <X size={14} /> Deny
-                                    </button>
+                                    <form action={rejectAccount}>
+                                        <input type="hidden" name="userId" value={user.id} />
+                                        <button type="submit" className="border border-red-200 text-red-600 px-4 py-2 rounded hover:bg-red-50 transition-colors text-xs font-bold flex items-center gap-1">
+                                            <X size={14} /> Deny
+                                        </button>
                                     </form>
                                 </div>
                             </td>
@@ -122,8 +124,9 @@ export default async function AccountsPage() {
                                 </div>
                                 
                                 {user.id !== session.user.id && (
-                                    <form action={removeUser.bind(null, user.id)}>
-                                        <button className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50">
+                                    <form action={removeUser}>
+                                        <input type="hidden" name="userId" value={user.id} />
+                                        <button type="submit" className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50">
                                             <Trash2 size={16} />
                                         </button>
                                     </form>
@@ -155,8 +158,9 @@ export default async function AccountsPage() {
                                             <div className="text-[10px] text-gray-400">Enrolled: {new Date(sub.subscribedAt).toLocaleDateString()}</div>
                                         </div>
                                     </div>
-                                    <form action={removeSubscriber.bind(null, sub.id)}>
-                                        <button className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50">
+                                    <form action={removeSubscriber}>
+                                        <input type="hidden" name="subscriberId" value={sub.id} />
+                                        <button type="submit" className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50">
                                             <Trash2 size={16} />
                                         </button>
                                     </form>
