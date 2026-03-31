@@ -2,8 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'AgendaMaster',
-      script: 'node_modules/next/dist/bin/next',
-      args: 'start',
+      script: 'npm',
+      args: 'run start',
       instances: 'max',
       exec_mode: 'cluster',
       env: {

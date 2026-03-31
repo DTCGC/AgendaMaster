@@ -99,6 +99,11 @@ sudo chown -R $USER:$USER /var/www/agendamaster /var/www/data
 cd /var/www/agendamaster
 git clone https://github.com/DTCGC/AgendaMaster.git .
 cp .env.example .env # Then nano .env and set production values
+
+# 5. Build Application
+npm install
+npx prisma generate
+npm run build
 ```
 
 ### 2. Production Database Strategy
