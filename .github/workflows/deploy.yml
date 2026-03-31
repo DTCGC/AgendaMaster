@@ -34,7 +34,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: ".next,public,node_modules,package.json,ecosystem.config.js,prisma"
           target: "/var/www/agendamaster"
-          rm: true # Clean old files to avoid conflicts
 
       - name: PM2 Reload
         uses: appleboy/ssh-action@master
