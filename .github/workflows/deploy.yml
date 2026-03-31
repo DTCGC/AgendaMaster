@@ -46,6 +46,10 @@ jobs:
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
             
-            # 2. Navigate and Reload
+            # 2. Navigate and Sync Database
             cd /var/www/agendamaster
+            npx prisma db push
+            npx prisma db seed
+            
+            # 3. Reload PM2
             pm2 reload ecosystem.config.js || pm2 start ecosystem.config.js
