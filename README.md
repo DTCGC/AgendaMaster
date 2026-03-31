@@ -70,51 +70,75 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
 
 ---
 
-## 🚢 Modern Deployment (DigitalOcean Droplet)
+## 🚢 Modern Deployment (DigitalOcean Droplet via GitHub Actions)
 
-This project is optimized for deployment on a **DigitalOcean Droplet** using a modern **GitHub Actions** CI/CD pipeline for effortless "Push to Deploy" updates.
+AgendaMaster is designed for high-availability deployment on a **DigitalOcean Droplet** using **GitHub Actions** for automated "Push to Deploy" updates.
 
-### 1. Droplet Preparation
-- Ensure **Node.js**, **NPM**, and **PM2** are installed on your droplet.
-- Set up your application directory and `.env` file manually once.
+### 1. Initial Server Provisioning
+Select a **Basic Droplet** with **Ubuntu 22.04 LTS** (1GB RAM / 1 CPU). 
 
-### 2. GitHub Actions Setup
-The following workflow can be added to `.github/workflows/deploy.yml` to automate deployments:
+> [!IMPORTANT]
+> **SSH Access**: Use the provided `AgendaMaster` private key (found in the repository root) to access your Droplet. Add the contents of `AgendaMaster.pub` to the Droplet's `authorized_keys` during creation.
 
-```yaml
-name: Deploy to Droplet
+#### Run these commands once on your Droplet:
+```bash
+# 1. Update and install Node.js (via NVM)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+source ~/.bashrc
+nvm install 20
 
-on:
-  push:
-    branches: [main]
+# 2. Install PM2 and Git
+npm install -g pm2
+sudo apt update && sudo apt install -y git nginx
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+# 3. Prepare Application Directories
+sudo mkdir -p /var/www/agendamaster /var/www/data
+sudo chown -R $USER:$USER /var/www/agendamaster /var/www/data
 
-      - name: SSH Deploy
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.DROPLET_IP }}
-          username: ${{ secrets.DROPLET_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /path/to/your/app
-            git pull origin main
-            npm install
-            npx prisma generate
-            npm run build
-            pm2 restart AgendaMaster
+# 4. Clone and Setup Environment
+cd /var/www/agendamaster
+git clone https://github.com/DTCGC/AgendaMaster.git .
+cp .env.example .env # Then nano .env and set production values
 ```
 
-### 3. Required GitHub Secrets
-Add these secrets in your GitHub Repository under **Settings → Secrets and variables → Actions**:
-- `DROPLET_IP`: The public IP of your DigitalOcean Droplet.
-- `DROPLET_USER`: Your SSH username (usually `root`).
-- `SSH_PRIVATE_KEY`: Your private SSH key (corresponding to the public key in your Droplet's `authorized_keys`).
+### 2. Production Database Strategy
+To prevent data loss during code updates, we use a persistent SQLite directory:
+- Update your production `.env` to: `DATABASE_URL="file:/var/www/data/prod.db"`
+- Prisma will automatically manage this file outside of the app folder.
+
+### 3. CI/CD with GitHub Actions
+Pushing to the `main` branch will trigger `.github/workflows/deploy.yml`. 
+
+#### Define these Repository Secrets in GitHub:
+- `DROPLET_IP`: Your Droplet's public IP address.
+- `DROPLET_USER`: `root` (or your chosen username).
+- `SSH_PRIVATE_KEY`: The contents of the `AgendaMaster` file in the root.
+
+### 4. Process Management (PM2)
+The app is managed by `ecosystem.config.js`. To start it for the first time:
+```bash
+pm2 start ecosystem.config.js
+pm2 save
+pm2 startup
+```
+
+### 5. Nginx Reverse Proxy (Optional for IP-only)
+To access the app via `http://<IP_ADDRESS>` directly:
+```bash
+sudo nano /etc/nginx/sites-available/default
+```
+Change the `location /` block:
+```nginx
+location / {
+    proxy_pass http://localhost:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_cache_bypass $http_upgrade;
+}
+```
+Then run: `sudo systemctl restart nginx`
 
 ---
 
