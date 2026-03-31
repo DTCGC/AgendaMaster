@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { quietlySendEmail } from '@/lib/email'
+import { quietlySendEmail, sendBccEmail } from '@/lib/email'
 
 export async function dispatchMassComms(subject: string, htmlBody: string, targetGroup: 'MEMBERS' | 'SUBSCRIBERS' | 'ALL') {
     let emailList: string[] = [];
@@ -28,18 +28,19 @@ export async function dispatchMassComms(subject: string, htmlBody: string, targe
         return { success: false, message: "No active targets found in the selected group." };
     }
 
-    // Process dispatches silently in parallel via standard promise.all map
-    // Note: If using a generic real-world high volume SMTP standard, we map batches. 
-    // Here we assume club size (~50).
-    const transmissionPromises = uniqueEmails.map(email => 
-        quietlySendEmail(email, subject, htmlBody)
-    );
-
-    await Promise.allSettled(transmissionPromises);
+    // Send via a single structured BCC call to remain under restrictive provider rate limits
+    const result = await sendBccEmail(uniqueEmails, subject, htmlBody);
+    
+    if (result.failed > 0) {
+        return { 
+            success: false, 
+            message: "SMTP Transmission failed. Please verify credentials or rate limits on the live server." 
+        };
+    }
 
     return { 
         success: true, 
-        message: `Successfully dispatched to ${uniqueEmails.length} recipients.`,
-        recipientCount: uniqueEmails.length 
+        message: `Successfully dispatched to ${result.succeeded} recipients.`,
+        recipientCount: result.succeeded 
     };
 }

@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db'
 import { quietlySendEmail } from '@/lib/email'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, refresh } from 'next/cache'
 
 export async function approveAccount(formData: FormData) {
   const userId = formData.get('userId') as string;
@@ -29,6 +29,7 @@ export async function approveAccount(formData: FormData) {
   
   await quietlySendEmail(user.email, subject, html);
   revalidatePath('/admin/accounts');
+  refresh();
 }
 
 export async function rejectAccount(formData: FormData) {
@@ -55,6 +56,7 @@ export async function rejectAccount(formData: FormData) {
 
   await quietlySendEmail(user.email, subject, html);
   revalidatePath('/admin/accounts');
+  refresh();
 }
 
 export async function subscribeGuest(email: string) {
@@ -75,6 +77,7 @@ export async function removeUser(formData: FormData) {
     where: { id: userId }
   });
   revalidatePath('/admin/accounts');
+  refresh();
 }
 
 export async function removeSubscriber(formData: FormData) {
@@ -83,4 +86,5 @@ export async function removeSubscriber(formData: FormData) {
     where: { id: subscriberId }
   });
   revalidatePath('/admin/accounts');
+  refresh();
 }

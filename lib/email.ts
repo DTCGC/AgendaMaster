@@ -53,17 +53,29 @@ export async function quietlySendEmail(to: string, subject: string, html: string
 }
 
 /**
- * Sends an email to multiple recipients via admin SMTP bridge.
- * Deduplicates and processes in parallel.
+ * Sends a single email to multiple recipients via BCC using the admin SMTP bridge.
  */
-export async function sendBulkEmail(recipients: string[], subject: string, html: string) {
+export async function sendBccEmail(recipients: string[], subject: string, html: string) {
   const unique = Array.from(new Set(recipients));
-  const results = await Promise.allSettled(
-    unique.map(email => quietlySendEmail(email, subject, html))
-  );
+  if (unique.length === 0) return { succeeded: 0, failed: 0, total: 0 };
 
-  const succeeded = results.filter(r => r.status === 'fulfilled').length;
-  const failed = results.filter(r => r.status === 'rejected').length;
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.log(`[MOCK BCC]: Simulated dispatch to ${unique.length} users.`);
+    return { succeeded: unique.length, failed: 0, total: unique.length };
+  }
 
-  return { succeeded, failed, total: unique.length };
+  try {
+    await transporter.sendMail({
+      from: `"DTCGC Portal" <${process.env.EMAIL_USER}>`,
+      to: process.env.EMAIL_USER,
+      bcc: unique,
+      subject,
+      html,
+    });
+    console.log(`✓ BCC Email dispatched to ${unique.length} recipients`);
+    return { succeeded: unique.length, failed: 0, total: unique.length };
+  } catch (error) {
+    console.error("BCC Email transmission failure:", error);
+    return { succeeded: 0, failed: unique.length, total: unique.length };
+  }
 }

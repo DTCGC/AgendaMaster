@@ -96,7 +96,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (user) {
             token.role = user.role;
             token.dbId = user.id;
+        } else if (token.role === 'PENDING' && token.dbId) {
+            // Silently refresh permissions from DB on subsequent requests requiring verification
+            const dbUser = await db.user.findUnique({ 
+                where: { id: token.dbId as string }, 
+                select: { role: true } 
+            });
+            if (dbUser) {
+                token.role = dbUser.role;
+            } else {
+                token.role = 'DENIED'; // If account disappeared/was rejected
+            }
         }
+        
         if (account?.provider === 'google') {
             token.accessToken = account.access_token;
             token.refreshToken = account.refresh_token;
