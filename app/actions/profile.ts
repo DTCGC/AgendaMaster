@@ -1,6 +1,6 @@
 'use server'
 
-import { auth } from '@/auth'
+import { auth, unstable_update } from '@/auth'
 import { db } from '@/lib/db'
 
 /**
@@ -54,6 +54,8 @@ export async function completeProfile(formData: FormData): Promise<{ success: bo
       role: 'PENDING',
     }
   });
+
+  await unstable_update({ user: { role: 'PENDING' } });
 
   return { success: true };
 }

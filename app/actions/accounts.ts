@@ -2,8 +2,7 @@
 
 import { db } from '@/lib/db'
 import { quietlySendEmail } from '@/lib/email'
-import { revalidatePath, refresh } from 'next/cache'
-
+import { revalidatePath } from 'next/cache'
 export async function approveAccount(formData: FormData) {
   const userId = formData.get('userId') as string;
   const user = await db.user.update({
@@ -29,14 +28,15 @@ export async function approveAccount(formData: FormData) {
   
   await quietlySendEmail(user.email, subject, html);
   revalidatePath('/admin/accounts');
-  refresh();
 }
 
 export async function rejectAccount(formData: FormData) {
   const userId = formData.get('userId') as string;
-  const user = await db.user.delete({
+  const user = await db.user.findUnique({
     where: { id: userId }
   });
+
+  if (!user) return;
 
   const subject = "DTCGC Account Application Update";
   const html = `
@@ -55,8 +55,12 @@ export async function rejectAccount(formData: FormData) {
   `;
 
   await quietlySendEmail(user.email, subject, html);
+
+  await db.user.delete({
+    where: { id: userId }
+  });
+
   revalidatePath('/admin/accounts');
-  refresh();
 }
 
 export async function subscribeGuest(email: string) {
@@ -77,7 +81,6 @@ export async function removeUser(formData: FormData) {
     where: { id: userId }
   });
   revalidatePath('/admin/accounts');
-  refresh();
 }
 
 export async function removeSubscriber(formData: FormData) {
@@ -86,7 +89,6 @@ export async function removeSubscriber(formData: FormData) {
     where: { id: subscriberId }
   });
   revalidatePath('/admin/accounts');
-  refresh();
 }
 
 /**
@@ -113,5 +115,4 @@ export async function updateUserName(formData: FormData) {
   });
 
   revalidatePath('/admin/accounts');
-  refresh();
 }
