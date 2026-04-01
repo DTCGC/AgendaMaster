@@ -42,7 +42,7 @@ export async function toggleMeeting(dateIso: string, existingId?: string) {
             where: { id: existingId },
             data: { 
                 status: newStatus as any,
-                ...(newStatus === 'CANCELLED' ? { theme: null } : {})
+                ...(newStatus === 'CANCELLED' ? { theme: null, googleSheetId: null, googleSheetUrl: null } : {})
             }
         });
 

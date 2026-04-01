@@ -23,16 +23,13 @@ function parseCSVRow(line: string): string[] {
   return cells;
 }
 
-/**
- * Populates the CSV template with role assignments.
- * Exported for testability.
- */
 export function populateTemplate(
   csvTemplate: string,
   theme: string,
   qotd: string,
   roleMap: Record<string, string>,
-  unassignedNames: string[]
+  unassignedNames: string[],
+  changelog: string[] = []
 ): string[][] {
   const rows = csvTemplate.split('\n')
     .map(line => line.replace(/\r$/, ''))
@@ -45,13 +42,24 @@ export function populateTemplate(
   }
 
   let inNoRolesSection = false;
+  let inChangelogSection = false;
+  let changelogStartIndex = -1;
 
   for (let i = 2; i < rows.length; i++) {
     const row = rows[i];
     const roleLabel = (row[1] || '').trim();
 
     if (roleLabel.startsWith('No Roles')) { inNoRolesSection = true; continue; }
-    if (roleLabel.startsWith('CHANGELOG')) break;
+    if (roleLabel.startsWith('CHANGELOG')) { 
+      inNoRolesSection = false; 
+      inChangelogSection = true; 
+      changelogStartIndex = i;
+      continue; 
+    }
+
+    if (inChangelogSection) {
+      continue;
+    }
 
     if (inNoRolesSection) {
       for (let c = 1; c <= 4 && c < row.length; c++) {
@@ -62,8 +70,12 @@ export function populateTemplate(
 
     // Replace NAME placeholder in col 3 with the person assigned to the role in col 1
     if (row.length > 3 && (row[3] || '').trim() === 'NAME') {
-      const person = roleMap[roleLabel];
-      row[3] = person !== undefined ? person : 'TBD';
+      if (roleLabel.toLowerCase().includes('general feedback') || roleLabel.toLowerCase().includes('general feadback')) {
+        row[3] = '-';
+      } else {
+        const person = roleMap[roleLabel];
+        row[3] = person !== undefined && person !== '' ? person : 'TBD';
+      }
     }
 
     if (roleLabel === 'BACKUP SPEAKER:' && row.length > 3 && (row[3] || '').trim() === 'NAME') {
@@ -82,6 +94,24 @@ export function populateTemplate(
           if (!(rows[r][c] || '').trim()) rows[r][c] = unassignedNames[ni++];
         }
       }
+    }
+  }
+
+  // Inject changelog
+  if (changelogStartIndex >= 0 && changelog.length > 0) {
+    let ci = 0;
+    // Overwrite subsequent rows with changelog data
+    for (let r = changelogStartIndex + 1; r < rows.length && ci < changelog.length; r++) {
+        rows[r][1] = changelog[ci++];
+    }
+    // If changelog exceeds available empty rows, push new rows
+    while (ci < changelog.length) {
+      rows.push(['', changelog[ci++], '', '', '']);
+    }
+  } else if (changelogStartIndex >= 0) {
+    // If no changelog, just clear the example line
+    if (changelogStartIndex + 1 < rows.length) {
+      rows[changelogStartIndex + 1][1] = '';
     }
   }
 
@@ -157,6 +187,48 @@ export async function createAgendaSheet(
 }
 
 /**
+ * Computes a person-centric changelog based on differences between existing sheet data and new role map.
+ */
+function computeChangelog(existingRows: string[][], newRoleMap: Record<string, string>): string[] {
+  const oldRoleMap: Record<string, string> = {};
+  
+  for (const row of existingRows) {
+    if (row.length > 3 && row[1]) {
+      const roleLabel = row[1].trim();
+      const person = row[3].trim();
+      if (person && person !== 'NAME' && person !== 'TBD' && person !== '-') {
+        oldRoleMap[roleLabel] = person;
+      }
+    }
+  }
+
+  const persons = new Set<string>();
+  for (const p of Object.values(oldRoleMap)) persons.add(p);
+  for (const p of Object.values(newRoleMap)) if (p && p !== 'TBD' && p !== '-') persons.add(p);
+
+  const changelog: string[] = [];
+
+  for (const p of persons) {
+    const oldR = Object.keys(oldRoleMap).filter(r => oldRoleMap[r] === p && !r.toLowerCase().includes('general'));
+    const newR = Object.keys(newRoleMap).filter(r => newRoleMap[r] === p && !r.toLowerCase().includes('general'));
+
+    const lost = oldR.filter(r => !newR.includes(r));
+    const gained = newR.filter(r => !oldR.includes(r));
+
+    const maxProps = Math.max(lost.length, gained.length);
+    for (let i = 0; i < maxProps; i++) {
+        if (i < lost.length && i < gained.length) {
+            changelog.push(`[${p}: ${lost[i]} ---> ${gained[i]}]`);
+        } else if (i < lost.length) {
+            changelog.push(`[${p}: ${lost[i]} ---> TBD]`);
+        }
+    }
+  }
+  
+  return changelog;
+}
+
+/**
  * Updates an existing Google Sheet with new role data.
  */
 export async function updateAgendaSheet(
@@ -168,9 +240,23 @@ export async function updateAgendaSheet(
   csvTemplate: string,
   unassignedNames: string[]
 ): Promise<void> {
-  const populatedRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames);
   const auth = getGoogleAuth(accessToken);
   const sheets = google.sheets({ version: 'v4', auth });
+  
+  // Fetch existing sheet data to compute the changelog
+  let existingRows: string[][] = [];
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: existingSheetId,
+      range: 'Sheet1!A1:E80'
+    });
+    existingRows = res.data.values || [];
+  } catch (err) {
+    console.error('[GoogleAPI] Failed to fetch existing sheet for changelog:', err);
+  }
+
+  const changelog = computeChangelog(existingRows, roleMap);
+  const populatedRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames, changelog);
   
   await writeSheetData(sheets, existingSheetId, populatedRows);
 }

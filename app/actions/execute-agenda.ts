@@ -48,10 +48,7 @@ function buildRoleMap(
   alias('Table Topics Evaluator #1', 'Table Topics Evaluator 1');
   alias('Table Topics Evaluator #2', 'Table Topics Evaluator 2');
 
-  // General Feedback rows — same person as the speaker they follow
-  alias('General Feedback #1', 'Speaker 1');    // Speaker #1's feedback slot
-  alias('General Feadback #2', 'Speaker 2');    // typo is in the actual CSV
-  alias('General Feedback  #3', 'Speaker 3');   // double space is in the actual CSV
+  // General Feedback rows are now intentionally left un-aliased so they can be parsed as '-' by the Google API logic.
 
   // Recurring roles in the second half of the meeting
   // Timer, Grammarian, FWC, Quizmaster, Toastmaster appear twice — same person
