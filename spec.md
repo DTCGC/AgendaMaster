@@ -20,7 +20,7 @@ Build a full-stack web application to manage club operations, specifically autom
 
 ## 4. Authentication & User Management
 * **Auth Provider:** Google OAuth2 ("Log in with Google").
-* **Identity Separation:** Google OAuth is used strictly for authentication and API access (Gmail, Drive, Sheets). The member's **club identity** (first name, last name) is collected separately via a mandatory Profile Completion step after first sign-in, because members may authenticate with a parent's or shared Google account.
+* **Identity Separation:** Google OAuth is used strictly for authentication and API access (Drive, Sheets). The member's **club identity** (first name, last name) is collected separately via a mandatory Profile Completion step after first sign-in, because members may authenticate with a parent's or shared Google account.
 * **Access Tiers:**
     * **Public/Parents:** Can input an email to subscribe to the mailing list without an account.
     * **Members:** Must sign in with Google. On first sign-in, a profile is created with role `INCOMPLETE`. The user is redirected to `/complete-profile` where they enter their **own real name**. Upon submission, their role transitions to `PENDING` and enters the admin approval queue. Accounts remain pending until approved by an Admin.
@@ -50,7 +50,7 @@ Build a full-stack web application to manage club operations, specifically autom
     * Display a final preview of the email and the agenda data.
     * Prompt for Google API permissions if tokens are expired/missing.
     * **Action 1 (Drive):** Read the agenda schema from the database template, duplicate the blank Google Sheets template via the Google Drive API, populate it with the assigned roles, and save it to the user's Drive.
-    * **Action 2 (Gmail):** Send the formatted email (with the Sheet link) to the mailing list via the Gmail API. 
+    * **Action 2 (Resend API):** Send the formatted email (with the Sheet link) to the mailing list via the Resend API bridge to bypass server SMTP blocks and ensure Bcc privacy. 
     * **Fallback:** Provide a manual fallback option that autonomously copies the final formatted email text and the generated Google Sheet link to the user's clipboard.
 
 ## 6. Admin Panel Functions

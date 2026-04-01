@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState, useTransition, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { approveAccount, rejectAccount, retryAccountEmail } from '@/app/actions/accounts'
 import { Check, X, MailWarning, Loader2, AlertTriangle, RefreshCw } from 'lucide-react'
@@ -11,43 +11,56 @@ interface AccountActionButtonsProps {
 }
 
 export default function AccountActionButtons({ userId, userName }: AccountActionButtonsProps) {
-  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  
+  const [approveLoading, setApproveLoading] = useState(false);
+  const [rejectLoading, setRejectLoading] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [errorModal, setErrorModal] = useState<{
     show: boolean;
     type: 'approval' | 'rejection';
     userId: string;
   } | null>(null);
 
-  // useActionState for Approve
-  const [approveState, approveAction, approveLoading] = useActionState(
-    approveAccount,
-    { success: false, emailError: false }
-  );
-
-  // useActionState for Reject
-  const [rejectState, rejectAction, rejectLoading] = useActionState(
-    rejectAccount,
-    { success: false, emailError: false }
-  );
-
-  const router = useRouter();
-  const [retrying, setRetrying] = useState(false);
-  const [lastErrorId, setLastErrorId] = useState<number | null>(null);
-
-  // Watch for state changes to trigger modal via useEffect (safe)
-  useEffect(() => {
-    if (approveState.emailError && approveState.userId === userId && approveState.errorId !== lastErrorId) {
-      setErrorModal({ show: true, type: 'approval', userId });
-      setLastErrorId(approveState.errorId);
+  const handleApprove = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setApproveLoading(true);
+    const formData = new FormData();
+    formData.append('userId', userId);
+    
+    try {
+      const result = await approveAccount(null, formData);
+      if (result?.emailError) {
+        setErrorModal({ show: true, type: 'approval', userId });
+      } else {
+        router.refresh();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setApproveLoading(false);
     }
-  }, [approveState, userId, lastErrorId]);
+  };
 
-  useEffect(() => {
-    if (rejectState.emailError && rejectState.userId === userId && rejectState.errorId !== lastErrorId) {
-      setErrorModal({ show: true, type: 'rejection', userId });
-      setLastErrorId(rejectState.errorId);
+  const handleReject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRejectLoading(true);
+    const formData = new FormData();
+    formData.append('userId', userId);
+    
+    try {
+      const result = await rejectAccount(null, formData);
+      if (result?.emailError) {
+        setErrorModal({ show: true, type: 'rejection', userId });
+      } else {
+        router.refresh();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRejectLoading(false);
     }
-  }, [rejectState, userId, lastErrorId]);
+  };
 
   const handleSkip = () => {
     setErrorModal(null);
@@ -61,7 +74,7 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
       const result = await retryAccountEmail(errorModal.userId, errorModal.type);
       if (result.success) {
         setErrorModal(null);
-        // We don't reset the action state globally, but cleaning errorModal hides the pop-up
+        router.refresh();
       } else {
         alert(result.error || "Retry failed.");
       }
@@ -75,8 +88,7 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
   return (
     <>
       <div className="flex gap-2 justify-end">
-        <form action={approveAction}>
-            <input type="hidden" name="userId" value={userId} />
+        <form onSubmit={handleApprove}>
             <button 
                 type="submit" 
                 disabled={approveLoading || rejectLoading}
@@ -87,8 +99,7 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
             </button>
         </form>
         
-        <form action={rejectAction}>
-            <input type="hidden" name="userId" value={userId} />
+        <form onSubmit={handleReject}>
             <button 
                 type="submit" 
                 disabled={approveLoading || rejectLoading}

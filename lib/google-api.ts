@@ -91,7 +91,6 @@ export function populateTemplate(
 
 const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 const DRIVE_BASE = 'https://www.googleapis.com/drive/v3/files';
-const GMAIL_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
 
 /**
  * Creates a Google Sheet, writes data, and makes it shareable.
@@ -217,47 +216,3 @@ async function writeSheetData(
   console.log(`[GoogleAPI] Write result: ${result.updatedCells} cells updated`);
 }
 
-// ---------- Gmail API (raw fetch) ----------
-
-/**
- * Sends an email via the Gmail API using the signed-in member's account.
- */
-export async function sendGmailAsUser(
-  accessToken: string,
-  recipients: string[],
-  subject: string,
-  htmlBody: string
-): Promise<{ success: boolean; messageId?: string }> {
-  const toList = recipients.join(', ');
-  const rawEmail = [
-    `To: ${toList}`,
-    `Subject: ${subject}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=UTF-8',
-    '',
-    htmlBody
-  ].join('\r\n');
-
-  const encodedMessage = Buffer.from(rawEmail)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-
-  const res = await fetch(GMAIL_BASE, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ raw: encodedMessage })
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Failed to send email: ${res.status} ${err}`);
-  }
-
-  const data = await res.json();
-  return { success: true, messageId: data.id || undefined };
-}

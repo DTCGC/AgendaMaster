@@ -1,34 +1,18 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import fs from 'fs';
 import path from 'path';
 
-/**
- * Production Gmail SMTP transport for admin-initiated emails.
- * Uses EMAIL_USER + EMAIL_PASS (Gmail App Password) from environment.
- * Falls back to mock logging in development if credentials aren't set.
- */
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // true for 465, false for 587
-  requireTLS: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  // Strict timeouts to prevent Server Action hanging
-  connectionTimeout: 5000,
-  greetingTimeout: 5000,
-  socketTimeout: 5000,
-});
+// Initialize Resend with API Key from environment
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'DTCGC Portal <onboarding@resend.dev>';
 
 /**
- * Sends an email via the admin Gmail SMTP bridge.
- * Used for: account approval/denial notifications, admin mass comms.
- * In development (no EMAIL_USER set), logs to /logs/mock-emails.md instead.
+ * Production HTTP API bridge for all app-initiated emails.
+ * Avoids DO droplet SMTP port blocks and streamlines mass announcements.
+ * Falls back to mock logging in development if credentials aren't set.
  */
 export async function quietlySendEmail(to: string, subject: string, html: string) {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+  if (!resend) {
     // Development fallback: log to console + file
     const logHeader = `\n================== [MOCK EMAIL BRIDGE: ${new Date().toLocaleString()}] ==================\n`;
     const logEntry = `${logHeader}To: ${to}\nSubject: ${subject}\nBody (HTML):\n${html}\n===========================================================\n`;
@@ -46,43 +30,50 @@ export async function quietlySendEmail(to: string, subject: string, html: string
   }
 
   try {
-    await transporter.sendMail({
-      from: `"DTCGC Portal" <${process.env.EMAIL_USER}>`,
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
       to,
       subject,
       html,
     });
-    console.log(`✓ Email dispatched to ${to}`);
+    
+    if (error) throw new Error(error.message);
+    
+    console.log(`✓ Email dispatched to ${to} (ID: ${data?.id})`);
   } catch (error) {
-    console.error("Email transmission failure:", error);
-    throw error; // Propagate so callers can handle
+    console.error("Email API transmission failure:", error);
+    throw error; // Propagate so callers can handle (e.g. AccountActionButtons)
   }
 }
 
 /**
- * Sends a single email to multiple recipients via BCC using the admin SMTP bridge.
+ * Sends a single email to multiple recipients via BCC using the Resend API.
  */
 export async function sendBccEmail(recipients: string[], subject: string, html: string) {
   const unique = Array.from(new Set(recipients));
   if (unique.length === 0) return { succeeded: 0, failed: 0, total: 0 };
 
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.log(`[MOCK BCC]: Simulated dispatch to ${unique.length} users.`);
+  if (!resend) {
+    console.log(`[MOCK BCC]: Simulated HTTP dispatch to ${unique.length} users.`);
     return { succeeded: unique.length, failed: 0, total: unique.length };
   }
 
   try {
-    await transporter.sendMail({
-      from: `"DTCGC Portal" <${process.env.EMAIL_USER}>`,
-      to: process.env.EMAIL_USER,
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: FROM_EMAIL.split('<')[1]?.replace('>', '') || 'onboarding@resend.dev', // Resend requires a To address even with BCC
       bcc: unique,
       subject,
       html,
     });
-    console.log(`✓ BCC Email dispatched to ${unique.length} recipients`);
+    
+    if (error) throw new Error(error.message);
+    
+    console.log(`✓ BCC Email dispatched to ${unique.length} recipients via Resend`);
     return { succeeded: unique.length, failed: 0, total: unique.length };
   } catch (error) {
-    console.error("BCC Email transmission failure:", error);
+    console.error("BCC Email API transmission failure:", error);
     return { succeeded: 0, failed: unique.length, total: unique.length };
   }
 }
+

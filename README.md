@@ -11,7 +11,7 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
 ### 📅 Agenda Engine Wizard
 - **Automated Generation**: One-click meeting agenda creation via Google Sheets integration.
 - **Tiptap Editor**: A rich-text interface for fine-tuning meeting themes and details before generation.
-- **Gmail Automation**: Automated meeting notifications and agenda delivery for Toastmasters and members.
+- **Email Automation**: Automated meeting notifications and agenda delivery for Toastmasters and members via the Resend API.
 
 ### 👥 Member & Role Management
 - **Identity Verification**: Members provide their own name during a Profile Completion step after first sign-in, ensuring accurate club records even when using a parent's or shared Google account.
@@ -55,8 +55,8 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
    AUTH_SECRET="your-auth-secret"
    GOOGLE_CLIENT_ID="your-client-id"
    GOOGLE_CLIENT_SECRET="your-client-secret"
-   EMAIL_USER="coquitlamgavel@gmail.com"
-   EMAIL_PASS="your-gmail-app-password"
+   RESEND_API_KEY="re_your_api_key"
+   RESEND_FROM_EMAIL="AgendaMaster <onboarding@resend.dev>"
    ```
 
 4. **Initialize Database**:
