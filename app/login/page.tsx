@@ -8,6 +8,7 @@ export default async function LoginPage() {
   const session = await auth();
 
   if (session) {
+    if (session.user?.role === 'INCOMPLETE') redirect("/complete-profile");
     if (session.user?.role === 'PENDING') redirect("/pending");
     if (session.user?.role === 'ADMIN') redirect("/admin/calendar");
     redirect("/agenda");

@@ -2,7 +2,6 @@
 
 import { auth } from '@/auth'
 import { db } from '@/lib/db'
-import { redirect } from 'next/navigation'
 
 /**
  * Completes a new member's profile by saving their self-reported name.
@@ -10,12 +9,15 @@ import { redirect } from 'next/navigation'
  * 
  * This decouples the user's club identity from whatever name is on
  * the Google account they used to authenticate.
+ * 
+ * Returns a result object instead of using redirect() to avoid
+ * Next.js redirect errors being caught by client-side try/catch.
  */
-export async function completeProfile(formData: FormData) {
+export async function completeProfile(formData: FormData): Promise<{ success: boolean; error?: string }> {
   const session = await auth();
 
   if (!session?.user?.dbId) {
-    redirect('/login');
+    return { success: false, error: 'Session expired. Please sign in again.' };
   }
 
   // Verify the user is still INCOMPLETE
@@ -25,7 +27,8 @@ export async function completeProfile(formData: FormData) {
   });
 
   if (!user || user.role !== 'INCOMPLETE') {
-    redirect('/pending');
+    // Already completed — the client will redirect to /pending
+    return { success: true };
   }
 
   const firstName = (formData.get('firstName') as string)?.trim();
@@ -33,13 +36,13 @@ export async function completeProfile(formData: FormData) {
 
   // Server-side validation
   if (!firstName || !lastName) {
-    throw new Error('First name and last name are required.');
+    return { success: false, error: 'First name and last name are required.' };
   }
 
   // Only allow letters, spaces, hyphens, and apostrophes
   const namePattern = /^[a-zA-Z\s\-']+$/;
   if (!namePattern.test(firstName) || !namePattern.test(lastName)) {
-    throw new Error('Names may only contain letters, spaces, hyphens, and apostrophes.');
+    return { success: false, error: 'Names may only contain letters, spaces, hyphens, and apostrophes.' };
   }
 
   // Commit the user's real name and advance to PENDING
@@ -52,5 +55,5 @@ export async function completeProfile(formData: FormData) {
     }
   });
 
-  redirect('/pending');
+  return { success: true };
 }

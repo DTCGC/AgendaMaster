@@ -1,14 +1,17 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { completeProfile } from '@/app/actions/profile'
-import { UserCircle, ArrowRight, AlertCircle } from 'lucide-react'
+import { ArrowRight, AlertCircle } from 'lucide-react'
 
 /**
  * Client form for new members to enter their real name.
  * Validates input before submitting to the completeProfile server action.
+ * Handles navigation client-side to avoid redirect() errors from server actions.
  */
 export default function ProfileForm() {
+  const router = useRouter();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [error, setError] = useState('');
@@ -48,7 +51,15 @@ export default function ProfileForm() {
       const formData = new FormData();
       formData.set('firstName', firstName.trim());
       formData.set('lastName', lastName.trim());
-      await completeProfile(formData);
+      const result = await completeProfile(formData);
+
+      if (result.success) {
+        // Navigate client-side to avoid redirect() issues in server actions
+        router.push('/pending');
+      } else {
+        setError(result.error || 'Something went wrong. Please try again.');
+        setSubmitting(false);
+      }
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.');
       setSubmitting(false);
