@@ -5,7 +5,7 @@ export default function TermsOfService() {
     <div className="flex-1 bg-background py-16 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-4xl font-bold text-slate-900 mb-8 border-b pb-4">Terms of Service</h1>
-        <p className="text-slate-600 mb-6 italic">Last Updated: March 31, 2026</p>
+        <p className="text-slate-600 mb-6 italic">Last Updated: April 1, 2026</p>
 
         <p className="text-slate-700 mb-10 leading-relaxed font-medium">
           By accessing or using the AgendaMaster portal at <span className="font-bold text-[#772432]">agendas.coquitlamgavel.com</span>, 
@@ -19,7 +19,7 @@ export default function TermsOfService() {
             Its purpose is to automate club meeting agendas, manage member roles, and facilitate club communications.
           </p>
           <ul className="list-disc pl-6 text-slate-700 space-y-2">
-            <li><strong>User Responsibilities:</strong> You must provide accurate registration information. You are responsible for any activity that occurs under your account.</li>
+            <li><strong>User Responsibilities:</strong> You must provide your own real first and last name during registration. If you are using a parent&apos;s or family member&apos;s Google account to sign in, you must still enter your personal name during the profile completion step — not the name associated with the Google account.</li>
             <li><strong>Account Approval:</strong> Registration does not guarantee access. All accounts are subject to manual approval by the Club administrators.</li>
             <li><strong>Permitted Use:</strong> Use the application only for lawful purposes in accordance with these terms and any applicable laws or regulations.</li>
           </ul>

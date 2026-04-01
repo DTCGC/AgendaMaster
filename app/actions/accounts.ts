@@ -88,3 +88,30 @@ export async function removeSubscriber(formData: FormData) {
   revalidatePath('/admin/accounts');
   refresh();
 }
+
+/**
+ * Allows admins to correct a member's first and last name.
+ * Used to fix names inherited from parent Google accounts or typos.
+ */
+export async function updateUserName(formData: FormData) {
+  const userId = formData.get('userId') as string;
+  const firstName = (formData.get('firstName') as string)?.trim();
+  const lastName = (formData.get('lastName') as string)?.trim();
+
+  if (!firstName || !lastName) {
+    throw new Error('Both first and last name are required.');
+  }
+
+  const namePattern = /^[a-zA-Z\s\-']+$/;
+  if (!namePattern.test(firstName) || !namePattern.test(lastName)) {
+    throw new Error('Names may only contain letters, spaces, hyphens, and apostrophes.');
+  }
+
+  await db.user.update({
+    where: { id: userId },
+    data: { firstName, lastName }
+  });
+
+  revalidatePath('/admin/accounts');
+  refresh();
+}

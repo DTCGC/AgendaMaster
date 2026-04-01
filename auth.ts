@@ -69,16 +69,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 });
                 
                 if (!existingUser) {
-                    // New Google sign-in → create PENDING account
+                    // New Google sign-in → create INCOMPLETE account
+                    // Name fields are empty — the user will provide their real
+                    // name on /complete-profile before entering the approval queue.
                     const newUser = await db.user.create({
                         data: {
                             email: user.email!,
-                            firstName: profile?.given_name || user.name?.split(' ')[0] || 'User',
-                            lastName: profile?.family_name || user.name?.split(' ').slice(1).join(' ') || '',
-                            role: 'PENDING',
+                            firstName: '',
+                            lastName: '',
+                            role: 'INCOMPLETE',
                         }
                     });
-                    user.role = 'PENDING';
+                    user.role = 'INCOMPLETE';
                     user.id = newUser.id;
                 } else {
                     user.role = existingUser.role;
@@ -96,7 +98,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (user) {
             token.role = user.role;
             token.dbId = user.id;
-        } else if (token.role === 'PENDING' && token.dbId) {
+        } else if ((token.role === 'PENDING' || token.role === 'INCOMPLETE') && token.dbId) {
             // Silently refresh permissions from DB on subsequent requests requiring verification
             const dbUser = await db.user.findUnique({ 
                 where: { id: token.dbId as string }, 

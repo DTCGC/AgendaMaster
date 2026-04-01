@@ -20,10 +20,11 @@ Build a full-stack web application to manage club operations, specifically autom
 
 ## 4. Authentication & User Management
 * **Auth Provider:** Google OAuth2 ("Log in with Google").
+* **Identity Separation:** Google OAuth is used strictly for authentication and API access (Gmail, Drive, Sheets). The member's **club identity** (first name, last name) is collected separately via a mandatory Profile Completion step after first sign-in, because members may authenticate with a parent's or shared Google account.
 * **Access Tiers:**
     * **Public/Parents:** Can input an email to subscribe to the mailing list without an account.
-    * **Members:** Must apply for an account (First Name, Last Name, Email). Accounts are pending until approved by an Admin.
-    * **Admins:** Dedicated login with a securely hashed password stored in the database.
+    * **Members:** Must sign in with Google. On first sign-in, a profile is created with role `INCOMPLETE`. The user is redirected to `/complete-profile` where they enter their **own real name**. Upon submission, their role transitions to `PENDING` and enters the admin approval queue. Accounts remain pending until approved by an Admin.
+    * **Admins:** Dedicated login with a securely hashed password stored in the database. Admins can also edit any member's name after the fact from the Account Management panel.
 * **Security:** Stop execution and prompt me for a secure workflow regarding password hashing (e.g., bcrypt) and session token management (e.g., Auth.js/NextAuth) before implementing the server-side auth logic.
 
 ## 5. Core Workflow: Agenda & Email Generation (Member View)

@@ -14,9 +14,10 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
 - **Gmail Automation**: Automated meeting notifications and agenda delivery for Toastmasters and members.
 
 ### 👥 Member & Role Management
+- **Identity Verification**: Members provide their own name during a Profile Completion step after first sign-in, ensuring accurate club records even when using a parent's or shared Google account.
 - **Automated Sequencing**: Intelligent role assignment based on historical participation and club-specific sequencing rules.
 - **Guest Subscription**: Dedicated system for managing guest subscribers and converted members.
-- **Admin Dashboard**: Centralized control for account approvals, role overrides, and meeting scheduling.
+- **Admin Dashboard**: Centralized control for account approvals, inline name editing, role overrides, and meeting scheduling.
 
 ### ☁️ Google Cloud Integration
 - Deep integration with **Google Sheets API**, **Gmail API**, and **Google Drive API** for seamless cloud-based operations.

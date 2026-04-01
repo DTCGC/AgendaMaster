@@ -5,7 +5,7 @@ export default function PrivacyPolicy() {
     <div className="flex-1 bg-background py-16 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-4xl font-bold text-slate-900 mb-8 border-b pb-4">Privacy Policy</h1>
-        <p className="text-slate-600 mb-6 italic">Last Updated: March 31, 2026</p>
+        <p className="text-slate-600 mb-6 italic">Last Updated: April 1, 2026</p>
 
         <section className="mb-10">
           <h2 className="text-2xl font-semibold text-[#004165] mb-4">1. Introduction</h2>
@@ -22,14 +22,15 @@ export default function PrivacyPolicy() {
           <p className="text-slate-700 mb-4">We collect information to provide a better experience for our members. This includes:</p>
           <ul className="list-disc pl-6 text-slate-700 space-y-2">
             <li>
-              <strong>Account Information:</strong> Your name and email address provided during the registration/approval process.
+              <strong>Account Information:</strong> Your self-reported first and last name, provided during the profile completion step after your first sign-in. This name may differ from the name on the Google account used to authenticate, as members may use a parent or family Google account.
             </li>
             <li>
-              <strong>Google Account Data:</strong> When you use our Google-integrated features, we access specific data with your permission:
+              <strong>Google Account Data:</strong> Your Google account email address is used for authentication. When you use our Google-integrated features, we access specific data with your permission:
               <ul className="list-circle pl-6 mt-2 space-y-1">
                 <li><strong>Gmail:</strong> To send club agendas and announcements on your behalf.</li>
                 <li><strong>Google Drive/Sheets:</strong> To create and manage agenda templates for club meetings.</li>
               </ul>
+              <p className="text-sm text-slate-500 mt-2 italic">Note: Your Google profile name is not used as your club identity. Only the email address from your Google account is stored for authentication purposes.</p>
             </li>
             <li>
               <strong>Subscriber Data:</strong> Email addresses of parents or public members who subscribe to our mailing list.

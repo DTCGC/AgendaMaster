@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { approveAccount, rejectAccount, removeUser, removeSubscriber } from '@/app/actions/accounts'
 import { Check, X, Users, Mail, Trash2, ShieldCheck } from 'lucide-react'
+import EditableName from '@/components/admin/editable-name'
 
 export const metadata = {
   title: 'Admin Approvals - DTCGC',
@@ -115,8 +116,8 @@ export default async function AccountsPage() {
                                         {user.firstName[0]}{user.lastName[0]}
                                     </div>
                                     <div>
-                                        <div className="font-bold text-sm text-gray-800 flex items-center gap-2">
-                                            {user.firstName} {user.lastName}
+                                        <div className="flex items-center gap-2">
+                                            <EditableName userId={user.id} firstName={user.firstName} lastName={user.lastName} />
                                             {user.role === 'ADMIN' && <ShieldCheck size={14} className="text-brand-true-maroon" />}
                                         </div>
                                         <div className="text-[10px] text-gray-500 font-mono italic">{user.email}</div>

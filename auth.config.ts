@@ -13,17 +13,27 @@ export const authConfig = {
       const isOnAgenda = nextUrl.pathname.startsWith('/agenda');
       const isOnLogin = nextUrl.pathname === '/login';
       const isOnPending = nextUrl.pathname === '/pending';
+      const isOnCompleteProfile = nextUrl.pathname === '/complete-profile';
 
       if (isOnLogin) {
         if (!isLoggedIn) return true;
+        if (role === 'INCOMPLETE') return Response.redirect(new URL('/complete-profile', nextUrl));
         if (role === 'PENDING') return Response.redirect(new URL('/pending', nextUrl));
         if (role === 'ADMIN') return Response.redirect(new URL('/admin/calendar', nextUrl));
         return Response.redirect(new URL('/agenda', nextUrl));
       }
 
+      // Profile Completion page: only INCOMPLETE users should see it
+      if (isOnCompleteProfile) {
+        if (!isLoggedIn) return false;
+        if (role !== 'INCOMPLETE') return Response.redirect(new URL('/agenda', nextUrl));
+        return true;
+      }
+
       // Pending page: only PENDING users should see it
       if (isOnPending) {
         if (!isLoggedIn) return false;
+        if (role === 'INCOMPLETE') return Response.redirect(new URL('/complete-profile', nextUrl));
         if (role !== 'PENDING') return Response.redirect(new URL('/agenda', nextUrl));
         return true;
       }
@@ -31,6 +41,7 @@ export const authConfig = {
       // Admin Area Protection
       if (isOnAdmin) {
         if (!isLoggedIn) return false;
+        if (role === 'INCOMPLETE') return Response.redirect(new URL('/complete-profile', nextUrl));
         if (role !== 'ADMIN') return Response.redirect(new URL('/agenda', nextUrl));
         return true;
       }
@@ -38,6 +49,7 @@ export const authConfig = {
       // Agenda Module Protection
       if (isOnAgenda) {
         if (!isLoggedIn) return false;
+        if (role === 'INCOMPLETE') return Response.redirect(new URL('/complete-profile', nextUrl));
         // PENDING users are denied
         if (role === 'PENDING') return Response.redirect(new URL('/pending', nextUrl));
         return true; // MEMBER and ADMIN
