@@ -39,8 +39,8 @@ export async function approveAccount(prevState: any, formData: FormData) {
     return { success: true, emailError: false };
   } catch (error) {
     console.error("Approval email failed:", error);
-    revalidatePath('/admin/accounts');
-    return { success: true, emailError: true, type: 'approval', userId: user.id };
+    // DO NOT revalidatePath so the component stays mounted to show the retry modal
+    return { success: true, emailError: true, type: 'approval', userId: user.id, errorId: Date.now() };
   }
 }
 
@@ -75,8 +75,8 @@ export async function rejectAccount(prevState: any, formData: FormData) {
     return { success: true, emailError: false };
   } catch (error) {
     console.error("Rejection email failed:", error);
-    // DO NOT DELETE yet so admin can retry
-    return { success: false, emailError: true, type: 'rejection', userId: user.id };
+    // DO NOT DELETE yet and DO NOT revalidatePath
+    return { success: false, emailError: true, type: 'rejection', userId: user.id, errorId: Date.now() };
   }
 }
 

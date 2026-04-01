@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useState, useTransition, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { approveAccount, rejectAccount, retryAccountEmail } from '@/app/actions/accounts'
 import { Check, X, MailWarning, Loader2, AlertTriangle, RefreshCw } from 'lucide-react'
 
@@ -29,20 +30,29 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
     { success: false, emailError: false }
   );
 
+  const router = useRouter();
   const [retrying, setRetrying] = useState(false);
+  const [lastErrorId, setLastErrorId] = useState<number | null>(null);
 
   // Watch for state changes to trigger modal via useEffect (safe)
   useEffect(() => {
-    if (approveState.emailError && approveState.userId === userId) {
+    if (approveState.emailError && approveState.userId === userId && approveState.errorId !== lastErrorId) {
       setErrorModal({ show: true, type: 'approval', userId });
+      setLastErrorId(approveState.errorId);
     }
-  }, [approveState, userId]);
+  }, [approveState, userId, lastErrorId]);
 
   useEffect(() => {
-    if (rejectState.emailError && rejectState.userId === userId) {
+    if (rejectState.emailError && rejectState.userId === userId && rejectState.errorId !== lastErrorId) {
       setErrorModal({ show: true, type: 'rejection', userId });
+      setLastErrorId(rejectState.errorId);
     }
-  }, [rejectState, userId]);
+  }, [rejectState, userId, lastErrorId]);
+
+  const handleSkip = () => {
+    setErrorModal(null);
+    router.refresh();
+  };
 
   const handleRetry = async () => {
     if (!errorModal) return;
@@ -95,7 +105,7 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <div 
                 className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" 
-                onClick={() => setErrorModal(null)}
+                onClick={handleSkip}
             />
             <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in fade-in zoom-in duration-200">
                 <div className={`bg-brand-true-maroon p-8 text-white text-center`}>
@@ -124,7 +134,7 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
                             Retry Notification
                         </button>
                         <button 
-                            onClick={() => setErrorModal(null)}
+                            onClick={handleSkip}
                             disabled={retrying}
                             className="w-full py-3 rounded-xl font-bold text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all flex items-center justify-center gap-1 text-sm"
                         >
