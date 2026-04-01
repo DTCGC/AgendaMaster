@@ -3,12 +3,19 @@
 import { db } from '@/lib/db'
 import { quietlySendEmail } from '@/lib/email'
 import { revalidatePath } from 'next/cache'
-export async function approveAccount(formData: FormData) {
+export async function approveAccount(prevState: any, formData: FormData) {
   const userId = formData.get('userId') as string;
-  const user = await db.user.update({
-    where: { id: userId },
-    data: { role: 'MEMBER' }
-  });
+  let user;
+  
+  try {
+    user = await db.user.update({
+      where: { id: userId },
+      data: { role: 'MEMBER' }
+    });
+  } catch (error) {
+    console.error("Database update failed:", error);
+    return { success: false, error: "Database error. Could not approve user." };
+  }
 
   const subject = "Welcome to the Downtown Coquitlam Gavel Club Portal";
   const html = `
@@ -26,17 +33,24 @@ export async function approveAccount(formData: FormData) {
     </div>
   `;
   
-  await quietlySendEmail(user.email, subject, html);
-  revalidatePath('/admin/accounts');
+  try {
+    await quietlySendEmail(user.email, subject, html);
+    revalidatePath('/admin/accounts');
+    return { success: true, emailError: false };
+  } catch (error) {
+    console.error("Approval email failed:", error);
+    revalidatePath('/admin/accounts');
+    return { success: true, emailError: true, type: 'approval', userId: user.id };
+  }
 }
 
-export async function rejectAccount(formData: FormData) {
+export async function rejectAccount(prevState: any, formData: FormData) {
   const userId = formData.get('userId') as string;
   const user = await db.user.findUnique({
     where: { id: userId }
   });
 
-  if (!user) return;
+  if (!user) return { success: false, error: "User not found." };
 
   const subject = "DTCGC Account Application Update";
   const html = `
@@ -54,14 +68,66 @@ export async function rejectAccount(formData: FormData) {
     </div>
   `;
 
-  await quietlySendEmail(user.email, subject, html);
-
-  await db.user.delete({
-    where: { id: userId }
-  });
-
-  revalidatePath('/admin/accounts');
+  try {
+    await quietlySendEmail(user.email, subject, html);
+    await db.user.delete({ where: { id: userId } });
+    revalidatePath('/admin/accounts');
+    return { success: true, emailError: false };
+  } catch (error) {
+    console.error("Rejection email failed:", error);
+    // DO NOT DELETE yet so admin can retry
+    return { success: false, emailError: true, type: 'rejection', userId: user.id };
+  }
 }
+
+/**
+ * Retries sending an email for a user whose notification failed.
+ * If it was a rejection, it also finishes the deletion.
+ */
+export async function retryAccountEmail(userId: string, type: 'approval' | 'rejection') {
+  const user = await db.user.findUnique({ where: { id: userId } });
+  if (!user) return { success: false, error: 'User no longer exists.' };
+
+  const isApproval = type === 'approval';
+  const subject = isApproval 
+    ? "Welcome to the Downtown Coquitlam Gavel Club Portal"
+    : "DTCGC Account Application Update";
+
+  const color = isApproval ? '#004165' : '#772432';
+  const title = isApproval ? 'Account Approved ✓' : 'Application Update';
+  const body = isApproval 
+    ? `<p>Your portal account has been verified and fully approved by the club administrative team.</p>
+       <p>You can now log in at any time to view upcoming agendas and your assigned operations.</p>`
+    : `<p>Unfortunately, your portal access request has been declined at this time.</p>
+       <p>If you believe this was in error, please contact the VP of Education directly.</p>`;
+
+  const html = `
+    <div style="font-family: 'Montserrat', sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: ${color}; color: white; padding: 24px; border-radius: 12px 12px 0 0;">
+        <h2 style="margin: 0;">${title}</h2>
+      </div>
+      <div style="padding: 24px; background: #f8f9fa; border-radius: 0 0 12px 12px; border: 1px solid #eee;">
+        <p>Hi ${user.firstName},</p>
+        ${body}
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #666;">This is an automated message from the DTCGC Agenda Workflow Engine.</p>
+      </div>
+    </div>
+  `;
+
+  try {
+    await quietlySendEmail(user.email, subject, html);
+    if (!isApproval) {
+      await db.user.delete({ where: { id: userId } });
+    }
+    revalidatePath('/admin/accounts');
+    return { success: true };
+  } catch (error) {
+    console.error("Retry failed:", error);
+    return { success: false, error: "Email still failing. Check system SMTP logs." };
+  }
+}
+
 
 export async function subscribeGuest(email: string) {
   try {

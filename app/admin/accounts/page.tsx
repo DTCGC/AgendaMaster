@@ -2,9 +2,10 @@ import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { approveAccount, rejectAccount, removeUser, removeSubscriber } from '@/app/actions/accounts'
+import { removeUser, removeSubscriber } from '@/app/actions/accounts'
 import { Check, X, Users, Mail, Trash2, ShieldCheck } from 'lucide-react'
 import EditableName from '@/components/admin/editable-name'
+import AccountActionButtons from '@/components/admin/account-action-buttons'
 
 export const metadata = {
   title: 'Admin Approvals - DTCGC',
@@ -77,20 +78,7 @@ export default async function AccountsPage() {
                             <td className="p-4 font-bold text-brand-loyal-blue">{user.firstName} {user.lastName}</td>
                             <td className="p-4 text-sm text-gray-600 italic font-mono">{user.email}</td>
                             <td className="p-4">
-                                <div className="flex gap-2 justify-end">
-                                    <form action={approveAccount}>
-                                        <input type="hidden" name="userId" value={user.id} />
-                                        <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded shadow-sm hover:bg-green-700 transition-colors text-xs font-bold flex items-center gap-1">
-                                            <Check size={14} /> Approve
-                                        </button>
-                                    </form>
-                                    <form action={rejectAccount}>
-                                        <input type="hidden" name="userId" value={user.id} />
-                                        <button type="submit" className="border border-red-200 text-red-600 px-4 py-2 rounded hover:bg-red-50 transition-colors text-xs font-bold flex items-center gap-1">
-                                            <X size={14} /> Deny
-                                        </button>
-                                    </form>
-                                </div>
+                                <AccountActionButtons userId={user.id} userName={`${user.firstName} ${user.lastName}`} />
                             </td>
                             </tr>
                         ))}
