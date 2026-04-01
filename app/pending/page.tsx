@@ -1,6 +1,8 @@
 import { auth, signOut } from "@/auth";
 import { redirect } from "next/navigation";
 import { Clock, LogOut } from "lucide-react";
+import { db } from "@/lib/db";
+import { getDisplayName } from "@/lib/user-logic";
 
 export default async function PendingPage() {
   const session = await auth();
@@ -13,6 +15,11 @@ export default async function PendingPage() {
     redirect('/agenda');
   }
 
+  // Fetch the user's real name from the DB and apply display logic
+  const dbUser = await db.user.findUnique({ where: { id: session.user.dbId } });
+  const allUsers = await db.user.findMany(); // Include themselves to properly count collisions
+  const displayName = dbUser ? getDisplayName(dbUser as any, allUsers as any) : "Member";
+
   return (
     <div className="flex min-h-[calc(100vh-80px)] items-center justify-center p-4 bg-brand-cool-grey/20">
       <div className="max-w-md bg-white p-8 rounded-xl shadow-lg border text-center space-y-6">
@@ -22,7 +29,7 @@ export default async function PendingPage() {
         
         <h1 className="text-3xl font-bold text-brand-loyal-blue">Account Pending</h1>
         <p className="text-gray-600 leading-relaxed">
-          Your account request has been successfully received, <strong className="text-brand-true-maroon">{session.user?.name?.split(' ')[0]}</strong>. An administrator must review and approve your access before you can view club agendas.
+          Your account request has been successfully received, <strong className="text-brand-true-maroon">{displayName}</strong>. An administrator must review and approve your access before you can view club agendas.
         </p>
         <p className="text-sm font-medium text-gray-400">
           You will receive an email at <strong>{session.user?.email}</strong> once your account has been approved.

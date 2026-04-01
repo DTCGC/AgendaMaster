@@ -27,7 +27,10 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
     });
   }
 
-  const userFirstName = session.user.name?.split(' ')[0] || "Member";
+  const allMembers = await db.user.findMany({ where: { role: { in: ['MEMBER', 'ADMIN'] } } });
+  
+  const currentUser = allMembers.find(u => u.id === session.user.dbId);
+  const userFirstName = currentUser ? getDisplayName(currentUser as any, allMembers as any) : "Member";
 
   if (!nextMeeting) {
     return (
@@ -58,9 +61,7 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
     "Roles For Next Meeting", "Business Meeting", "Table Topics Master", "Table Topics Evaluator 1", "Table Topics Evaluator 2"
   ];
 
-  // Fetch all active members for display name collision detection
-  const allMembers = await db.user.findMany({ where: { role: { in: ['MEMBER', 'ADMIN'] } } });
-
+  // Computed display names for all members earlier
   const agendaItems = roleSequence.map(role => {
       const assignment = nextMeeting.roleAssignments.find((a: any) => a.roleName === role);
       if (role === "Roles For Next Meeting") return { role, name: "John" };
