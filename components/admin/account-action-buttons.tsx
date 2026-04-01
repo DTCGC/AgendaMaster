@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState, useTransition } from 'react'
+import { useActionState, useState, useTransition, useEffect } from 'react'
 import { approveAccount, rejectAccount, retryAccountEmail } from '@/app/actions/accounts'
 import { Check, X, MailWarning, Loader2, AlertTriangle, RefreshCw } from 'lucide-react'
 
@@ -31,13 +31,18 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
 
   const [retrying, setRetrying] = useState(false);
 
-  // Watch for state changes to trigger modal
-  if (approveState.emailError && !errorModal && approveState.userId === userId) {
-    setErrorModal({ show: true, type: 'approval', userId });
-  }
-  if (rejectState.emailError && !errorModal && rejectState.userId === userId) {
-    setErrorModal({ show: true, type: 'rejection', userId });
-  }
+  // Watch for state changes to trigger modal via useEffect (safe)
+  useEffect(() => {
+    if (approveState.emailError && approveState.userId === userId) {
+      setErrorModal({ show: true, type: 'approval', userId });
+    }
+  }, [approveState, userId]);
+
+  useEffect(() => {
+    if (rejectState.emailError && rejectState.userId === userId) {
+      setErrorModal({ show: true, type: 'rejection', userId });
+    }
+  }, [rejectState, userId]);
 
   const handleRetry = async () => {
     if (!errorModal) return;
