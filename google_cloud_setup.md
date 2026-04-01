@@ -25,7 +25,6 @@ You need three APIs enabled. Do this for each:
 
 | API Name | What it does |
 |----------|-------------|
-| **Gmail API** | Lets the Toastmaster send emails from their own Gmail |
 | **Google Sheets API** | Lets the app create and populate agenda spreadsheets |
 | **Google Drive API** | Lets the app save sheets to the user's Google Drive |
 
@@ -58,7 +57,6 @@ Before creating credentials, Google requires you to set up a consent screen (wha
 | `openid` | Basic identity |
 | `email` | User's email address |
 | `profile` | User's name and photo |
-| `https://www.googleapis.com/auth/gmail.send` | Send emails |
 | `https://www.googleapis.com/auth/spreadsheets` | Create/edit spreadsheets |
 | `https://www.googleapis.com/auth/drive.file` | Manage files created by this app |
 
@@ -114,56 +112,12 @@ GOOGLE_CLIENT_SECRET="<paste your Client Secret here>"
 
 ---
 
-## Step 6: Gmail App Password for Admin SMTP
-
-> [!WARNING]
-> Gmail **does not allow** third-party apps to use your regular password for SMTP. You need to generate a special "App Password." Your regular password `gcgm1450` will **not work** for SMTP.
-
-### Generate an App Password:
-
-1. Go to [myaccount.google.com](https://myaccount.google.com/) (signed in as `coquitlamgavel@gmail.com`)
-2. Go to **Security**
-3. Under **"How you sign in to Google"**, make sure **2-Step Verification** is **ON**
-   - If it's off, click it and follow the steps to enable it (you'll need your phone)
-4. After 2-Step Verification is enabled, go back to **Security**
-5. Search for or navigate to **"App passwords"** (you can also go directly to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords))
-6. Under "App name", type: `AgendaMaster`
-7. Click **Create**
-8. Google will show you a **16-character password** like: `abcd efgh ijkl mnop`
-9. **Copy this password** (remove spaces)
-
-### Add to `.env`:
-
-```env
-EMAIL_USER="coquitlamgavel@gmail.com"
-EMAIL_PASS="<paste your 16-char App Password here>"
-```
-
----
-
-## Final `.env` Should Look Like:
-
-```env
-DATABASE_URL="file:./dev.db"
-AUTH_SECRET="f2bdc851-4e4b-4ee9-b4f1-085e6ebd5192-dtcgg"
-GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET="GOCSPX-your-client-secret"
-EMAIL_USER="coquitlamgavel@gmail.com"
-EMAIL_PASS="your-16-char-app-password"
-```
-
----
-
 ## Summary Checklist
 
 - [ ] Created Google Cloud project
-- [ ] Enabled Gmail API, Google Sheets API, Google Drive API
+- [ ] Enabled Google Sheets API, Google Drive API
 - [ ] Configured OAuth consent screen with correct scopes
 - [ ] Added test users (your Gmail + any testers)
 - [ ] Created OAuth client ID credentials
 - [ ] Copied Client ID and Client Secret to `.env`
 - [ ] Enabled 2-Step Verification on the Gmail account
-- [ ] Generated a Gmail App Password
-- [ ] Added `EMAIL_USER` and `EMAIL_PASS` to `.env`
-
-Once you've completed these steps, come back and tell me. The app code is being set up in parallel so it will be ready to use immediately.

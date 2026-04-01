@@ -21,6 +21,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
             'openid',
             'email',
             'profile',
+            'https://www.googleapis.com/auth/gmail.send',
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive.file',
           ].join(' '),

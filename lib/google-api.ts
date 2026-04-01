@@ -1,8 +1,9 @@
 /**
- * Google API integration using raw fetch() calls.
- * We bypass the `googleapis` Node.js client to avoid serialization issues
- * that were causing empty `{}` to appear in cell A1.
+ * Google API integration.
+ * Utilizing the official `googleapis` library with `requestBody` instead of `resource`
+ * to fix the serialization bug that caused `{}` to appear in cell A1.
  */
+import { google } from 'googleapis';
 
 // ---------- Template Population (pure logic, no API calls) ----------
 
@@ -87,10 +88,13 @@ export function populateTemplate(
   return rows;
 }
 
-// ---------- Google Sheets API (raw fetch) ----------
+// ---------- Google Sheets API (using googleapis) ----------
 
-const SHEETS_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
-const DRIVE_BASE = 'https://www.googleapis.com/drive/v3/files';
+function getGoogleAuth(accessToken: string) {
+  const auth = new google.auth.OAuth2();
+  auth.setCredentials({ access_token: accessToken });
+  return auth;
+}
 
 /**
  * Creates a Google Sheet, writes data, and makes it shareable.
@@ -109,47 +113,43 @@ export async function createAgendaSheet(
   const title = `Gavel Club ${month}/${day} - ${theme}`;
 
   const populatedRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames);
+  const auth = getGoogleAuth(accessToken);
+  const sheets = google.sheets({ version: 'v4', auth });
+  const drive = google.drive({ version: 'v3', auth });
 
-  // Step 1: Create an empty spreadsheet
   console.log('[GoogleAPI] Creating spreadsheet:', title);
-  const createRes = await fetch(SHEETS_BASE, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
+  
+  // Step 1: Create an empty spreadsheet
+  const createRes = await sheets.spreadsheets.create({
+    requestBody: {
       properties: { title },
       sheets: [{ properties: { title: 'Sheet1' } }]
-    })
+    }
   });
 
-  if (!createRes.ok) {
-    const err = await createRes.text();
-    throw new Error(`Failed to create spreadsheet: ${createRes.status} ${err}`);
+  const sheetId = createRes.data.spreadsheetId;
+  const sheetUrl = createRes.data.spreadsheetUrl;
+  
+  if (!sheetId || !sheetUrl) {
+    throw new Error('Failed to create spreadsheet: ID or URL is missing.');
   }
-
-  const createData = await createRes.json();
-  const sheetId = createData.spreadsheetId;
-  const sheetUrl = createData.spreadsheetUrl;
+  
   console.log('[GoogleAPI] Created sheet:', sheetId);
 
   // Step 2: Write the populated data
-  await writeSheetData(accessToken, sheetId, populatedRows);
+  await writeSheetData(sheets, sheetId, populatedRows);
 
   // Step 3: Make shareable (anyone with link can view)
   console.log('[GoogleAPI] Setting share permissions');
-  const permRes = await fetch(`${DRIVE_BASE}/${sheetId}/permissions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ type: 'anyone', role: 'reader' })
-  });
-
-  if (!permRes.ok) {
-    const err = await permRes.text();
+  try {
+    await drive.permissions.create({
+      fileId: sheetId,
+      requestBody: {
+        type: 'anyone',
+        role: 'reader'
+      }
+    });
+  } catch (err) {
     console.error('[GoogleAPI] Permission error (non-fatal):', err);
   }
 
@@ -169,14 +169,17 @@ export async function updateAgendaSheet(
   unassignedNames: string[]
 ): Promise<void> {
   const populatedRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames);
-  await writeSheetData(accessToken, existingSheetId, populatedRows);
+  const auth = getGoogleAuth(accessToken);
+  const sheets = google.sheets({ version: 'v4', auth });
+  
+  await writeSheetData(sheets, existingSheetId, populatedRows);
 }
 
 /**
  * Writes a 2D array to Sheet1 of a spreadsheet via the Values API.
  */
 async function writeSheetData(
-  accessToken: string,
+  sheets: any,
   spreadsheetId: string,
   rows: string[][]
 ) {
@@ -189,30 +192,61 @@ async function writeSheetData(
   });
 
   const endCol = String.fromCharCode(64 + Math.min(maxCols, 26));
-  const range = encodeURIComponent(`Sheet1!A1:${endCol}${normalized.length}`);
-  const url = `${SHEETS_BASE}/${spreadsheetId}/values/${range}?valueInputOption=RAW`;
+  const range = `Sheet1!A1:${endCol}${normalized.length}`;
 
   console.log(`[GoogleAPI] Writing ${normalized.length} rows × ${maxCols} cols to ${spreadsheetId}`);
-  console.log(`[GoogleAPI] Sample row 2:`, JSON.stringify(normalized[2]));
-  console.log(`[GoogleAPI] Sample row 3:`, JSON.stringify(normalized[3]));
 
-  const body = JSON.stringify({ values: normalized });
-
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body
+  // CRITICAL FIX: Use requestBody, NOT resource, to prevent {} in cell A1.
+  const res = await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range,
+    valueInputOption: 'RAW',
+    requestBody: {
+      values: normalized
+    }
   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Failed to write sheet data: ${res.status} ${err}`);
-  }
+  console.log(`[GoogleAPI] Write result: ${res.data.updatedCells} cells updated`);
+}
 
-  const result = await res.json();
-  console.log(`[GoogleAPI] Write result: ${result.updatedCells} cells updated`);
+/**
+ * Sends an email via the Gmail API from the authenticated user's account.
+ */
+export async function sendGmailAsUser(
+  accessToken: string,
+  recipients: string[],
+  subject: string,
+  htmlBody: string
+) {
+  console.log(`[GoogleAPI] Sending Gmail to ${recipients.length} recipients...`);
+
+  // Gmail API requires messages in RFC 2822 format (base64url encoded)
+  // We use BCC for multiple recipients to protect privacy and avoid massive headers
+  const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
+  const message = [
+    `Content-Type: text/html; charset="UTF-8"`,
+    `MIME-Version: 1.0`,
+    `To: ${recipients[0]}`, // Standard 'To' field
+    `Bcc: ${recipients.join(', ')}`, // Send all others as BCC
+    `Subject: ${utf8Subject}`,
+    '',
+    htmlBody
+  ].join('\r\n');
+
+  const encodedMessage = Buffer.from(message)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  const auth = getGoogleAuth(accessToken);
+  const gmail = google.gmail({ version: 'v1', auth });
+
+  const res = await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: { raw: encodedMessage }
+  });
+
+  console.log(`✓ Gmail dispatched successfully (ID: ${res.data.id})`);
 }
 
