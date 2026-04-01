@@ -143,9 +143,21 @@ export async function subscribeGuest(email: string) {
 
 export async function removeUser(formData: FormData) {
   const userId = formData.get('userId') as string;
-  await db.user.delete({
-    where: { id: userId }
-  });
+  
+  try {
+    // Unlink the user from any past or future agenda roles to prevent FK constraint errors
+    await db.roleAssignment.updateMany({
+      where: { userId: userId },
+      data: { userId: null }
+    });
+
+    await db.user.delete({
+      where: { id: userId }
+    });
+  } catch (error) {
+    console.error("Failed to remove user:", error);
+  }
+  
   revalidatePath('/admin/accounts');
 }
 
