@@ -57,13 +57,13 @@ export async function toggleMeeting(dateIso: string, existingId?: string) {
         }
     } else {
         // Create new
-        let standardTemplate = await db.meetingTemplate.findFirst({
-            where: { type: 'Standard' }
+        let regularTemplate = await db.meetingTemplate.findFirst({
+            where: { type: 'Regular' }
         });
 
-        if (!standardTemplate) {
-            standardTemplate = await db.meetingTemplate.create({
-                data: { id: 'standard-toastmasters', type: 'Standard', schemaStructure: '{}' }
+        if (!regularTemplate) {
+            regularTemplate = await db.meetingTemplate.create({
+                data: { id: 'regular-template', type: 'Regular', schemaStructure: 'TIME,ROLE,,NAME,,\n' }
             });
         }
 
@@ -73,7 +73,7 @@ export async function toggleMeeting(dateIso: string, existingId?: string) {
         await db.meeting.create({
             data: {
                 date: date,
-                typeId: standardTemplate.id,
+                typeId: regularTemplate.id,
                 status: 'SCHEDULED'
             }
         });

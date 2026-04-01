@@ -127,7 +127,17 @@ export async function executeAgendaPipeline(
       .filter((m: { id: string }) => !assignedUserIds.has(m.id))
       .map((m: NameableUser) => getDisplayName(m, allMembers));
 
-    const csvTemplate = meeting.template.schemaStructure;
+    let csvTemplate = meeting.template.schemaStructure;
+
+    // HEALING FALLBACK: Existing meetings might be bound to the corrupted '{}' standard-toastmasters template.
+    if (csvTemplate && csvTemplate.trim() === '{}') {
+      const fallbackTemplate = await db.meetingTemplate.findFirst({
+        where: { type: 'Regular' }
+      });
+      if (fallbackTemplate) {
+        csvTemplate = fallbackTemplate.schemaStructure;
+      }
+    }
 
     // --- Check if this is a first-time creation or an update ---
     const isUpdate = !!meeting.googleSheetId;
