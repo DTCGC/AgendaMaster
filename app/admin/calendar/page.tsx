@@ -24,9 +24,13 @@ export default async function CalendarPage() {
   // Generate potential Fridays
   const potentialFridays = await getFutureFridays()
 
-  const todayMidnight = new Date();
-  todayMidnight.setHours(0, 0, 0, 0);
-  const pastMeetings = existingMeetings.filter((m: any) => new Date(m.date) < todayMidnight).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  // Archival threshold: 9:00 PM on the meeting date.
+  // We use 2 hours and 15 mins (8100000ms) past the 6:45 PM start time.
+  const archivalThreshold = new Date(Date.now() - 8100000);
+  
+  const pastMeetings = existingMeetings
+    .filter((m: any) => m.status === 'ARCHIVED' || (m.status === 'COMPLETED') || new Date(m.date) < archivalThreshold)
+    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
     <div className="flex-1 p-8 bg-brand-cool-grey/10 min-h-screen">
@@ -51,7 +55,7 @@ export default async function CalendarPage() {
                 <tbody className="divide-y divide-gray-100">
                     {potentialFridays.map(date => {
                         const existing = existingMeetings.find((m: any) => 
-                            new Date(m.date).toDateString() === date.toDateString()
+                            new Date(m.date).toDateString() === date.toDateString() && m.status !== 'ARCHIVED'
                         );
                         
                         return (
@@ -66,7 +70,11 @@ export default async function CalendarPage() {
                                 </td>
                                 <td className="p-4 text-center">
                                     {existing ? (
-                                        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${existing.status === 'SCHEDULED' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                                            existing.status === 'SCHEDULED' ? 'bg-green-50 text-green-700 border-green-200' : 
+                                            existing.status === 'CANCELLED' ? 'bg-red-50 text-red-700 border-red-200' :
+                                            'bg-gray-50 text-gray-700 border-gray-200'
+                                        }`}>
                                             {existing.status}
                                         </span>
                                     ) : (
@@ -128,7 +136,12 @@ export default async function CalendarPage() {
                                     <div className="text-xs text-gray-500">Scheduled Time: 6:45 PM</div>
                                 </td>
                                 <td className="p-4 text-center">
-                                    <span className={`px-3 py-1 rounded-full text-xs font-bold border ${m.status === 'COMPLETED' ? 'bg-purple-50 text-purple-700 border-purple-200' : m.status === 'CANCELLED' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                    <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                                        m.status === 'ARCHIVED' ? 'bg-brand-loyal-blue/10 text-brand-loyal-blue border-brand-loyal-blue/20' : 
+                                        m.status === 'COMPLETED' ? 'bg-purple-50 text-purple-700 border-purple-200' : 
+                                        m.status === 'CANCELLED' ? 'bg-red-50 text-red-700 border-red-200' : 
+                                        'bg-gray-100 text-gray-600 border-gray-200'
+                                    }`}>
                                         {m.status}
                                     </span>
                                 </td>

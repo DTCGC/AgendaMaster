@@ -36,6 +36,7 @@ export async function toggleMeeting(dateIso: string, existingId?: string) {
 
         if (!meeting) return;
 
+        if (meeting.status === 'ARCHIVED') return;
         const newStatus = meeting.status === 'SCHEDULED' ? 'CANCELLED' : 'SCHEDULED';
         
         await db.meeting.update({

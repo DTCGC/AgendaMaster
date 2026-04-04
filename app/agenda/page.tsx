@@ -20,8 +20,11 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
       include: { roleAssignments: { include: { user: true } } }
     });
   } else {
+    // To allow the Friday meeting to remain visible until 9:00 PM, 
+    // we use a buffer of 2 hours and 15 mins (8100000ms) since the DB date is 6:45 PM.
+    const archivalThreshold = new Date(Date.now() - 8100000);
     nextMeeting = await db.meeting.findFirst({
-      where: { date: { gte: new Date() }, status: 'SCHEDULED' },
+      where: { date: { gte: archivalThreshold }, status: 'SCHEDULED' },
       include: { roleAssignments: { include: { user: true } } },
       orderBy: { date: 'asc' }
     });

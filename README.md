@@ -146,6 +146,15 @@ location / {
 ```
 Then run: `sudo systemctl restart nginx`
 
+### 6. Automated Meeting Archival
+Meetings are automatically moved from "Scheduled" to "Archived" status 2 hours and 15 minutes after their start time (at 9:00 PM Pacific Time). This ensures the dashboard remains current.
+
+To automate this on your Droplet, set up a system cron job:
+1. Generate a secure secret and add it to your `.env` as `CRON_SECRET`.
+2. Run `crontab -e`.
+3. Add the following entry (runs at 9:00 PM every Friday):
+   `0 21 * * 5 curl -X POST http://localhost:3000/api/cron/archive -H "Authorization: Bearer YOUR_SECRET"`
+
 ---
 
 ## 📖 Related Documentation
