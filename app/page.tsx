@@ -58,6 +58,23 @@ export default async function LandingPage() {
                 <p className="text-sm text-gray-500">Manage member lists, account approvals, and club communications.</p>
             </div>
         </div>
+
+        {/* Data Transparency Section (Google OAuth Compliance) */}
+        <section className="pt-20 pb-10 border-t border-gray-200">
+          <div className="max-w-2xl mx-auto text-center">
+            <h2 className="text-2xl font-bold text-brand-loyal-blue mb-4">Data Transparency</h2>
+            <p className="text-sm text-gray-600 leading-relaxed mb-6">
+              AgendaMaster requests access to Google Sheets, Google Drive, and Gmail strictly to automate the creation 
+              and distribution of meeting agendas for the Downtown Coquitlam Gavel Club. We do not store, share, or sell 
+              your Google user data for advertising, marketing, or any other commercial purposes.
+            </p>
+            <div className="flex justify-center gap-6 text-xs font-bold uppercase tracking-widest text-brand-loyal-blue/60">
+              <Link href="/privacy" className="hover:text-brand-loyal-blue transition-colors">Privacy Policy</Link>
+              <Link href="/tos" className="hover:text-brand-loyal-blue transition-colors">Terms of Service</Link>
+              <a href="mailto:info@coquitlamgavel.com" className="hover:text-brand-loyal-blue transition-colors">Contact Support</a>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );

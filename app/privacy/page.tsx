@@ -50,20 +50,43 @@ export default function PrivacyPolicy() {
         </section>
 
         <section className="mb-10">
-          <h2 className="text-2xl font-semibold text-brand-loyal-blue mb-4">4. Data Sharing and Transfer</h2>
-          <p className="text-slate-700">
-            AgendaMaster does not sell, trade, or otherwise transfer your personal information to third parties. 
-            Information is only shared with service providers (like Google) as necessary to perform the application's core functions.
+          <h2 className="text-2xl font-semibold text-brand-loyal-blue mb-4">4. Google Limited Use Disclosure</h2>
+          <p className="text-slate-700 leading-relaxed border-l-4 border-brand-happy-yellow pl-4 bg-yellow-50 py-4 rounded-r-lg">
+            AgendaMaster&apos;s use and transfer to any other app of information received from Google APIs will adhere to the 
+            <a href="https://developers.google.com/terms/api-services-user-data-policy" className="text-brand-loyal-blue underline mx-1" target="_blank" rel="noopener noreferrer">
+              Google API Services User Data Policy
+            </a>, including the Limited Use requirements.
           </p>
         </section>
 
         <section className="mb-10">
-          <h2 className="text-2xl font-semibold text-brand-loyal-blue mb-4">5. Security</h2>
+          <h2 className="text-2xl font-semibold text-brand-loyal-blue mb-4">5. Data Sharing and Transfer</h2>
+          <p className="text-slate-700">
+            AgendaMaster does not sell, trade, or otherwise transfer your personal information to third parties. 
+            Information is only shared with service providers (like Google) as necessary to perform the application&apos;s core functions.
+          </p>
+        </section>
+
+        <section className="mb-10">
+          <h2 className="text-2xl font-semibold text-brand-loyal-blue mb-4">6. Security</h2>
           <p className="text-slate-700">
             We implement standard security measures to protect your information. 
             All authentication is handled via Google OAuth, and we do not store your Google password. 
-            Sensitive database entries (like admin accounts) use secure hashing.
+            Sensitive database entries (like admin accounts) use secure hashing. Data in transit is protected using industry-standard SSL/TLS encryption.
           </p>
+        </section>
+
+        <section className="mb-10">
+          <h2 className="text-2xl font-semibold text-brand-loyal-blue mb-4">7. Data Retention and Deletion</h2>
+          <ul className="list-disc pl-6 text-slate-700 space-y-2">
+            <li>
+              <strong>Retention:</strong> We retain your club identity (name) and authentication metadata for as long as you remain a member of the Downtown Coquitlam Gavel Club.
+            </li>
+            <li>
+              <strong>Deletion:</strong> You may request the deletion of your account and all associated personal data at any time by contacting us at 
+              <span className="font-bold"> info@coquitlamgavel.com</span>. Once requested, your data will be permanently removed from our production database within 30 days.
+            </li>
+          </ul>
         </section>
 
         <section className="mb-10 text-center bg-slate-50 p-8 rounded-lg border border-slate-200">

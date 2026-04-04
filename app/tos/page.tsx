@@ -74,8 +74,10 @@ export default function TermsOfService() {
           <a href="mailto:info@coquitlamgavel.com" className="text-brand-loyal-blue font-bold hover:underline">info@coquitlamgavel.com</a>
         </section>
 
-        <div className="mt-12 text-center text-sm text-slate-500">
-          <Link href="/" className="hover:text-brand-loyal-blue transition-colors underline decoration-slate-300">Return to Home</Link>
+        <div className="mt-12 text-center text-sm text-slate-500 space-x-6">
+          <Link href="/" className="hover:text-brand-loyal-blue transition-colors underline decoration-slate-300">Home</Link>
+          <Link href="/privacy" className="hover:text-brand-loyal-blue transition-colors underline decoration-slate-300">Privacy Policy</Link>
+          <a href="mailto:info@coquitlamgavel.com" className="hover:text-brand-loyal-blue transition-colors underline decoration-slate-300">Support</a>
         </div>
       </div>
     </div>
