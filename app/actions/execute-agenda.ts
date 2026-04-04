@@ -2,9 +2,8 @@
 
 import { auth } from '@/auth'
 import { db } from '@/lib/db'
-import { createAgendaSheet, updateAgendaSheet } from '@/lib/google-api'
+import { createAgendaSheet, updateAgendaSheet, sendGmailAsUser } from '@/lib/google-api'
 import { getDisplayName, type NameableUser } from '@/lib/user-logic'
-import { sendBccEmail } from '@/lib/email'
 import { MINOR_ROLES, MAJOR_ROLES, FIXED_ROLES } from '@/lib/agenda-logic'
 import { revalidatePath } from 'next/cache'
 
@@ -197,8 +196,8 @@ export async function executeAgendaPipeline(
       const subscriberEmails = subscribers.map((s: { email: string }) => s.email);
       const allRecipients = Array.from(new Set([...memberEmails, ...subscriberEmails]));
 
-      // Send via unified Resend API bridge
-      await sendBccEmail(allRecipients, emailSubject, emailWithLink);
+      // Send via Gmail API (as the logged-in Toastmaster)
+      await sendGmailAsUser(accessToken, allRecipients, emailSubject, emailWithLink);
     }
 
     // Save theme (if not already saved)

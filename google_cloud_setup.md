@@ -25,6 +25,7 @@ You need three APIs enabled. Do this for each:
 
 | API Name | What it does |
 |----------|-------------|
+| **Gmail API** | Lets the Toastmaster send emails from their own Gmail |
 | **Google Sheets API** | Lets the app create and populate agenda spreadsheets |
 | **Google Drive API** | Lets the app save sheets to the user's Google Drive |
 
@@ -57,6 +58,7 @@ Before creating credentials, Google requires you to set up a consent screen (wha
 | `openid` | Basic identity |
 | `email` | User's email address |
 | `profile` | User's name and photo |
+| `https://www.googleapis.com/auth/gmail.send` | Send emails |
 | `https://www.googleapis.com/auth/spreadsheets` | Create/edit spreadsheets |
 | `https://www.googleapis.com/auth/drive.file` | Manage files created by this app |
 
@@ -115,7 +117,7 @@ GOOGLE_CLIENT_SECRET="<paste your Client Secret here>"
 ## Summary Checklist
 
 - [ ] Created Google Cloud project
-- [ ] Enabled Google Sheets API, Google Drive API
+- [ ] Enabled Gmail API, Google Sheets API, Google Drive API
 - [ ] Configured OAuth consent screen with correct scopes
 - [ ] Added test users (your Gmail + any testers)
 - [ ] Created OAuth client ID credentials
