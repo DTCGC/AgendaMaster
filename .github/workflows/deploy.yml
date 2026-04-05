@@ -24,7 +24,7 @@ jobs:
         run: npx prisma generate
 
       - name: Build Application
-        run: npm run build
+        run: NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$(openssl rand -base64 32) npm run build
 
       - name: Copy Files to Droplet
         uses: appleboy/scp-action@master
