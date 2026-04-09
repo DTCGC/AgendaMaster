@@ -59,7 +59,6 @@ Before creating credentials, Google requires you to set up a consent screen (wha
 | `email` | User's email address |
 | `profile` | User's name and photo |
 | `https://www.googleapis.com/auth/gmail.send` | Send emails |
-| `https://www.googleapis.com/auth/spreadsheets` | Create/edit spreadsheets |
 | `https://www.googleapis.com/auth/drive.file` | Manage files created by this app |
 
 4. Click **Update** → **Save and Continue**
