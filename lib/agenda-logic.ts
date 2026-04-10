@@ -99,7 +99,7 @@ export async function getAutoAssignments(meetingId: string) {
         if (u) (u as any).displayName = getDisplayName(u, activeUsers);
         return {
             ...a,
-            user: u ? { firstName: u.firstName, lastName: u.lastName, displayName: (u as any).displayName } : null
+            user: u ? { id: u.id, firstName: u.firstName, lastName: u.lastName, displayName: (u as any).displayName } : null
         };
     })
   };

@@ -27,6 +27,7 @@ export async function approveAccount(prevState: any, formData: FormData) {
         <p>Hi ${user.firstName},</p>
         <p>Your portal account has been verified and fully approved by the club administrative team.</p>
         <p>You can now log in at any time to view upcoming agendas and your assigned operations.</p>
+        <p><a href="https://agendas.coquitlamgavel.com" style="display: inline-block; background-color: #004165; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 10px;">Access Portal</a></p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
         <p style="font-size: 12px; color: #666;">This is an automated message from the DTCGC Agenda Workflow Engine.</p>
       </div>
@@ -62,6 +63,7 @@ export async function rejectAccount(prevState: any, formData: FormData) {
         <p>Hi ${user.firstName},</p>
         <p>Unfortunately, your portal access request has been declined at this time.</p>
         <p>If you believe this was in error, please contact the VP of Education directly.</p>
+        <p>Return to <a href="https://agendas.coquitlamgavel.com" style="color: #772432; font-weight: bold;">agendas.coquitlamgavel.com</a></p>
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
         <p style="font-size: 12px; color: #666;">This is an automated message from the DTCGC Agenda Workflow Engine.</p>
       </div>
@@ -97,9 +99,11 @@ export async function retryAccountEmail(userId: string, type: 'approval' | 'reje
   const title = isApproval ? 'Account Approved ✓' : 'Application Update';
   const body = isApproval 
     ? `<p>Your portal account has been verified and fully approved by the club administrative team.</p>
-       <p>You can now log in at any time to view upcoming agendas and your assigned operations.</p>`
+       <p>You can now log in at any time to view upcoming agendas and your assigned operations.</p>
+       <p><a href="https://agendas.coquitlamgavel.com" style="display: inline-block; background-color: #004165; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 10px;">Access Portal</a></p>`
     : `<p>Unfortunately, your portal access request has been declined at this time.</p>
-       <p>If you believe this was in error, please contact the VP of Education directly.</p>`;
+       <p>If you believe this was in error, please contact the VP of Education directly.</p>
+       <p>Return to <a href="https://agendas.coquitlamgavel.com" style="color: #772432; font-weight: bold;">agendas.coquitlamgavel.com</a></p>`;
 
   const html = `
     <div style="font-family: 'Montserrat', sans-serif; max-width: 600px; margin: 0 auto;">

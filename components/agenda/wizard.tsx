@@ -6,7 +6,7 @@ import { AlertCircle, CheckCircle2, ExternalLink, Copy, Loader2 } from 'lucide-r
 import TiptapEditor from './tiptap-editor'
 import { fetchRoleAssignments, formatDraft, saveFinalAgenda } from '@/app/actions/agenda'
 import { executeAgendaPipeline } from '@/app/actions/execute-agenda'
-import { MINOR_ROLES } from '@/lib/agenda-logic'
+import { MINOR_ROLES, MAJOR_ROLES } from '@/lib/agenda-logic'
 
 // Boilerplate Template 
 const DEFAULT_TEMPLATE = ``
@@ -59,9 +59,21 @@ function WizardContent({ meetingId }: { meetingId: string }) {
     const loadRoles = async () => {
         try {
             const data = await fetchRoleAssignments(meetingId)
-            setMinorRoles(data.assignments)
+            
+            const editableRoles = { ...data.assignments };
+            const lockedRoles: any[] = [];
+            
+            data.preAssignedMajor.forEach((a: any) => {
+                if (a.roleName === 'Toastmaster') {
+                    lockedRoles.push(a);
+                } else {
+                    editableRoles[a.roleName] = a.user;
+                }
+            });
+
+            setMinorRoles(editableRoles)
             setUnassigned(data.unassigned)
-            setPreAssigned(data.preAssignedMajor)
+            setPreAssigned(lockedRoles)
             setLoadingRoles(false)
         } catch (e) {
             console.error("Failed to load roles:", e)
@@ -334,7 +346,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                  <input type="text" placeholder="e.g., Spring Forward" className="w-full border p-3 rounded" value={meetingTheme} onChange={(e) => setMeetingTheme(e.target.value)} />
              </div>
              <div className="space-y-2">
-                 <label className="font-semibold text-sm">Question of The Day (QOTD)</label>
+                 <label className="font-semibold text-sm">Question of The Day (Required)</label>
                  <input type="text" placeholder="e.g., What is your favorite season?" className="w-full border p-3 rounded" value={meetingQotd} onChange={(e) => setMeetingQotd(e.target.value)} />
              </div>
           </div>
@@ -371,7 +383,9 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                     <div>
                         <h3 className="font-bold text-gray-700 mb-4 bg-gray-100 p-2 rounded text-sm">Minor Roles</h3>
                         <div className="space-y-2">
-                             {Object.entries(minorRoles).map(([role, user]) => {
+                             {Object.entries(minorRoles)
+                                 .filter(([role]) => !MAJOR_ROLES.includes(role))
+                                 .map(([role, user]) => {
                                  // Safely construct a unique list of all known users
                                  const staticUsers = [...unassigned];
                                  Object.values(minorRoles).forEach(u => { if (u && !staticUsers.some(existing => existing.id === u.id)) staticUsers.push(u); });
@@ -400,9 +414,34 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                         <div>
                             <h3 className="font-bold text-gray-700 mb-4 bg-brand-true-maroon text-white p-2 rounded text-sm flex justify-between">
                                 <span>Major Roles</span>
-                                <span className="text-[10px] font-normal opacity-75">Admin Entry</span>
+                                <span className="text-[10px] font-normal opacity-75">Admin/TM Entry</span>
                             </h3>
                             <div className="space-y-3 text-sm">
+                                {Object.entries(minorRoles)
+                                    .filter(([role]) => MAJOR_ROLES.includes(role))
+                                    .map(([role, user]) => {
+                                    const staticUsers = [...unassigned];
+                                    Object.values(minorRoles).forEach(u => { if (u && !staticUsers.some(existing => existing.id === u.id)) staticUsers.push(u); });
+                                    preAssigned.forEach(a => { if (a.user && !staticUsers.some(existing => existing.id === a.user.id)) staticUsers.push(a.user); });
+                                    staticUsers.sort((a, b) => a.displayName.localeCompare(b.displayName));
+   
+                                    return (
+                                    <div key={role} className="flex justify-between items-center border-b pb-2 last:border-0">
+                                        <span className="font-semibold text-gray-600">{role}</span>
+                                        <select 
+                                           className={`px-2 py-1 rounded text-xs border bg-white focus:ring-2 focus:ring-brand-true-maroon outline-none transition-shadow ${user ? 'bg-brand-happy-yellow/10 border-brand-happy-yellow/50' : 'bg-red-50 border-red-200 border-dashed'}`} 
+                                           value={user?.id || ""} 
+                                           onChange={(e) => handleRoleChange(role, e.target.value)}
+                                        >
+                                            <option value="">-- UNASSIGNED --</option>
+                                            {(allowDoubleRoles ? staticUsers : [...unassigned, ...(user ? [user] : [])]).filter((u, i, arr) => arr.findIndex(t => t.id === u.id) === i).map((u: any) => (
+                                                <option key={u.id} value={u.id}>{u.displayName}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    )
+                                })}
+
                                 {preAssigned.map((a: any) => (
                                     <div key={a.id} className="flex justify-between items-center border-b pb-2 last:border-0">
                                         <span className="font-semibold text-gray-600">{a.roleName}</span>
@@ -563,8 +602,8 @@ function WizardContent({ meetingId }: { meetingId: string }) {
           {step < 4 ? (
               <button 
                   onClick={handleNextStep}
-                  disabled={(step === 2 && !meetingTheme)}
-                  className={`px-6 py-2 rounded font-bold transition-all ${step === 2 && !meetingTheme ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-brand-loyal-blue text-white shadow hover:opacity-90 active:scale-95'}`}
+                  disabled={(step === 2 && (!meetingTheme || !meetingQotd))}
+                  className={`px-6 py-2 rounded font-bold transition-all ${step === 2 && (!meetingTheme || !meetingQotd) ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-brand-loyal-blue text-white shadow hover:opacity-90 active:scale-95'}`}
               >
                   Next Step
               </button>

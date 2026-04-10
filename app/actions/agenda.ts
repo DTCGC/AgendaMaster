@@ -14,19 +14,19 @@ export async function formatDraft(text: string) {
 }
 
 export async function saveFinalAgenda(meetingId: string, assignments: Record<string, any>) {
-    // 1. Transactional Delete/Create for Minor Roles
-    // (Major roles are already handled separately in the Admin Panel)
-    const minorRoles = Object.keys(assignments).filter(r => MINOR_ROLES.includes(r));
+    // 1. Transactional Delete/Create for Minor and Editable Major Roles
+    // (Toastmaster role is separate)
+    const rolesToUpdate = Object.keys(assignments).filter(r => r !== 'Toastmaster');
     
     await db.$transaction([
         db.roleAssignment.deleteMany({
             where: {
                 meetingId,
-                roleName: { in: MINOR_ROLES }
+                roleName: { in: rolesToUpdate }
             }
         }),
         db.roleAssignment.createMany({
-            data: minorRoles
+            data: rolesToUpdate
                 .filter(role => assignments[role] !== null)
                 .map(role => ({
                     meetingId,
