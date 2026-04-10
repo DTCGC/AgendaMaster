@@ -14,11 +14,11 @@ export default async function LandingPage() {
         {/* Hero Section - Above the fold */}
         <div className="min-h-[85vh] flex flex-col justify-center items-center text-center space-y-8 py-12">
           <div className="inline-block px-4 py-1.5 bg-brand-happy-yellow/20 text-yellow-800 rounded-full text-xs font-bold tracking-widest uppercase mb-4 animate-bounce">
-            2023 - Downtown Coquitlam Gavel Club
+            Est. 2023 - Downtown Coquitlam Gavel Club
           </div>
           
           <h1 className="text-6xl md:text-7xl font-extrabold text-brand-loyal-blue tracking-tighter leading-none">
-            DTCGC <span className="text-brand-true-maroon font-black">Portal</span>
+            Agenda<span className="text-brand-true-maroon font-black">Master</span>
           </h1>
           
           <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed font-medium">
