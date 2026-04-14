@@ -56,7 +56,7 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
    GOOGLE_CLIENT_ID="your-client-id"
    GOOGLE_CLIENT_SECRET="your-client-secret"
    RESEND_API_KEY="re_your_api_key"
-   RESEND_FROM_EMAIL="AgendaMaster <onboarding@resend.dev>"
+   RESEND_FROM_EMAIL="AgendaMaster <info@coquitlamgavel.com>"
    ```
 
 4. **Initialize Database**:

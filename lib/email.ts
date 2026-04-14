@@ -11,11 +11,11 @@ const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'DTCGC Portal <onboarding@re
  * Avoids DO droplet SMTP port blocks and streamlines mass announcements.
  * Falls back to mock logging in development if credentials aren't set.
  */
-export async function quietlySendEmail(to: string, subject: string, html: string) {
+export async function quietlySendEmail(to: string, subject: string, html: string, options?: { reply_to?: string }) {
   if (!resend) {
     // Development fallback: log to console + file
     const logHeader = `\n================== [MOCK EMAIL BRIDGE: ${new Date().toLocaleString()}] ==================\n`;
-    const logEntry = `${logHeader}To: ${to}\nSubject: ${subject}\nBody (HTML):\n${html}\n===========================================================\n`;
+    const logEntry = `${logHeader}To: ${to}\nReply-To: ${options?.reply_to || 'None'}\nSubject: ${subject}\nBody (HTML):\n${html}\n===========================================================\n`;
     
     console.log(logEntry);
 
@@ -35,6 +35,7 @@ export async function quietlySendEmail(to: string, subject: string, html: string
       to,
       subject,
       html,
+      ...(options?.reply_to ? { reply_to: options.reply_to } : {}),
     });
     
     if (error) throw new Error(error.message);
@@ -49,12 +50,12 @@ export async function quietlySendEmail(to: string, subject: string, html: string
 /**
  * Sends a single email to multiple recipients via BCC using the Resend API.
  */
-export async function sendBccEmail(recipients: string[], subject: string, html: string) {
+export async function sendBccEmail(recipients: string[], subject: string, html: string, options?: { reply_to?: string }) {
   const unique = Array.from(new Set(recipients));
   if (unique.length === 0) return { succeeded: 0, failed: 0, total: 0 };
 
   if (!resend) {
-    console.log(`[MOCK BCC]: Simulated HTTP dispatch to ${unique.length} users.`);
+    console.log(`[MOCK BCC]: Simulated HTTP dispatch to ${unique.length} users. Reply-To: ${options?.reply_to || 'None'}`);
     return { succeeded: unique.length, failed: 0, total: unique.length };
   }
 
@@ -65,6 +66,7 @@ export async function sendBccEmail(recipients: string[], subject: string, html: 
       bcc: unique,
       subject,
       html,
+      ...(options?.reply_to ? { reply_to: options.reply_to } : {}),
     });
     
     if (error) throw new Error(error.message);
