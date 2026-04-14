@@ -1,17 +1,43 @@
 import { NextResponse } from 'next/server';
 import { quietlySendEmail } from '@/lib/email';
+import { Resend } from 'resend';
+
+// Initialize Resend client here to fetch full inbound email contents
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 export async function POST(req: Request) {
   try {
     const payload = await req.json();
 
     // The payload shape for Resend Inbound Webhooks
-    const { from, subject, text, html } = payload;
+    if (payload.type !== 'email.received' || !payload.data) {
+      console.warn("[Webhook] Ignored non-received event or malformed payload.", payload.type);
+      return NextResponse.json({ success: true });
+    }
+
+    const { from, subject, email_id } = payload.data;
     
     if (!from) {
       console.warn("[Webhook] Received inbound email webhook without 'from' field.");
       // Acknowledge to Resend to stop retries
       return NextResponse.json({ success: true }); 
+    }
+
+    let text = '';
+    let html = '';
+
+    // The webhook payload only contains metadata. 
+    // We must fetch the full email to get the `text` and `html` content.
+    if (email_id && resend) {
+      const { data: emailDetails, error } = await resend.emails.get(email_id);
+      if (error) {
+        console.error("[Webhook] Failed to fetch email body for ID:", email_id, error);
+      } else if (emailDetails) {
+        text = emailDetails.text || '';
+        html = emailDetails.html || '';
+      }
+    } else if (!resend) {
+      console.warn("[Webhook] Resend client not initialized. Cannot fetch email body.");
     }
 
     const formattedSubject = `FWD: ${subject || 'No Subject'}`;
@@ -23,7 +49,7 @@ export async function POST(req: Request) {
         <p style="margin: 5px 0 0 0; color: #772432; font-size: 12px;"><em>(Replying to this email will send your response directly to the original sender's address)</em></p>
       </div>
       <div style="padding: 10px; border-left: 4px solid #004165; background: #fff; color: #000;">
-        ${html || (text ? `<pre style="white-space: pre-wrap; font-family: inherit;">${text}</pre>` : '<em>No content provided.</em>')}
+        ${html || (text ? `<pre style="white-space: pre-wrap; font-family: inherit;">${text}</pre>` : '<em>No content provided or failed to retrieve body.</em>')}
       </div>
     `;
 
