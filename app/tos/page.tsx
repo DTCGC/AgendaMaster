@@ -1,3 +1,4 @@
+/** Terms of Service page — required for Google OAuth verification compliance. */
 import Link from "next/link";
 
 export default function TermsOfService() {

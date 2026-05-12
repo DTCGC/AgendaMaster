@@ -1,8 +1,14 @@
+/**
+ * Admin Role Assignment Page
+ *
+ * Split-panel interface for assigning major roles (Toastmaster, Speakers, etc.)
+ * to upcoming meetings. Left sidebar shows a meeting selector; right panel
+ * shows the role form and a participation history tracker (sorted by recency).
+ */
 import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { redirect } from 'next/navigation'
 import RolesForm from './roles-form'
-import { MAJOR_ROLES } from '@/lib/agenda-logic'
 import { AlertCircle, Calendar as CalendarIcon, ChevronRight } from 'lucide-react'
 
 type RoleAssignment = {
@@ -128,7 +134,7 @@ export default async function RolesPage({
                         <p className="text-sm text-gray-500 mb-6 border-b pb-4 leading-relaxed">
                             Members who haven't had a role in a while are prioritized. Lower in the list = Higher availability.
                         </p>
- streams                        
+                        
                         <div className="space-y-2 overflow-y-auto max-h-[600px] pr-2">
                             {members.sort((a: any, b: any) => {
                                 const dateA = a.roleAssignments[0]?.assignedAt ? new Date(a.roleAssignments[0].assignedAt).getTime() : 0;

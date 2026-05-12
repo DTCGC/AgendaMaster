@@ -1,3 +1,10 @@
+/**
+ * Mass Broadcast Client Component
+ *
+ * Admin-facing rich email composition interface with target group selection.
+ * Supports three delivery targets: Active Members, Guest Subscribers, or All.
+ * Includes a clipboard fallback for manual email dispatch.
+ */
 'use client'
 
 import { useState } from 'react'

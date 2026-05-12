@@ -1,9 +1,21 @@
+/**
+ * Calendar Server Actions
+ *
+ * Manages the meeting schedule from the admin Master Calendar panel.
+ * Handles scheduling new meetings, toggling SCHEDULED ↔ CANCELLED, and deletion.
+ * All meetings are pinned to Fridays at 6:45 PM, with July and August excluded.
+ */
 'use server'
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
 import { MINOR_ROLES } from '@/lib/agenda-logic'
 
+/**
+ * Generates a list of upcoming Fridays for the calendar view.
+ * Excludes July and August per club standing rules (summer break).
+ * Caps at 20 Fridays (~5-6 months lookahead).
+ */
 export async function getFutureFridays() {
     const today = new Date();
     const fridays = [];
@@ -28,6 +40,14 @@ export async function getFutureFridays() {
     return fridays;
 }
 
+/**
+ * Toggles a meeting date between SCHEDULED ↔ CANCELLED, or creates a new meeting.
+ * When cancelling, clears the theme, Google Sheet link, and minor role assignments.
+ * When creating, pins the time to 6:45 PM and links to the Regular template.
+ *
+ * @param dateIso    - ISO date string for the target Friday.
+ * @param existingId - If provided, toggles the existing meeting's status.
+ */
 export async function toggleMeeting(dateIso: string, existingId?: string) {
     if (existingId) {
         const meeting = await db.meeting.findUnique({
@@ -47,7 +67,7 @@ export async function toggleMeeting(dateIso: string, existingId?: string) {
             }
         });
 
-        // WIPE initialized agenda when toggled off/on for testing purpose
+        // Clear agenda data when cancelling (theme, sheet link, minor roles)
         if (newStatus === 'CANCELLED') {
             await db.roleAssignment.deleteMany({
                 where: {
@@ -57,7 +77,7 @@ export async function toggleMeeting(dateIso: string, existingId?: string) {
             });
         }
     } else {
-        // Create new
+        // Schedule a new meeting: link to the Regular template, set 6:45 PM start
         let regularTemplate = await db.meetingTemplate.findFirst({
             where: { type: 'Regular' }
         });
@@ -84,8 +104,14 @@ export async function toggleMeeting(dateIso: string, existingId?: string) {
     revalidatePath('/agenda');
 }
 
+/**
+ * Permanently deletes a meeting and all its role assignments.
+ * Used for cleanup of erroneously created meetings.
+ *
+ * @param meetingId - The meeting to delete.
+ */
 export async function deleteMeeting(meetingId: string) {
-    // Delete any dependent role assignments first
+    // Cascade: delete dependent role assignments before the meeting itself
     await db.roleAssignment.deleteMany({
         where: { meetingId }
     });

@@ -1,9 +1,17 @@
+/**
+ * Admin Member Management Page
+ *
+ * Three-panel view for managing club membership:
+ *   1. Pending approvals queue (new sign-up requests)
+ *   2. Active member directory (with inline name editing)
+ *   3. Guest subscriber list
+ */
 import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { removeUser, removeSubscriber } from '@/app/actions/accounts'
-import { Check, X, Users, Mail, Trash2, ShieldCheck } from 'lucide-react'
+import { Check, Users, Mail, Trash2, ShieldCheck } from 'lucide-react'
 import EditableName from '@/components/admin/editable-name'
 import AccountActionButtons from '@/components/admin/account-action-buttons'
 

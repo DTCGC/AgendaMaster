@@ -1,3 +1,9 @@
+/**
+ * Pending Approval Holding Page
+ *
+ * Displayed to PENDING users while their account awaits admin approval.
+ * Auto-refreshes to detect role transitions via the JWT callback in auth.ts.
+ */
 import { auth, signOut } from "@/auth";
 import { redirect } from "next/navigation";
 import { Clock, LogOut } from "lucide-react";

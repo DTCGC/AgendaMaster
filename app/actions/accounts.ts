@@ -1,8 +1,26 @@
+/**
+ * Account Management Server Actions
+ *
+ * Handles the full member lifecycle from the admin Accounts panel:
+ *   - Approve / Reject pending registrations (with email notifications)
+ *   - Retry failed email notifications (with completion of deferred operations)
+ *   - Guest mailing list subscription
+ *   - User removal (soft-unlinking from roles, then hard delete)
+ *   - Admin name correction
+ */
 'use server'
 
 import { db } from '@/lib/db'
 import { quietlySendEmail } from '@/lib/email'
 import { revalidatePath } from 'next/cache'
+
+/**
+ * Approves a pending user registration.
+ * Transitions PENDING → MEMBER and sends a welcome email.
+ *
+ * If the email fails, returns `emailError: true` so the UI can show
+ * a retry modal (the DB update is NOT rolled back — approval persists).
+ */
 export async function approveAccount(prevState: any, formData: FormData) {
   const userId = formData.get('userId') as string;
   let user;
@@ -36,15 +54,23 @@ export async function approveAccount(prevState: any, formData: FormData) {
   
   try {
     await quietlySendEmail(user.email, subject, html);
+    // Email succeeded — safe to refresh the page
     revalidatePath('/admin/accounts');
     return { success: true, emailError: false };
   } catch (error) {
     console.error("Approval email failed:", error);
-    // DO NOT revalidatePath so the component stays mounted to show the retry modal
+    // Keep page mounted (no revalidate) so the retry modal can render
     return { success: true, emailError: true, type: 'approval', userId: user.id, errorId: Date.now() };
   }
 }
 
+/**
+ * Rejects a pending user registration.
+ * Sends a denial email first, then deletes the user record.
+ *
+ * If the email fails, the user is NOT deleted yet — the retry
+ * mechanism will complete both the email and deletion.
+ */
 export async function rejectAccount(prevState: any, formData: FormData) {
   const userId = formData.get('userId') as string;
   const user = await db.user.findUnique({
@@ -72,12 +98,13 @@ export async function rejectAccount(prevState: any, formData: FormData) {
 
   try {
     await quietlySendEmail(user.email, subject, html);
+    // Email sent — now safe to delete the rejected user record
     await db.user.delete({ where: { id: userId } });
     revalidatePath('/admin/accounts');
     return { success: true, emailError: false };
   } catch (error) {
     console.error("Rejection email failed:", error);
-    // DO NOT DELETE yet and DO NOT revalidatePath
+    // DO NOT delete user yet and DO NOT revalidate — retry modal will handle it
     return { success: false, emailError: true, type: 'rejection', userId: user.id, errorId: Date.now() };
   }
 }
@@ -133,6 +160,7 @@ export async function retryAccountEmail(userId: string, type: 'approval' | 'reje
 }
 
 
+/** Adds a guest email to the mailing list (subscriber table). */
 export async function subscribeGuest(email: string) {
   try {
     await db.subscriber.create({
@@ -145,6 +173,11 @@ export async function subscribeGuest(email: string) {
   }
 }
 
+/**
+ * Removes an active member from the system.
+ * Soft-unlinks role assignments (sets userId=null) before hard-deleting
+ * the user record, preserving historical meeting data.
+ */
 export async function removeUser(formData: FormData) {
   const userId = formData.get('userId') as string;
   
@@ -165,6 +198,7 @@ export async function removeUser(formData: FormData) {
   revalidatePath('/admin/accounts');
 }
 
+/** Removes a guest subscriber from the mailing list. */
 export async function removeSubscriber(formData: FormData) {
   const subscriberId = formData.get('subscriberId') as string;
   await db.subscriber.delete({

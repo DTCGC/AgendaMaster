@@ -1,3 +1,9 @@
+/**
+ * Public Landing Page
+ *
+ * The first page visitors see. Features animated branding (Est. 2023),
+ * the AgendaMaster logo, and a CTA linking to the login/dashboard.
+ */
 import Link from "next/link";
 import { auth } from "@/auth";
 

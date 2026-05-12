@@ -1,4 +1,11 @@
-import NextAuth, { type DefaultSession } from 'next-auth'
+/**
+ * NextAuth Type Augmentations
+ *
+ * Extends the default NextAuth Session, User, and JWT types with
+ * AgendaMaster-specific fields (role, dbId, accessToken, refreshToken).
+ * This makes TypeScript aware of custom properties attached via auth callbacks.
+ */
+import type { DefaultSession } from 'next-auth'
 
 declare module 'next-auth' {
   interface Session {

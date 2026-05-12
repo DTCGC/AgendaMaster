@@ -1,3 +1,10 @@
+/**
+ * Major Role Assignment Form
+ *
+ * Client-side form for the admin Roles panel. Allows admins to assign
+ * major roles (Toastmaster, Speakers, etc.) for upcoming meetings.
+ * Displays last-active timestamps to help identify priority members.
+ */
 'use client'
 
 import { useState } from 'react'

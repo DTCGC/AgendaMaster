@@ -1,3 +1,10 @@
+/**
+ * Guest Mailing List Subscription Form
+ *
+ * Allows public visitors (parents, prospective members) to subscribe
+ * to club communications without creating an account. Shown on the
+ * login page below the main sign-in options.
+ */
 'use client'
 
 import { useState } from 'react'

@@ -1,3 +1,10 @@
+/**
+ * Cron Meeting Archival Endpoint
+ *
+ * POST /api/cron/archive — called every Friday at 9:00 PM PT by
+ * the system crontab on the DigitalOcean Droplet. Protected by
+ * CRON_SECRET to prevent unauthorized invocations.
+ */
 import { NextResponse } from 'next/server'
 import { archivePassedMeetings } from '@/lib/archival'
 

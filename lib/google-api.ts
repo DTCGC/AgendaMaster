@@ -1,7 +1,15 @@
 /**
- * Google API integration.
- * Utilizing the official `googleapis` library with `requestBody` instead of `resource`
- * to fix the serialization bug that caused `{}` to appear in cell A1.
+ * Google API Integration Module
+ *
+ * Handles all interactions with Google Sheets, Google Drive, and Gmail APIs.
+ * Uses the official `googleapis` library with `requestBody` (not `resource`)
+ * to work around a serialization bug that caused `{}` in cell A1.
+ *
+ * Key exports:
+ *   - populateTemplate()   — Pure logic: fills a CSV template with role data
+ *   - createAgendaSheet()  — Creates a new Google Sheet and makes it shareable
+ *   - updateAgendaSheet()  — Updates an existing sheet with new role assignments
+ *   - sendGmailAsUser()    — Sends email via Gmail API as the authenticated user
  */
 import { google } from 'googleapis';
 
@@ -31,20 +39,23 @@ export function populateTemplate(
   unassignedNames: string[],
   changelog: string[] = []
 ): string[][] {
+  // Parse each CSV row, then process template sections in order
   const rows = csvTemplate.split('\n')
-    .map(line => line.replace(/\r$/, ''))
-    .filter(line => line.length > 0)
+    .map(line => line.replace(/\r$/, ''))  // Normalize CRLF to LF
+    .filter(line => line.length > 0)       // Skip blank lines
     .map(line => parseCSVRow(line));
 
-  // Row 0: inject theme/qotd
+  // Row 0, col 1: inject the Question of the Day (or theme as fallback)
   if (rows[0]?.[1]) {
     rows[0][1] = rows[0][1].replace('[QUESTION HERE]', qotd || theme);
   }
 
-  let inNoRolesSection = false;
-  let inChangelogSection = false;
+  // Tracking flags for the three sections of the CSV template
+  let inNoRolesSection = false;      // "No Roles" section: members attending without a role
+  let inChangelogSection = false;    // "CHANGELOG" section: role swap audit trail
   let changelogStartIndex = -1;
 
+  // Walk rows starting from row 2 (row 0 = header, row 1 = sub-header)
   for (let i = 2; i < rows.length; i++) {
     const row = rows[i];
     const roleLabel = (row[1] || '').trim();
@@ -78,12 +89,13 @@ export function populateTemplate(
       }
     }
 
+    // BACKUP SPEAKER is always TBD (never auto-assigned)
     if (roleLabel === 'BACKUP SPEAKER:' && row.length > 3 && (row[3] || '').trim() === 'NAME') {
       row[3] = 'TBD';
     }
   }
 
-  // Inject unassigned names
+  // Fill the "No Roles" section with leftover attendee names
   if (unassignedNames.length > 0) {
     const idx = rows.findIndex(r => (r[1] || '').trim().startsWith('No Roles'));
     if (idx >= 0) {
@@ -97,7 +109,7 @@ export function populateTemplate(
     }
   }
 
-  // Inject changelog
+  // Append changelog entries (role swaps from previous version)
   if (changelogStartIndex >= 0 && changelog.length > 0) {
     let ci = 0;
     // Overwrite subsequent rows with changelog data
@@ -120,6 +132,10 @@ export function populateTemplate(
 
 // ---------- Google Sheets API (using googleapis) ----------
 
+/**
+ * Creates an authenticated OAuth2 client from a user's access token.
+ * Used for all per-request Google API calls (Sheets, Drive, Gmail).
+ */
 function getGoogleAuth(accessToken: string) {
   const auth = new google.auth.OAuth2();
   auth.setCredentials({ access_token: accessToken });
@@ -187,7 +203,12 @@ export async function createAgendaSheet(
 }
 
 /**
- * Computes a person-centric changelog based on differences between existing sheet data and new role map.
+ * Computes a person-centric changelog by diffing existing sheet data against a new role map.
+ * Produces entries like "[John: Timer ---> Grammarian]" for the CHANGELOG section.
+ *
+ * @param existingRows - 2D array of current sheet data (fetched via Values API).
+ * @param newRoleMap   - The new role→person mapping being applied.
+ * @returns Array of human-readable changelog strings.
  */
 function computeChangelog(existingRows: string[][], newRoleMap: Record<string, string>): string[] {
   const oldRoleMap: Record<string, string> = {};
@@ -306,8 +327,8 @@ export async function sendGmailAsUser(
 ) {
   console.log(`[GoogleAPI] Sending Gmail to ${recipients.length} recipients...`);
 
-  // Gmail API requires messages in RFC 2822 format (base64url encoded)
-  // We use BCC for multiple recipients to protect privacy and avoid massive headers
+  // Gmail API requires RFC 2822 formatted messages, base64url-encoded.
+  // We use BCC for multiple recipients to protect member email privacy.
   const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
   const message = [
     `Content-Type: text/html; charset="UTF-8"`,

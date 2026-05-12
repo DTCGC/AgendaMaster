@@ -1,10 +1,23 @@
+/**
+ * Agenda Execution Pipeline
+ *
+ * The "big red button" of AgendaMaster — orchestrates Google Sheet creation,
+ * Gmail dispatch, and database state synchronization for Step 4 of the wizard.
+ *
+ * Two execution modes:
+ *   1. First run:  Creates a Google Sheet, sends email to all members+subscribers,
+ *                  and stores the sheet ID/URL in the meeting record.
+ *   2. Re-run:     Updates the existing Google Sheet with new role data
+ *                  (no email re-send).
+ *
+ * Requires the user's Google OAuth access token with drive.file + gmail.send scopes.
+ */
 'use server'
 
 import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { createAgendaSheet, updateAgendaSheet, sendGmailAsUser } from '@/lib/google-api'
 import { getDisplayName, type NameableUser } from '@/lib/user-logic'
-import { MINOR_ROLES, MAJOR_ROLES, FIXED_ROLES } from '@/lib/agenda-logic'
 import { revalidatePath } from 'next/cache'
 
 /**
@@ -125,7 +138,9 @@ export async function executeAgendaPipeline(
 
     let csvTemplate = meeting.template.schemaStructure;
 
-    // HEALING FALLBACK: Existing meetings might be bound to the corrupted '{}' standard-toastmasters template.
+    // HEALING FALLBACK: Early meetings may reference a corrupted '{}' template
+    // that was created before the CSV seeder was implemented. Fall back to
+    // the canonical Regular template if detected.
     if (csvTemplate && csvTemplate.trim() === '{}') {
       const fallbackTemplate = await db.meetingTemplate.findFirst({
         where: { type: 'Regular' }

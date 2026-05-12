@@ -1,3 +1,13 @@
+/**
+ * Login Page
+ *
+ * The primary authentication entry point. Provides three access methods:
+ *   1. Google OAuth (primary — for all members)
+ *   2. Admin credentials (collapsible section — for exec-only access)
+ *   3. Guest mailing list subscription (no account required)
+ *
+ * Redirects authenticated users based on their role state.
+ */
 import { auth, signIn } from "@/auth";
 import Image from "next/image";
 import { redirect } from "next/navigation";

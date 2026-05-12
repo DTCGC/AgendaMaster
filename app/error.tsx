@@ -1,3 +1,9 @@
+/**
+ * Global Error Boundary (500 Page)
+ *
+ * Catches unhandled runtime errors at the app level and renders
+ * a branded error page with a retry button and error reference digest.
+ */
 'use client'
 
 import { useEffect } from "react";

@@ -1,3 +1,14 @@
+/**
+ * Database Seed Script
+ *
+ * Initializes the production database with required bootstrap data:
+ *   1. Regular Meeting Template — parsed from the CSV file in public/assets/templates/
+ *   2. Production Admin Account — the club's shared admin credential (coquitlamgavel@gmail.com)
+ *
+ * Idempotent: skips creation if records already exist.
+ * Run via: `npx tsx prisma/seed.ts` (also runs on every deploy via CI/CD).
+ */
+
 import { PrismaClient } from '@prisma/client'
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
 import * as fs from 'fs'

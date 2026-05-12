@@ -1,5 +1,10 @@
+/**
+ * 404 Not Found Page
+ *
+ * Rendered when a user navigates to a route that doesn't exist.
+ * Provides links back to home and the login page.
+ */
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowLeft, MapPinOff } from "lucide-react";
 
 export default function NotFound() {

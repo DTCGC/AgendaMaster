@@ -1,8 +1,23 @@
+/**
+ * Communications Server Actions
+ *
+ * Handles mass email dispatch from the admin Broadcast panel.
+ * Segments recipients into MEMBERS (active users), SUBSCRIBERS (guest waitlist),
+ * or ALL (both). Uses BCC delivery via lib/email.ts.
+ */
 'use server'
 
 import { db } from '@/lib/db'
-import { quietlySendEmail, sendBccEmail } from '@/lib/email'
+import { sendBccEmail } from '@/lib/email'
 
+/**
+ * Dispatches a mass email to the selected target group.
+ *
+ * @param subject     - Email subject line.
+ * @param htmlBody    - Rich HTML email body (from the Tiptap editor).
+ * @param targetGroup - Recipient segment: 'MEMBERS', 'SUBSCRIBERS', or 'ALL'.
+ * @returns Result with success status, message, and optional recipientCount.
+ */
 export async function dispatchMassComms(subject: string, htmlBody: string, targetGroup: 'MEMBERS' | 'SUBSCRIBERS' | 'ALL') {
     let emailList: string[] = [];
 

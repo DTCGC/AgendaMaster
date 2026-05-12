@@ -1,3 +1,10 @@
+/**
+ * Agenda Creation Page (Toastmaster Entry Point)
+ *
+ * Gate-checks authorization (only the assigned Toastmaster can access),
+ * then renders the AgendaWizard component with the target meeting ID.
+ * Non-Toastmasters see a permission-denied message.
+ */
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";

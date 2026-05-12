@@ -1,3 +1,4 @@
+/** Privacy Policy page — required for Google OAuth verification compliance. */
 import Link from "next/link";
 
 export default function PrivacyPolicy() {

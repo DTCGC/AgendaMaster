@@ -1,3 +1,12 @@
+/**
+ * Top Navigation Bar
+ *
+ * Role-aware navigation component rendered in the root layout.
+ * Switches between blue (MEMBER) and maroon (ADMIN) color schemes
+ * to provide visual context about the current user's permission level.
+ *
+ * Includes a confirmation modal for sign-out to prevent accidental logouts.
+ */
 'use client'
 
 import Link from "next/link";
@@ -7,7 +16,6 @@ import { signOut } from "next-auth/react";
 import {
   NavigationMenu,
   NavigationMenuItem,
-  NavigationMenuLink,
   NavigationMenuList,
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
@@ -24,6 +32,7 @@ export function TopNav({ role }: { role?: string }) {
   const bgColor = isAdmin ? 'bg-brand-true-maroon' : 'bg-brand-loyal-blue';
   const activeTextColor = isAdmin ? 'text-brand-true-maroon' : 'text-brand-loyal-blue';
 
+/** Computes active/inactive nav link styling based on current pathname. */
   const isActive = (path: string) => pathname === path;
 
   const getNavLinkClass = (path: string) => {

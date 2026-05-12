@@ -1,3 +1,10 @@
+/**
+ * Root Layout
+ *
+ * Defines the application shell: HTML head (Montserrat font, SEO meta),
+ * the role-aware TopNav, page content area, and the sticky footer.
+ * Wraps all pages with consistent branding and navigation.
+ */
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Montserrat } from "next/font/google";

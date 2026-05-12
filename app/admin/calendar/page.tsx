@@ -1,8 +1,15 @@
+/**
+ * Admin Master Calendar Page
+ *
+ * Displays upcoming Fridays for scheduling meetings and a historical
+ * archive of past meetings. Admins can toggle meetings between
+ * SCHEDULED / CANCELLED states and view archived meeting records.
+ */
 import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { redirect } from 'next/navigation'
-import { getFutureFridays, toggleMeeting, deleteMeeting } from '@/app/actions/calendar'
-import { Calendar as CalendarIcon, Clock, Trash2, CheckCircle, XCircle, AlertCircle, FileText } from 'lucide-react'
+import { getFutureFridays, toggleMeeting } from '@/app/actions/calendar'
+import { Clock, CheckCircle, XCircle, AlertCircle, FileText } from 'lucide-react'
 import Link from 'next/link'
 
 export const metadata = {

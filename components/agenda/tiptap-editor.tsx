@@ -1,3 +1,13 @@
+/**
+ * Tiptap Rich Text Editor Wrapper
+ *
+ * Provides a WYSIWYG editing experience for the Agenda Wizard's email draft
+ * and the admin Mass Broadcast panel. Built on Tiptap/ProseMirror with
+ * explicit BulletList and OrderedList extensions for reliable list rendering.
+ *
+ * The `initialized` ref prevents content from being overwritten when the
+ * component re-renders after localStorage hydration on the client.
+ */
 'use client'
 
 import { useEditor, EditorContent } from '@tiptap/react'
@@ -17,7 +27,7 @@ export default function TiptapEditor({
 }) {
   const initialized = useRef(false);
 
-  const [tick, setTick] = useState(0);
+  const [_tick, setTick] = useState(0);
 
   const editor = useEditor({
     extensions: [

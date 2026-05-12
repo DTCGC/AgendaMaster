@@ -1,3 +1,10 @@
+/**
+ * Profile Completion Page
+ *
+ * Shown to INCOMPLETE users after their first Google sign-in.
+ * Collects first/last name (decoupled from Google account name)
+ * and transitions the user to PENDING for admin review.
+ */
 import { auth, signOut } from "@/auth";
 import { redirect } from "next/navigation";
 import Image from "next/image";

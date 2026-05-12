@@ -1,3 +1,13 @@
+/**
+ * NextAuth Full Configuration
+ *
+ * Extends auth.config.ts with Node.js-only providers (Google OAuth, Credentials)
+ * and richer callbacks that interact with the database.
+ *
+ * Exports: handlers (API route), auth (session getter), signIn, signOut,
+ *          unstable_update (session mutation for role transitions).
+ */
+
 import NextAuth from 'next-auth';
 import { authConfig } from './auth.config';
 import Google from 'next-auth/providers/google';
@@ -7,8 +17,9 @@ import bcrypt from 'bcryptjs';
 
 export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
-  session: { strategy: 'jwt' },
+  session: { strategy: 'jwt' },  // Stateless JWT sessions (no DB session table)
   providers: [
+    // --- Google OAuth: Primary login for all members ---
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -27,6 +38,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         },
       },
     }),
+    // --- Credentials: Admin-only email/password login ---
     Credentials({
         name: 'Admin Login',
         credentials: {
@@ -36,13 +48,15 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         async authorize(credentials) {
             if (!credentials?.email || !credentials?.password) return null;
             
+            // Look up the user by email in the database
             const user = await db.user.findUnique({ 
                 where: { email: credentials.email as string } 
             });
             
-            // Limit generic credential login to ADMINs ONLY
+            // Only ADMIN users may use credential login; MEMBER accounts must use Google
             if (!user || user.role !== 'ADMIN' || !user.passwordHash) return null;
             
+            // Verify password against bcrypt hash
             const isValid = await bcrypt.compare(credentials.password as string, user.passwordHash);
             
             if (isValid) {
@@ -60,7 +74,8 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ],
   callbacks: {
     ...authConfig.callbacks,
-    async signIn({ user, account, profile }) {
+    /** Handle new Google sign-ins: create INCOMPLETE user record if first visit. */
+    async signIn({ user, account, profile: _profile }) {
         if (account?.provider === 'google') {
             try {
                 const existingUser = await db.user.findUnique({
@@ -92,13 +107,19 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         }
         return true;
     },
+    /**
+     * JWT callback: persist user metadata and Google tokens.
+     * On subsequent requests, re-checks DB role for PENDING/INCOMPLETE users
+     * so that admin approvals take effect without requiring re-login.
+     */
     async jwt({ token, user, account }) {
         // On initial sign-in, persist user metadata + Google OAuth tokens
         if (user) {
+            // Initial sign-in: seed the token with user metadata
             token.role = user.role;
             token.dbId = user.id;
         } else if ((token.role === 'PENDING' || token.role === 'INCOMPLETE') && token.dbId) {
-            // Silently refresh permissions from DB on subsequent requests requiring verification
+            // Live role refresh: check if admin has approved/denied while user waits
             const dbUser = await db.user.findUnique({ 
                 where: { id: token.dbId as string }, 
                 select: { role: true } 
@@ -110,12 +131,14 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
             }
         }
         
+        // Persist Google OAuth tokens for Sheets/Drive/Gmail API calls
         if (account?.provider === 'google') {
             token.accessToken = account.access_token;
             token.refreshToken = account.refresh_token;
         }
         return token;
     },
+    /** Expose role, DB ID, and access token from JWT into the client-visible session. */
     session({ session, token }) {
         if (session.user && token) {
             session.user.role = token.role as string;

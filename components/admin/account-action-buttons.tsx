@@ -1,3 +1,12 @@
+/**
+ * Account Action Buttons (Approve/Reject)
+ *
+ * Client-side component for the admin Accounts panel that handles
+ * member approval and rejection with email notification retry logic.
+ *
+ * If the notification email fails, shows a modal overlay allowing
+ * the admin to retry the email or acknowledge and skip.
+ */
 'use client'
 
 import { useState } from 'react'

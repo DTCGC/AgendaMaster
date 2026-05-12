@@ -1,3 +1,10 @@
+/**
+ * Admin Credentials Login Form
+ *
+ * Email/password login form restricted to ADMIN users only.
+ * Regular members must use Google OAuth. Uses the NextAuth
+ * Credentials provider configured in auth.ts.
+ */
 'use client'
 
 import { useState } from 'react'

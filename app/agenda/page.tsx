@@ -1,3 +1,11 @@
+/**
+ * Member Meeting Dashboard
+ *
+ * The main member-facing view. Displays the upcoming meeting's role roster
+ * and shows a special CTA panel if the logged-in user is the Toastmaster.
+ *
+ * Also serves as the archive viewer when accessed with `?archivedId=<id>`.
+ */
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";

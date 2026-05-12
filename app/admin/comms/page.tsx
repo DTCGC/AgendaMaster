@@ -1,3 +1,9 @@
+/**
+ * Admin Broadcast Page (Server Wrapper)
+ *
+ * Gate-checks admin authorization, then renders the CommsClient component.
+ * The actual email composition logic lives in comms-client.tsx.
+ */
 import { auth } from '@/auth'
 import { redirect } from 'next/navigation'
 import CommsClient from './comms-client'

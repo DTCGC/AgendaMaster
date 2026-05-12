@@ -1,3 +1,10 @@
+/**
+ * Inline Editable Name Component
+ *
+ * Renders a member's name as clickable text that transforms into
+ * a two-field editor (first + last name) on click. Supports
+ * keyboard submission (Enter) and escape-to-cancel.
+ */
 'use client'
 
 import { useState } from 'react'

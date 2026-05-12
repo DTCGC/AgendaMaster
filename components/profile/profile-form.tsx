@@ -1,3 +1,10 @@
+/**
+ * New Member Profile Form
+ *
+ * Client-side form for the profile completion flow. Collects first
+ * and last name with validation, then calls the completeProfile
+ * server action to transition INCOMPLETE → PENDING.
+ */
 'use client'
 
 import { useState } from 'react'

@@ -1,3 +1,12 @@
+/**
+ * Inbound Email Webhook (Resend)
+ *
+ * Receives `email.received` webhook events from Resend when someone
+ * emails info@coquitlamgavel.com. Fetches the full email body via the
+ * Resend Receiving API, wraps it in branded HTML, and forwards it to
+ * the club's Gmail account (coquitlamgavel@gmail.com) with the original
+ * sender set as Reply-To for seamless correspondence.
+ */
 import { NextResponse } from 'next/server';
 import { quietlySendEmail } from '@/lib/email';
 

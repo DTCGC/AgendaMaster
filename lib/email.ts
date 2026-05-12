@@ -1,9 +1,25 @@
+/**
+ * Email Dispatch Module
+ *
+ * All outbound emails from AgendaMaster flow through this module.
+ * Uses the Resend HTTP API to bypass DigitalOcean's SMTP port blocks.
+ *
+ * In development (no RESEND_API_KEY), emails are mock-logged to
+ * console + `logs/mock-emails.md` for inspection.
+ *
+ * Environment variables:
+ *   RESEND_API_KEY     — Resend API key (omit for mock mode)
+ *   RESEND_FROM_EMAIL  — Sender address, e.g. "AgendaMaster <info@coquitlamgavel.com>"
+ */
+
 import { Resend } from 'resend';
 import fs from 'fs';
 import path from 'path';
 
-// Initialize Resend with API Key from environment
+// Initialize the Resend SDK. null = development mock mode.
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
+// Sender identity shown in recipient inboxes. Falls back to Resend's sandbox domain.
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'DTCGC Portal <onboarding@resend.dev>';
 
 /**
@@ -13,7 +29,7 @@ const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'DTCGC Portal <onboarding@re
  */
 export async function quietlySendEmail(to: string, subject: string, html: string, options?: { reply_to?: string }) {
   if (!resend) {
-    // Development fallback: log to console + file
+    // Development fallback: write a human-readable mock to console and a log file
     const logHeader = `\n================== [MOCK EMAIL BRIDGE: ${new Date().toLocaleString()}] ==================\n`;
     const logEntry = `${logHeader}To: ${to}\nReply-To: ${options?.reply_to || 'None'}\nSubject: ${subject}\nBody (HTML):\n${html}\n===========================================================\n`;
     
@@ -30,6 +46,7 @@ export async function quietlySendEmail(to: string, subject: string, html: string
   }
 
   try {
+    // POST /emails via Resend HTTP API — single recipient, direct delivery
     const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
       to,
@@ -60,9 +77,12 @@ export async function sendBccEmail(recipients: string[], subject: string, html: 
   }
 
   try {
-    const { data, error } = await resend.emails.send({
+    // POST /emails via Resend HTTP API — BCC pattern for mass delivery.
+    // Resend requires a non-empty "to" field even when using BCC,
+    // so we use the club's own address as the nominal recipient.
+    const { data: _data, error } = await resend.emails.send({
       from: FROM_EMAIL,
-      to: FROM_EMAIL.split('<')[1]?.replace('>', '') || 'onboarding@resend.dev', // Resend requires a To address even with BCC
+      to: FROM_EMAIL.split('<')[1]?.replace('>', '') || 'onboarding@resend.dev',
       bcc: unique,
       subject,
       html,

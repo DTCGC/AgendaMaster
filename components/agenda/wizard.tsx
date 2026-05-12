@@ -1,3 +1,18 @@
+/**
+ * Agenda Creation Wizard
+ *
+ * The core 4-step workflow for preparing a club meeting:
+ *   Step 1 — Draft:    WYSIWYG email composition (auto-saved to localStorage)
+ *   Step 2 — Settings: Meeting type, theme, and Question of the Day
+ *   Step 3 — Roles:    Auto-assigned minor roles + admin-locked major roles
+ *   Step 4 — Finalize: Execute the Google Sheet + Gmail pipeline
+ *
+ * Supports two entry modes:
+ *   - Full flow (step=1): Toastmaster goes through all 4 steps
+ *   - Update mode (step=3): Jump directly to roles for quick roster edits
+ *
+ * Wrapped in <Suspense> for client-side useSearchParams() compatibility.
+ */
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
@@ -6,9 +21,9 @@ import { AlertCircle, CheckCircle2, ExternalLink, Copy, Loader2 } from 'lucide-r
 import TiptapEditor from './tiptap-editor'
 import { fetchRoleAssignments, formatDraft, saveFinalAgenda } from '@/app/actions/agenda'
 import { executeAgendaPipeline } from '@/app/actions/execute-agenda'
-import { MINOR_ROLES, MAJOR_ROLES } from '@/lib/agenda-logic'
+import { MAJOR_ROLES } from '@/lib/agenda-logic'
 
-// Boilerplate Template 
+// Empty default — most Toastmasters write the email from scratch each week
 const DEFAULT_TEMPLATE = ``
 
 function WizardContent({ meetingId }: { meetingId: string }) {
@@ -83,6 +98,8 @@ function WizardContent({ meetingId }: { meetingId: string }) {
   }, [meetingId])
 
   // --- Double Role Cleansing ---
+  // When "Allow Multiple Roles" is toggled OFF, automatically remove
+  // duplicate assignments and return displaced members to the unassigned pool.
   useEffect(() => {
     if (!allowDoubleRoles) {
         const newMinorRoles = { ...minorRoles };
@@ -124,6 +141,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
     }
   }, [emailSubject])
 
+  /** Advances the wizard by one step. Cleans the email draft on step 1 exit. */
   const handleNextStep = async () => {
       if (step === 1) {
           const cleaned = await formatDraft(emailDraft)
@@ -132,6 +150,10 @@ function WizardContent({ meetingId }: { meetingId: string }) {
       setStep(prev => prev + 1)
   }
 
+  /**
+   * Handles a role dropdown change in Step 3.
+   * Enforces single-assignment constraint unless "Allow Multiple Roles" is on.
+   */
   const handleRoleChange = (roleName: string, userId: string) => {
     const allUsers = [...unassigned, ...Object.values(minorRoles).filter(Boolean), ...preAssigned.map(a => a.user).filter(Boolean)];
     const selectedUser = allUsers.find(u => u.id === userId) || null;
@@ -160,6 +182,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
     });
   }
 
+  /** Quick save for Step 3 update mode — saves roles and silently updates the sheet. */
   const handleFinish = async () => {
     setIsSaving(true);
     try {
@@ -182,7 +205,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
     }
   }
 
-  // --- Step 4: Execute the full pipeline (Google Sheet + Gmail) ---
+  /** Full pipeline execution (Step 4) — saves roles, creates/updates sheet, sends email. */
   const handleExecute = async () => {
     setIsExecuting(true)
     setExecutionResult(null)
@@ -217,6 +240,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
     }
   }
 
+  /** Copies a text summary of the meeting (roles + email) to the clipboard as a fallback. */
   const handleCopy = () => {
       const tempDiv = document.createElement("div");
       tempDiv.innerHTML = emailDraft;
