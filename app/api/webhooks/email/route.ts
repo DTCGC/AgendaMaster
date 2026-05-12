@@ -1,9 +1,45 @@
 import { NextResponse } from 'next/server';
 import { quietlySendEmail } from '@/lib/email';
-import { Resend } from 'resend';
 
-// Initialize Resend client here to fetch full inbound email contents
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+
+/**
+ * Fetches the full content of a *received* (inbound) email from Resend.
+ * 
+ * IMPORTANT: The SDK's `resend.emails.get()` only works for SENT (outbound) emails
+ * and hits `GET /emails/{id}`. Inbound emails live at a separate endpoint:
+ * `GET /emails/receiving/{id}` — which returns `html`, `text`, and `raw` fields.
+ * 
+ * @see https://resend.com/docs/api-reference/emails/retrieve-received-email
+ */
+async function fetchReceivedEmail(emailId: string): Promise<{ html: string; text: string } | null> {
+  if (!RESEND_API_KEY) return null;
+
+  try {
+    const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`[Webhook] Resend API error (${res.status}) fetching received email ${emailId}:`, errorBody);
+      return null;
+    }
+
+    const data = await res.json();
+    return {
+      html: data.html || '',
+      text: data.text || '',
+    };
+  } catch (err) {
+    console.error('[Webhook] Network error fetching received email:', err);
+    return null;
+  }
+}
 
 export async function POST(req: Request) {
   try {
@@ -26,18 +62,14 @@ export async function POST(req: Request) {
     let text = '';
     let html = '';
 
-    // The webhook payload only contains metadata. 
-    // We must fetch the full email to get the `text` and `html` content.
-    if (email_id && resend) {
-      const { data: emailDetails, error } = await resend.emails.get(email_id);
-      if (error) {
-        console.error("[Webhook] Failed to fetch email body for ID:", email_id, error);
-      } else if (emailDetails) {
-        text = emailDetails.text || '';
-        html = emailDetails.html || '';
+    // The webhook payload only contains metadata (from, subject, email_id).
+    // We must fetch the full email via the RECEIVING endpoint to get `text` and `html`.
+    if (email_id) {
+      const body = await fetchReceivedEmail(email_id);
+      if (body) {
+        text = body.text;
+        html = body.html;
       }
-    } else if (!resend) {
-      console.warn("[Webhook] Resend client not initialized. Cannot fetch email body.");
     }
 
     const formattedSubject = `FWD: ${subject || 'No Subject'}`;
