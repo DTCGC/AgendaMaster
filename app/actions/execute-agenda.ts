@@ -229,11 +229,12 @@ export async function executeAgendaPipeline(
     revalidatePath('/admin/calendar');
 
     return { success: true, sheetUrl, isUpdate };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'An unexpected error occurred during the execution pipeline.'
     console.error('Agenda execution pipeline error:', error);
     return {
       success: false,
-      error: error.message || 'An unexpected error occurred during the execution pipeline.'
+      error: message
     };
   }
 }

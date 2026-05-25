@@ -22,6 +22,7 @@ import TiptapEditor from './tiptap-editor'
 import { fetchRoleAssignments, formatDraft, saveFinalAgenda } from '@/app/actions/agenda'
 import { executeAgendaPipeline } from '@/app/actions/execute-agenda'
 import { MAJOR_ROLES } from '@/lib/agenda-logic'
+import type { UserWithDisplayName, PreAssignedMajorRole } from '@/lib/types'
 
 // Empty default — most Toastmasters write the email from scratch each week
 const DEFAULT_TEMPLATE = ``
@@ -40,9 +41,9 @@ function WizardContent({ meetingId }: { meetingId: string }) {
   
   // Roles Data
   const [loadingRoles, setLoadingRoles] = useState(true)
-  const [minorRoles, setMinorRoles] = useState<Record<string, any>>({})
-  const [unassigned, setUnassigned] = useState<any[]>([])
-  const [preAssigned, setPreAssigned] = useState<any[]>([])
+  const [minorRoles, setMinorRoles] = useState<Record<string, UserWithDisplayName | null>>({})
+  const [unassigned, setUnassigned] = useState<UserWithDisplayName[]>([])
+  const [preAssigned, setPreAssigned] = useState<PreAssignedMajorRole[]>([])
   
   const [allowDoubleRoles, setAllowDoubleRoles] = useState(false)
   const [clipboardStatus, setClipboardStatus] = useState('Copy to Clipboard')
@@ -76,9 +77,9 @@ function WizardContent({ meetingId }: { meetingId: string }) {
             const data = await fetchRoleAssignments(meetingId)
             
             const editableRoles = { ...data.assignments };
-            const lockedRoles: any[] = [];
+            const lockedRoles: PreAssignedMajorRole[] = [];
             
-            data.preAssignedMajor.forEach((a: any) => {
+            data.preAssignedMajor.forEach((a) => {
                 if (a.roleName === 'Toastmaster') {
                     lockedRoles.push(a);
                 } else {
@@ -155,7 +156,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
    * Enforces single-assignment constraint unless "Allow Multiple Roles" is on.
    */
   const handleRoleChange = (roleName: string, userId: string) => {
-    const allUsers = [...unassigned, ...Object.values(minorRoles).filter(Boolean), ...preAssigned.map(a => a.user).filter(Boolean)];
+    const allUsers = [...unassigned, ...Object.values(minorRoles).filter((u): u is UserWithDisplayName => u !== null), ...preAssigned.map(a => a.user).filter((u): u is UserWithDisplayName => u !== null)];
     const selectedUser = allUsers.find(u => u.id === userId) || null;
     const displacedUser = minorRoles[roleName];
 
@@ -230,10 +231,11 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         localStorage.removeItem('dtcgc_email_draft')
         localStorage.removeItem('dtcgc_email_subject')
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Pipeline execution failed.'
       setExecutionResult({
         success: false,
-        error: error.message || 'Pipeline execution failed.'
+        error: message
       })
     } finally {
       setIsExecuting(false)
@@ -260,9 +262,9 @@ function WizardContent({ meetingId }: { meetingId: string }) {
           if (roleName === "Roles For Next Meeting") holder = "John";
           else if (roleName === "Business Meeting") holder = "Andrew";
           else {
-              const major = preAssigned.find((a: any) => a.roleName === roleName);
+              const major = preAssigned.find((a) => a.roleName === roleName);
               if (major) {
-                  const u = (major as any).user;
+                  const u = major.user;
                   holder = u?.displayName || "TBD";
               } else {
                   const user = minorRoles[roleName];
@@ -413,7 +415,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                  // Safely construct a unique list of all known users
                                  const staticUsers = [...unassigned];
                                  Object.values(minorRoles).forEach(u => { if (u && !staticUsers.some(existing => existing.id === u.id)) staticUsers.push(u); });
-                                 preAssigned.forEach(a => { if (a.user && !staticUsers.some(existing => existing.id === a.user.id)) staticUsers.push(a.user); });
+                                 preAssigned.forEach(a => { if (a.user && !staticUsers.some(existing => existing.id === a.user!.id)) staticUsers.push(a.user); });
                                  staticUsers.sort((a, b) => a.displayName.localeCompare(b.displayName));
 
                                  return (
@@ -425,7 +427,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                         onChange={(e) => handleRoleChange(role, e.target.value)}
                                      >
                                          <option value="">-- UNASSIGNED --</option>
-                                         {(allowDoubleRoles ? staticUsers : [...unassigned, ...(user ? [user] : [])]).filter((u, i, arr) => arr.findIndex(t => t.id === u.id) === i).map((u: any) => (
+                                         {(allowDoubleRoles ? staticUsers : [...unassigned, ...(user ? [user] : [])]).filter((u, i, arr) => arr.findIndex(t => t.id === u.id) === i).map((u) => (
                                              <option key={u.id} value={u.id}>{u.displayName}</option>
                                          ))}
                                      </select>
@@ -446,7 +448,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                     .map(([role, user]) => {
                                     const staticUsers = [...unassigned];
                                     Object.values(minorRoles).forEach(u => { if (u && !staticUsers.some(existing => existing.id === u.id)) staticUsers.push(u); });
-                                    preAssigned.forEach(a => { if (a.user && !staticUsers.some(existing => existing.id === a.user.id)) staticUsers.push(a.user); });
+                                    preAssigned.forEach(a => { if (a.user && !staticUsers.some(existing => existing.id === a.user!.id)) staticUsers.push(a.user); });
                                     staticUsers.sort((a, b) => a.displayName.localeCompare(b.displayName));
    
                                     return (
@@ -458,7 +460,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                            onChange={(e) => handleRoleChange(role, e.target.value)}
                                         >
                                             <option value="">-- UNASSIGNED --</option>
-                                            {(allowDoubleRoles ? staticUsers : [...unassigned, ...(user ? [user] : [])]).filter((u, i, arr) => arr.findIndex(t => t.id === u.id) === i).map((u: any) => (
+                                            {(allowDoubleRoles ? staticUsers : [...unassigned, ...(user ? [user] : [])]).filter((u, i, arr) => arr.findIndex(t => t.id === u.id) === i).map((u) => (
                                                 <option key={u.id} value={u.id}>{u.displayName}</option>
                                             ))}
                                         </select>
@@ -466,7 +468,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                     )
                                 })}
 
-                                {preAssigned.map((a: any) => (
+                                {preAssigned.map((a) => (
                                     <div key={a.id} className="flex justify-between items-center border-b pb-2 last:border-0">
                                         <span className="font-semibold text-gray-600">{a.roleName}</span>
                                         <span className="text-brand-loyal-blue font-black bg-brand-loyal-blue/5 px-2 py-0.5 rounded">{a.user ? `${a.user.firstName} ${a.user.lastName}` : "TBD"}</span>

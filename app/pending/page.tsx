@@ -24,7 +24,7 @@ export default async function PendingPage() {
   // Fetch the user's real name from the DB and apply display logic
   const dbUser = await db.user.findUnique({ where: { id: session.user.dbId } });
   const allUsers = await db.user.findMany(); // Include themselves to properly count collisions
-  const displayName = dbUser ? getDisplayName(dbUser as any, allUsers as any) : "Member";
+  const displayName = dbUser ? getDisplayName(dbUser, allUsers) : "Member";
 
   return (
     <div className="flex min-h-[calc(100vh-80px)] items-center justify-center p-4 bg-brand-cool-grey/20">

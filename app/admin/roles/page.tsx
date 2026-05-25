@@ -42,7 +42,7 @@ export default async function RolesPage({
 
   // Determine which meeting we are currently editing
   const targetMeetingId = params.meetingId || upcomingMeetings[0]?.id;
-  const currentMeeting = upcomingMeetings.find((m: any) => m.id === targetMeetingId) || upcomingMeetings[0];
+  const currentMeeting = upcomingMeetings.find((m) => m.id === targetMeetingId) || upcomingMeetings[0];
 
   // Grab active roster
   const members = await db.user.findMany({
@@ -80,7 +80,7 @@ export default async function RolesPage({
                 <div className="lg:col-span-1 space-y-4">
                     <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Upcoming Meetings</h3>
                     <div className="space-y-2">
-                        {upcomingMeetings.map((meeting: any) => (
+                        {upcomingMeetings.map((meeting) => (
                             <a 
                                 key={meeting.id}
                                 href={`?meetingId=${meeting.id}`}
@@ -120,11 +120,11 @@ export default async function RolesPage({
                                 acc[curr.roleName] = curr.userId || ""
                                 return acc
                             }, {})}
-                            members={members.map((u: any) => ({
+                            members={members.map((u) => ({
                                 id: u.id,
                                 firstName: u.firstName,
                                 lastName: u.lastName,
-                                roleAssignments: u.roleAssignments.map((ra: any) => ({ assignedAt: ra.assignedAt }))
+                                roleAssignments: u.roleAssignments.map((ra) => ({ assignedAt: ra.assignedAt }))
                             }))}
                         />
                     </div>
@@ -136,11 +136,11 @@ export default async function RolesPage({
                         </p>
                         
                         <div className="space-y-2 overflow-y-auto max-h-[600px] pr-2">
-                            {members.sort((a: any, b: any) => {
+                            {members.sort((a, b) => {
                                 const dateA = a.roleAssignments[0]?.assignedAt ? new Date(a.roleAssignments[0].assignedAt).getTime() : 0;
                                 const dateB = b.roleAssignments[0]?.assignedAt ? new Date(b.roleAssignments[0].assignedAt).getTime() : 0;
                                 return dateA - dateB; 
-                            }).map((member: any) => (
+                            }).map((member) => (
                                 <div key={member.id} className="flex justify-between items-center text-sm p-3 border rounded-lg hover:bg-gray-50 transition-colors">
                                     <div>
                                         <span className="font-semibold text-gray-800">{member.firstName} {member.lastName}</span>

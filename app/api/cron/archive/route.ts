@@ -27,11 +27,12 @@ export async function POST(request: Request) {
         message: `Successfully archived ${result.count} meetings.`,
         count: result.count 
     })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Archival Error:', error)
+    const message = error instanceof Error ? error.message : 'Internal Server Error'
     return NextResponse.json({ 
         success: false, 
-        error: error.message || 'Internal Server Error' 
+        error: message 
     }, { status: 500 })
   }
 }

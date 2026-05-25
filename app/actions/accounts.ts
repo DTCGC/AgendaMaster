@@ -21,7 +21,7 @@ import { revalidatePath } from 'next/cache'
  * If the email fails, returns `emailError: true` so the UI can show
  * a retry modal (the DB update is NOT rolled back — approval persists).
  */
-export async function approveAccount(prevState: any, formData: FormData) {
+export async function approveAccount(prevState: { success: boolean; emailError?: boolean; error?: string; type?: string; userId?: string; errorId?: number } | null, formData: FormData) {
   const userId = formData.get('userId') as string;
   let user;
   
@@ -71,7 +71,7 @@ export async function approveAccount(prevState: any, formData: FormData) {
  * If the email fails, the user is NOT deleted yet — the retry
  * mechanism will complete both the email and deletion.
  */
-export async function rejectAccount(prevState: any, formData: FormData) {
+export async function rejectAccount(prevState: { success: boolean; error?: string; type?: string; userId?: string; errorId?: number } | null, formData: FormData) {
   const userId = formData.get('userId') as string;
   const user = await db.user.findUnique({
     where: { id: userId }

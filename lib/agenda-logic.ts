@@ -13,6 +13,7 @@
 
 import { db } from './db';
 import { getDisplayName } from './user-logic';
+import type { UserWithDisplayName, AutoAssignmentResult } from './types';
 
 /** Roles automatically assigned by the heuristic engine (round-robin by recency). */
 export const MINOR_ROLES = [
@@ -50,7 +51,7 @@ export const FIXED_ROLES = {
  * @returns Object containing `assignments` (role→user map), `unassigned` (leftover members),
  *          and `preAssignedMajor` (admin-set major roles with user data attached).
  */
-export async function getAutoAssignments(meetingId: string) {
+export async function getAutoAssignments(meetingId: string): Promise<AutoAssignmentResult> {
   // Fetch all approved members (MEMBER role only; ADMINs are excluded from auto-assignment)
   const activeUsers = await db.user.findMany({
     where: {
@@ -67,21 +68,21 @@ export async function getAutoAssignments(meetingId: string) {
   });
 
   // Build a sortable stats array: each member gets a recency timestamp and a display name
-  const userStats = activeUsers.map((user: any) => {
+  const userStats = activeUsers.map((user) => {
     const lastAssignment = user.roleAssignments[0]?.assignedAt;
     const lastAssignedAt = lastAssignment ? new Date(lastAssignment).getTime() : 0;
     
-    // Add computed name for privacy
-    user.displayName = getDisplayName(user, activeUsers);
+    // Compute display name into a new object (avoids mutating Prisma result)
+    const displayName = getDisplayName(user, activeUsers);
     
     return {
-      user,
+      user: { id: user.id, firstName: user.firstName, lastName: user.lastName, displayName },
       lastAssignedAt
     };
   });
 
   // Sort ascending: members who haven't had a role recently (or ever) get priority
-  userStats.sort((a: any, b: any) => a.lastAssignedAt - b.lastAssignedAt);
+  userStats.sort((a, b) => a.lastAssignedAt - b.lastAssignedAt);
 
   // Exclude members who already have a manually-assigned Major Role for this meeting
   const existingAssignments = await db.roleAssignment.findMany({
@@ -90,16 +91,16 @@ export async function getAutoAssignments(meetingId: string) {
 
   const usersWithMajorRole = new Set(
     existingAssignments
-      .filter((a: any) => MAJOR_ROLES.includes(a.roleName))
-      .map((a: any) => a.userId)
+      .filter((a) => MAJOR_ROLES.includes(a.roleName))
+      .map((a) => a.userId)
   );
 
   const eligibleUsers = userStats
-    .map((stats: any) => stats.user)
-    .filter((u: any) => !usersWithMajorRole.has(u.id));
+    .map((stats) => stats.user)
+    .filter((u) => !usersWithMajorRole.has(u.id));
 
   // Round-robin distribute minor roles to eligible members (priority order)
-  const assignments: Record<string, any> = {};
+  const assignments: Record<string, UserWithDisplayName | null> = {};
   
   let userIndex = 0;
   for (const role of MINOR_ROLES) {
@@ -116,13 +117,13 @@ export async function getAutoAssignments(meetingId: string) {
   return {
     assignments,
     unassigned,
-    preAssignedMajor: existingAssignments.filter((a: any) => MAJOR_ROLES.includes(a.roleName)).map((a: any) => {
+    preAssignedMajor: existingAssignments.filter((a) => MAJOR_ROLES.includes(a.roleName)).map((a) => {
         // Find the user object from the activeUsers list we already fetched
-        const u = activeUsers.find((user: any) => user.id === a.userId);
-        if (u) (u as any).displayName = getDisplayName(u, activeUsers);
+        const u = activeUsers.find((user) => user.id === a.userId);
+        const displayName = u ? getDisplayName(u, activeUsers) : '';
         return {
             ...a,
-            user: u ? { id: u.id, firstName: u.firstName, lastName: u.lastName, displayName: (u as any).displayName } : null
+            user: u ? { id: u.id, firstName: u.firstName, lastName: u.lastName, displayName } : null
         };
     })
   };

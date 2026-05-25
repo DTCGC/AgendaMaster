@@ -62,7 +62,7 @@ export async function toggleMeeting(dateIso: string, existingId?: string) {
         await db.meeting.update({
             where: { id: existingId },
             data: { 
-                status: newStatus as any,
+                status: newStatus,
                 ...(newStatus === 'CANCELLED' ? { theme: null, googleSheetId: null, googleSheetUrl: null } : {})
             }
         });

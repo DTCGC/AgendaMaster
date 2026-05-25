@@ -11,7 +11,7 @@
  *   - updateAgendaSheet()  — Updates an existing sheet with new role assignments
  *   - sendGmailAsUser()    — Sends email via Gmail API as the authenticated user
  */
-import { google } from 'googleapis';
+import { google, sheets_v4 } from 'googleapis';
 
 // ---------- Template Population (pure logic, no API calls) ----------
 
@@ -286,7 +286,7 @@ export async function updateAgendaSheet(
  * Writes a 2D array to Sheet1 of a spreadsheet via the Values API.
  */
 async function writeSheetData(
-  sheets: any,
+  sheets: sheets_v4.Sheets,
   spreadsheetId: string,
   rows: string[][]
 ) {

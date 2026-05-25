@@ -36,8 +36,8 @@ export default async function CalendarPage() {
   const archivalThreshold = new Date(Date.now() - 8100000);
   
   const pastMeetings = existingMeetings
-    .filter((m: any) => m.status === 'ARCHIVED' || (m.status === 'COMPLETED') || new Date(m.date) < archivalThreshold)
-    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .filter((m) => m.status === 'ARCHIVED' || (m.status === 'COMPLETED') || new Date(m.date) < archivalThreshold)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   return (
     <div className="flex-1 p-8 bg-brand-cool-grey/10 min-h-screen">
@@ -61,7 +61,7 @@ export default async function CalendarPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                     {potentialFridays.map(date => {
-                        const existing = existingMeetings.find((m: any) => 
+                        const existing = existingMeetings.find((m) => 
                             new Date(m.date).toDateString() === date.toDateString() && m.status !== 'ARCHIVED'
                         );
                         
@@ -134,7 +134,7 @@ export default async function CalendarPage() {
                     <tbody className="divide-y divide-gray-100">
                         {pastMeetings.length === 0 ? (
                             <tr><td colSpan={3} className="p-8 text-center text-gray-400 italic">No past meetings recorded.</td></tr>
-                        ) : pastMeetings.map((m: any) => (
+                        ) : pastMeetings.map((m) => (
                             <tr key={m.id} className="hover:bg-gray-50/50 transition-colors">
                                 <td className="p-4">
                                     <div className="font-bold text-gray-700">

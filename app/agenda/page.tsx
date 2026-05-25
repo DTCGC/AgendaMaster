@@ -41,7 +41,7 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
   const allMembers = await db.user.findMany({ where: { role: { in: ['MEMBER', 'ADMIN'] } } });
   
   const currentUser = allMembers.find(u => u.id === session.user.dbId);
-  const userFirstName = currentUser ? getDisplayName(currentUser as any, allMembers as any) : "Member";
+  const userFirstName = currentUser ? getDisplayName(currentUser, allMembers) : "Member";
 
   if (!nextMeeting) {
     return (
@@ -63,7 +63,7 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
       );
   }
 
-  const isToastmaster = nextMeeting.roleAssignments.find((a: any) => a.roleName === 'Toastmaster')?.userId === session.user.id;
+  const isToastmaster = nextMeeting.roleAssignments.find((a) => a.roleName === 'Toastmaster')?.userId === session.user.id;
 
   // Compute final roster in correct order
   const roleSequence = [
@@ -74,18 +74,18 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
 
   // Computed display names for all members earlier
   const agendaItems = roleSequence.map(role => {
-      const assignment = nextMeeting.roleAssignments.find((a: any) => a.roleName === role);
+      const assignment = nextMeeting.roleAssignments.find((a) => a.roleName === role);
       if (role === "Roles For Next Meeting") return { role, name: "John" };
       if (role === "Business Meeting") return { role, name: "Andrew" };
       
       const user = assignment?.user;
       return {
           role,
-          name: user ? getDisplayName(user as any, allMembers as any) : "TBD"
+          name: user ? getDisplayName(user, allMembers) : "TBD"
       };
   });
 
-  const hasFinalized = nextMeeting.roleAssignments.some((a: any) => MINOR_ROLES.includes(a.roleName));
+  const hasFinalized = nextMeeting.roleAssignments.some((a) => MINOR_ROLES.includes(a.roleName));
 
   return (
     <div className="flex-1 p-8 bg-brand-cool-grey/10 min-h-screen">

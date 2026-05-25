@@ -80,7 +80,7 @@ export default async function AccountsPage() {
                         </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                        {pendingUsers.map((user: any) => (
+                        {pendingUsers.map((user) => (
                             <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
                             <td className="p-4 text-sm text-gray-500">{new Date(user.createdAt).toLocaleDateString()}</td>
                             <td className="p-4 font-bold text-brand-loyal-blue">{user.firstName} {user.lastName}</td>
@@ -105,7 +105,7 @@ export default async function AccountsPage() {
                 <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Active Member List</h2>
                 <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
                     <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
-                        {activeUsers.map((user: any) => (
+                        {activeUsers.map((user) => (
                             <div key={user.id} className="p-4 flex items-center justify-between group hover:bg-gray-50 transition-colors">
                                 <div className="flex items-center gap-3">
                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${user.role === 'ADMIN' ? 'bg-brand-true-maroon text-white' : 'bg-brand-loyal-blue/10 text-brand-loyal-blue'}`}>
@@ -144,7 +144,7 @@ export default async function AccountsPage() {
                         </div>
                     ) : (
                         <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
-                            {guestSubscribers.map((sub: any) => (
+                            {guestSubscribers.map((sub) => (
                                 <div key={sub.id} className="p-4 flex items-center justify-between group hover:bg-gray-50 transition-colors">
                                     <div className="flex items-center gap-3">
                                         <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-gray-400">

@@ -29,7 +29,7 @@ export async function formatDraft(text: string) {
  * @param meetingId   - Target meeting ID.
  * @param assignments - Map of roleName → user object (null = unassigned).
  */
-export async function saveFinalAgenda(meetingId: string, assignments: Record<string, any>) {
+export async function saveFinalAgenda(meetingId: string, assignments: Record<string, { id: string } | null>) {
     // Exclude Toastmaster — that role is locked and managed via the admin roles panel
     const rolesToUpdate = Object.keys(assignments).filter(r => r !== 'Toastmaster');
     
@@ -45,7 +45,7 @@ export async function saveFinalAgenda(meetingId: string, assignments: Record<str
                 .filter(role => assignments[role] !== null)
                 .map(role => ({
                     meetingId,
-                    userId: assignments[role].id,
+                    userId: assignments[role]!.id,
                     roleName: role,
                     assignedAt: new Date()
                 }))
