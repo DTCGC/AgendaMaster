@@ -44,22 +44,28 @@ async function main() {
 
   // --- 2. Create Production Admin Account ---
   const adminEmail = 'coquitlamgavel@gmail.com'
-  const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } })
-  
-  if (!existingAdmin) {
-    const passwordHash = await bcrypt.hash('gcgm1450', 12)
-    await prisma.user.create({
-      data: {
-        email: adminEmail,
-        firstName: 'Admin',
-        lastName: 'DTCGC',
-        role: 'ADMIN',
-        passwordHash,
-      }
-    })
-    console.log(`✓ Production admin created: ${adminEmail}`)
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD
+
+  if (!adminPassword) {
+    console.warn('• SEED_ADMIN_PASSWORD not set — skipping admin seed.')
   } else {
-    console.log(`• Admin ${adminEmail} already exists, skipping.`)
+    const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } })
+
+    if (!existingAdmin) {
+      const passwordHash = await bcrypt.hash(adminPassword, 12)
+      await prisma.user.create({
+        data: {
+          email: adminEmail,
+          firstName: 'Admin',
+          lastName: 'DTCGC',
+          role: 'ADMIN',
+          passwordHash,
+        }
+      })
+      console.log(`✓ Production admin created: ${adminEmail}`)
+    } else {
+      console.log(`• Admin ${adminEmail} already exists, skipping.`)
+    }
   }
 
   console.log('\n✓ Database seed completed successfully.')
