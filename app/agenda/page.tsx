@@ -13,6 +13,7 @@ import Link from "next/link";
 import { Calendar, FileText } from "lucide-react";
 import { getDisplayName } from '@/lib/user-logic';
 import { MINOR_ROLES } from '@/lib/agenda-logic';
+import ForceSignOut from '@/components/auth/force-sign-out';
 
 export default async function AgendaPage(props: { searchParams?: Promise<{ archivedId?: string }> }) {
   const session = await auth();
@@ -41,7 +42,15 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
   const allMembers = await db.user.findMany({ where: { role: { in: ['MEMBER', 'ADMIN'] } } });
   
   const currentUser = allMembers.find(u => u.id === session.user.dbId);
-  const userFirstName = currentUser ? getDisplayName(currentUser, allMembers) : "Member";
+
+  // The user's account was deleted/deactivated mid-session. The stale JWT
+  // still says MEMBER (the edge middleware can't see the deletion), so we
+  // can't rely on a redirect — evict the session client-side instead.
+  if (!currentUser) {
+    return <ForceSignOut />;
+  }
+
+  const userFirstName = getDisplayName(currentUser, allMembers);
 
   if (!nextMeeting) {
     return (

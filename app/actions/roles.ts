@@ -8,6 +8,7 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
+import { requireAdmin } from '@/lib/auth-guard'
 
 /**
  * Saves all major role assignments for a meeting.
@@ -17,6 +18,8 @@ import { revalidatePath } from 'next/cache'
  * @param assignments - Array of { roleName, userId } pairs.
  */
 export async function saveAllMajorRoles(meetingId: string, assignments: { roleName: string, userId: string }[]) {
+    await requireAdmin();
+
     const roleNames = assignments.map(a => a.roleName);
     
     await db.$transaction([

@@ -38,6 +38,16 @@ async function main() {
       },
     });
     console.log('✓ Seeded "Regular" Meeting Template from CSV.')
+  } else if (existingRegular.schemaStructure.includes('Feadback')) {
+    // Repair the legacy "General Feadback" typo baked into already-seeded
+    // templates. The CSV file is corrected, but the seed is idempotent and
+    // never overwrites an existing template — so older DBs keep the typo in
+    // their stored schemaStructure until this targeted repair runs.
+    await prisma.meetingTemplate.update({
+      where: { id: existingRegular.id },
+      data: { schemaStructure: existingRegular.schemaStructure.replace(/Feadback/g, 'Feedback') },
+    });
+    console.log('✓ Repaired "Feadback" typo in existing Regular template.')
   } else {
     console.log('• Regular template already exists, skipping.')
   }

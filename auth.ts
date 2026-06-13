@@ -118,17 +118,20 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
             // Initial sign-in: seed the token with user metadata
             token.role = user.role;
             token.dbId = user.id;
-        } else if ((token.role === 'PENDING' || token.role === 'INCOMPLETE') && token.dbId) {
-            // Live role refresh: check if admin has approved/denied while user waits
-            const dbUser = await db.user.findUnique({ 
-                where: { id: token.dbId as string }, 
-                select: { role: true } 
+        } else if (token.dbId) {
+            // Live revalidation on EVERY subsequent request so that admin
+            // approvals (PENDING → MEMBER), role changes, and account
+            // deletions take effect WITHOUT requiring a logout/login.
+            //
+            // Previously this only ran for PENDING/INCOMPLETE, which meant an
+            // approved member kept a stale PENDING token (redirect loop to
+            // /pending) and a deleted member kept a valid MEMBER token forever
+            // ("Welcome, Member" with no eviction).
+            const dbUser = await db.user.findUnique({
+                where: { id: token.dbId as string },
+                select: { role: true }
             });
-            if (dbUser) {
-                token.role = dbUser.role;
-            } else {
-                token.role = 'DENIED'; // If account disappeared/was rejected
-            }
+            token.role = dbUser ? dbUser.role : 'DELETED'; // account removed/rejected
         }
         
         // Persist Google OAuth tokens for Sheets/Drive/Gmail API calls

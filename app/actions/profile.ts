@@ -59,3 +59,27 @@ export async function completeProfile(formData: FormData): Promise<{ success: bo
 
   return { success: true };
 }
+
+/**
+ * Re-reads the caller's role from the database and writes it back into the
+ * JWT session cookie. Holding pages (e.g. /pending) poll this so an admin
+ * approval is reflected without a manual logout/login.
+ *
+ * The edge middleware only ever sees the cookie's contents, so calling
+ * auth() alone (which refreshes the in-memory token but not the cookie) is
+ * not enough — unstable_update re-runs the jwt callback and persists the
+ * freshly-revalidated role to the cookie, breaking the /pending redirect loop.
+ *
+ * @returns The caller's current role, or null if the session is gone.
+ */
+export async function syncSessionRole(): Promise<{ role: string | null }> {
+  const session = await auth();
+
+  if (!session?.user) {
+    return { role: null };
+  }
+
+  await unstable_update({ user: { role: session.user.role } });
+
+  return { role: session.user.role ?? null };
+}

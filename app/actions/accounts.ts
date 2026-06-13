@@ -13,6 +13,8 @@
 import { db } from '@/lib/db'
 import { quietlySendEmail } from '@/lib/email'
 import { revalidatePath } from 'next/cache'
+import { requireAdmin } from '@/lib/auth-guard'
+import { auth } from '@/auth'
 
 /**
  * Approves a pending user registration.
@@ -22,6 +24,11 @@ import { revalidatePath } from 'next/cache'
  * a retry modal (the DB update is NOT rolled back — approval persists).
  */
 export async function approveAccount(prevState: { success: boolean; emailError?: boolean; error?: string; type?: string; userId?: string; errorId?: number } | null, formData: FormData) {
+  const session = await auth();
+  if (session?.user?.role !== 'ADMIN') {
+    return { success: false, error: 'Unauthorized: administrator access required.' };
+  }
+
   const userId = formData.get('userId') as string;
   let user;
   
@@ -72,6 +79,11 @@ export async function approveAccount(prevState: { success: boolean; emailError?:
  * mechanism will complete both the email and deletion.
  */
 export async function rejectAccount(prevState: { success: boolean; error?: string; type?: string; userId?: string; errorId?: number } | null, formData: FormData) {
+  const session = await auth();
+  if (session?.user?.role !== 'ADMIN') {
+    return { success: false, error: 'Unauthorized: administrator access required.' };
+  }
+
   const userId = formData.get('userId') as string;
   const user = await db.user.findUnique({
     where: { id: userId }
@@ -114,6 +126,11 @@ export async function rejectAccount(prevState: { success: boolean; error?: strin
  * If it was a rejection, it also finishes the deletion.
  */
 export async function retryAccountEmail(userId: string, type: 'approval' | 'rejection') {
+  const session = await auth();
+  if (session?.user?.role !== 'ADMIN') {
+    return { success: false, error: 'Unauthorized: administrator access required.' };
+  }
+
   const user = await db.user.findUnique({ where: { id: userId } });
   if (!user) return { success: false, error: 'User no longer exists.' };
 
@@ -179,6 +196,8 @@ export async function subscribeGuest(email: string) {
  * the user record, preserving historical meeting data.
  */
 export async function removeUser(formData: FormData) {
+  await requireAdmin();
+
   const userId = formData.get('userId') as string;
   
   try {
@@ -200,6 +219,8 @@ export async function removeUser(formData: FormData) {
 
 /** Removes a guest subscriber from the mailing list. */
 export async function removeSubscriber(formData: FormData) {
+  await requireAdmin();
+
   const subscriberId = formData.get('subscriberId') as string;
   await db.subscriber.delete({
     where: { id: subscriberId }
@@ -212,6 +233,9 @@ export async function removeSubscriber(formData: FormData) {
  * Used to fix names inherited from parent Google accounts or typos.
  */
 export async function updateUserName(formData: FormData) {
+  // Admin-only: anyone authenticated could otherwise rename arbitrary members.
+  await requireAdmin();
+
   const userId = formData.get('userId') as string;
   const firstName = (formData.get('firstName') as string)?.trim();
   const lastName = (formData.get('lastName') as string)?.trim();

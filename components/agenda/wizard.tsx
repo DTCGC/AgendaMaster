@@ -244,9 +244,17 @@ function WizardContent({ meetingId }: { meetingId: string }) {
 
   /** Copies a text summary of the meeting (roles + email) to the clipboard as a fallback. */
   const handleCopy = () => {
+      // Convert block-level tags and <br> into real line breaks before
+      // extracting text — textContent alone collapses the entire HTML email
+      // into a single unbroken paragraph.
+      const withBreaks = emailDraft
+        .replace(/<\s*br\s*\/?>/gi, "\n")
+        .replace(/<\s*li[^>]*>/gi, "• ")
+        .replace(/<\s*\/(p|div|h[1-6]|li|tr|blockquote)\s*>/gi, "\n");
       const tempDiv = document.createElement("div");
-      tempDiv.innerHTML = emailDraft;
-      let textData = tempDiv.textContent || tempDiv.innerText || "";
+      tempDiv.innerHTML = withBreaks;
+      let textData = (tempDiv.textContent || tempDiv.innerText || "")
+        .replace(/\n{3,}/g, "\n\n");
       
       textData += `\n\n---\nTheme: ${meetingTheme}\nType: ${meetingType}\n`;
       textData += `\n[MEETING ROLES - CHRONOLOGICAL]\n`;

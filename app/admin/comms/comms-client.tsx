@@ -44,9 +44,15 @@ export default function CommsClient() {
     }
 
     const handleCopyManual = () => {
+        // Preserve line breaks: textContent alone flattens block-level HTML
+        // (paragraphs, <br>, lists) into one run-on line.
+        const withBreaks = htmlBody
+            .replace(/<\s*br\s*\/?>/gi, "\n")
+            .replace(/<\s*li[^>]*>/gi, "• ")
+            .replace(/<\s*\/(p|div|h[1-6]|li|tr|blockquote)\s*>/gi, "\n");
         const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = htmlBody;
-        const textData = tempDiv.textContent || tempDiv.innerText || "";
+        tempDiv.innerHTML = withBreaks;
+        const textData = (tempDiv.textContent || tempDiv.innerText || "").replace(/\n{3,}/g, "\n\n");
         navigator.clipboard.writeText(`[${targetGroup} Blast] - ${subject}\n\n${textData}`).then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 3000);

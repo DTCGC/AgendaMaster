@@ -10,6 +10,11 @@
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
 import { MINOR_ROLES } from '@/lib/agenda-logic'
+import { requireAdmin } from '@/lib/auth-guard'
+
+/** Standard meeting start: 6:45 PM local (deployment server runs on Pacific time). */
+const MEETING_START_HOUR = 18
+const MEETING_START_MINUTE = 45
 
 /**
  * Generates a list of upcoming Fridays for the calendar view.
@@ -30,7 +35,14 @@ export async function getFutureFridays() {
             const month = d.getMonth(); // 0-indexed
             // Spec: Globally disable Jul (6) and Aug (7)
             if (month !== 6 && month !== 7) {
-                fridays.push(new Date(d));
+                // Don't offer a Friday whose 6:45 PM start has already elapsed.
+                // (Server runs on Pacific time, so local hours map to the
+                // real meeting time — see toggleMeeting.)
+                const start = new Date(d);
+                start.setHours(MEETING_START_HOUR, MEETING_START_MINUTE, 0, 0);
+                if (start.getTime() > Date.now()) {
+                    fridays.push(new Date(d));
+                }
             }
         }
         
@@ -49,6 +61,8 @@ export async function getFutureFridays() {
  * @param existingId - If provided, toggles the existing meeting's status.
  */
 export async function toggleMeeting(dateIso: string, existingId?: string) {
+    await requireAdmin();
+
     if (existingId) {
         const meeting = await db.meeting.findUnique({
             where: { id: existingId }
@@ -89,7 +103,14 @@ export async function toggleMeeting(dateIso: string, existingId?: string) {
         }
 
         const date = new Date(dateIso);
-        date.setHours(18, 45, 0, 0);
+        date.setHours(MEETING_START_HOUR, MEETING_START_MINUTE, 0, 0);
+
+        // Reject meetings whose start time has already passed. Without this,
+        // an admin could schedule a meeting in the past (e.g. today's Friday
+        // after 6:45 PM has elapsed).
+        if (date.getTime() <= Date.now()) {
+            return;
+        }
 
         await db.meeting.create({
             data: {
@@ -111,6 +132,8 @@ export async function toggleMeeting(dateIso: string, existingId?: string) {
  * @param meetingId - The meeting to delete.
  */
 export async function deleteMeeting(meetingId: string) {
+    await requireAdmin();
+
     // Cascade: delete dependent role assignments before the meeting itself
     await db.roleAssignment.deleteMany({
         where: { meetingId }
