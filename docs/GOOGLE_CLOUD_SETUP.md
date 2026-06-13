@@ -104,7 +104,7 @@ You'll see a popup with:
 
 ## Step 5: Update Your `.env` File
 
-Open `d:\John\my stuff\Code\DTCGC\AgendaMaster\.env` and replace the placeholder values:
+Open the `.env` file in the project root (copy it from [`.env.example`](../.env.example) if you haven't yet) and replace the placeholder values:
 
 ```env
 GOOGLE_CLIENT_ID="<paste your Client ID here>"

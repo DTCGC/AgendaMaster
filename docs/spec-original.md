@@ -1,5 +1,13 @@
 # Project Specification: Downtown Coquitlam Gavel Club Management App
 
+> [!NOTE]
+> **This is the original project brief, preserved for historical context.** It captures the
+> requirements as written at the start of the project, *not* the current as-built behavior.
+> Where the shipped application diverges from this document (e.g. email delivery, meeting
+> status values, the role model, and the Archive view), the **[README](../README.md)** is
+> authoritative. Please don't edit this file to "match" the code — its value is as the original
+> spec. Known divergences are tracked in the README's *Status vs. Original Spec* section.
+
 ## 1. Project Overview
 Build a full-stack web application to manage club operations, specifically automating agenda creation and mass email distributions. The application must be mobile-compatible, prioritising desktop views.
 
