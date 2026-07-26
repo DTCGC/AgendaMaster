@@ -48,6 +48,12 @@ export function filterToPanelRoles<T extends { roleName: string }>(assignments: 
  * scoped to the whitelisted role names only, leaving minor roles (and their
  * `assignedAt` history) untouched.
  *
+ * `assignedAt` is carried forward for any role whose holder is unchanged. The
+ * panel posts all of its roles on every save, so without this a single speaker
+ * swap would re-date every other major role — a Toastmaster assigned weeks ago
+ * would look freshly served and sink in the fairness rotation. Only a genuine
+ * change of holder counts as new participation.
+ *
  * @param meetingId   - Target meeting ID.
  * @param assignments - Array of { roleName, userId } pairs; empty userId clears the role.
  * @returns The role names that were actually accepted and written.
@@ -60,23 +66,35 @@ export async function persistMajorRoles(
   if (accepted.length === 0) return []
 
   const roleNames = accepted.map((a) => a.roleName)
-  const assignedAt = new Date()
+  const now = new Date()
 
-  await db.$transaction([
-    db.roleAssignment.deleteMany({
+  // Read and write inside one interactive transaction so the timestamps being
+  // carried forward cannot be invalidated by a concurrent save.
+  await db.$transaction(async (tx) => {
+    const previous = await tx.roleAssignment.findMany({
       where: { meetingId, roleName: { in: roleNames } },
-    }),
-    db.roleAssignment.createMany({
+    })
+    const previousByRole = new Map(previous.map((row) => [row.roleName, row]))
+
+    await tx.roleAssignment.deleteMany({
+      where: { meetingId, roleName: { in: roleNames } },
+    })
+
+    await tx.roleAssignment.createMany({
       data: accepted
         .filter((a) => !!a.userId)
-        .map((a) => ({
-          meetingId,
-          roleName: a.roleName,
-          userId: a.userId,
-          assignedAt,
-        })),
-    }),
-  ])
+        .map((a) => {
+          const prior = previousByRole.get(a.roleName)
+          const sameHolder = prior?.userId === a.userId
+          return {
+            meetingId,
+            roleName: a.roleName,
+            userId: a.userId,
+            assignedAt: sameHolder && prior ? prior.assignedAt : now,
+          }
+        }),
+    })
+  })
 
   return roleNames
 }

@@ -80,6 +80,37 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
 
 ---
 
+## 🧪 Tests
+
+```bash
+npm test
+```
+
+Tests use **Node's built-in test runner** (`node:test`) executed through `tsx`. This is a
+deliberate choice over Vitest or Jest: the deploy pipeline rsyncs `node_modules` wholesale to
+the Droplet after a plain `npm install`, so any test framework added as a dependency would ship
+to production. `tsx` is already a dependency and already runs there for the seed script, so this
+setup adds **no new packages and no production surface**.
+
+Each test file gets its own throwaway SQLite database in the OS temp directory, created by
+`tests/helpers/env.ts` and torn down on exit — `dev.db` is never touched. Node runs each test
+file in a separate process, so the databases cannot collide.
+
+What is covered (all of it invisible-when-broken behaviour, which is why it is pinned):
+
+| File | Guards |
+|---|---|
+| `tests/roles-recency.test.ts` | The admin panel only writes roles it owns, and preserves `assignedAt` for unchanged holders — both silently corrupt the fairness rotation when broken. |
+| `tests/backup-speaker.test.ts` | The Backup Speaker stays roleless: still eligible for a minor role, still on the attendance list, never counted as recent participation. |
+| `tests/roster-regeneration.test.ts` | A normal load preserves the saved roster; `ignoreSavedMinorRoles` reshuffles without persisting or disturbing other roles. |
+
+**Do not deploy test files.** The artifact list in `.github/workflows/deploy.yml` copies only
+`.next`, `public`, `node_modules`, `package.json`, `ecosystem.config.js` and `prisma`, so
+`tests/` is excluded by omission. Keep it that way — and if you ever add a test framework as a
+devDependency, prune it before the rsync step.
+
+---
+
 ## 🚢 Deployment
 
 AgendaMaster deploys to a **DigitalOcean Droplet** via a **GitHub Actions** push-to-deploy

@@ -23,6 +23,12 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      - name: Run Tests
+        # Gates the deploy. Each test file provisions its own scratch SQLite
+        # database in the runner's temp dir, so no DATABASE_URL is needed here
+        # and production data is never involved.
+        run: npm test
+
       - name: Build Application
         # Use GITHUB_SHA for internal BUILD_ID consistency; set stable encryption for actions
         run: |
