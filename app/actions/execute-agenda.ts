@@ -70,7 +70,8 @@ function buildRoleMap(
   alias('Comments and Closing Remarks', 'Toastmaster');
   alias('Dismissal', 'Sergeant at Arms');
 
-  // Break Time has no person
+  // Break Time is unstaffed by design. An empty string is the marker for that:
+  // populateTemplate() renders it as '-' rather than 'TBD'.
   map['Break Time'] = '';
 
   return map;
@@ -114,7 +115,9 @@ export async function executeAgendaPipeline(
       return { success: false, error: 'Meeting not found.' };
     }
 
-    // All approved members
+    // All approved accounts. ADMINs are included here because they still receive
+    // the agenda email and are needed for display-name disambiguation — but they
+    // are NOT club attendees (see unassignedNames below).
     const allMembers = await db.user.findMany({
       where: { role: { in: ['MEMBER', 'ADMIN'] } }
     });
@@ -128,11 +131,16 @@ export async function executeAgendaPipeline(
       allMembers
     );
 
-    // Compute unassigned members
+    // Compute the "No Roles" list: members attending without a formal role.
+    // ADMIN accounts are excluded — the club's shared admin credential is not a
+    // person, and an ADMIN can never hold a role anyway (both the auto-assignment
+    // engine and the admin Role Management panel only ever offer MEMBER users).
+    // This mirrors the wizard's Attendance List, which is MEMBER-only.
     const assignedUserIds = new Set(
       meeting.roleAssignments.map((a: { userId: string | null }) => a.userId).filter(Boolean)
     );
     const unassignedNames = allMembers
+      .filter((m: { role: string }) => m.role === 'MEMBER')
       .filter((m: { id: string }) => !assignedUserIds.has(m.id))
       .map((m: NameableUser) => getDisplayName(m, allMembers));
 

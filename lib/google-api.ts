@@ -16,6 +16,16 @@ import { google, sheets_v4 } from 'googleapis';
 // ---------- Template Population (pure logic, no API calls) ----------
 
 /**
+ * Placeholder written into the name column for agenda rows that are deliberately
+ * not staffed by a person (Break Time, General Feedback slots).
+ *
+ * Distinct from 'TBD', which means "a real role that nobody has been assigned to
+ * yet". A row whose roleMap entry is an empty string is unstaffed *by design* and
+ * must render as '-', never as 'TBD'.
+ */
+const NO_PERSON = '-';
+
+/**
  * Simple CSV row parser that handles quoted fields.
  */
 function parseCSVRow(line: string): string[] {
@@ -82,10 +92,16 @@ export function populateTemplate(
     // Replace NAME placeholder in col 3 with the person assigned to the role in col 1
     if (row.length > 3 && (row[3] || '').trim() === 'NAME') {
       if (roleLabel.toLowerCase().includes('general feedback') || roleLabel.toLowerCase().includes('general feadback')) {
-        row[3] = '-';
+        row[3] = NO_PERSON;
       } else {
         const person = roleMap[roleLabel];
-        row[3] = person !== undefined && person !== '' ? person : 'TBD';
+        if (person === undefined) {
+          row[3] = 'TBD';        // a real role, nobody assigned to it yet
+        } else if (person === '') {
+          row[3] = NO_PERSON;    // unstaffed by design (e.g. Break Time)
+        } else {
+          row[3] = person;
+        }
       }
     }
 
@@ -217,7 +233,7 @@ function computeChangelog(existingRows: string[][], newRoleMap: Record<string, s
     if (row.length > 3 && row[1]) {
       const roleLabel = row[1].trim();
       const person = row[3].trim();
-      if (person && person !== 'NAME' && person !== 'TBD' && person !== '-') {
+      if (person && person !== 'NAME' && person !== 'TBD' && person !== NO_PERSON) {
         oldRoleMap[roleLabel] = person;
       }
     }
@@ -225,7 +241,7 @@ function computeChangelog(existingRows: string[][], newRoleMap: Record<string, s
 
   const persons = new Set<string>();
   for (const p of Object.values(oldRoleMap)) persons.add(p);
-  for (const p of Object.values(newRoleMap)) if (p && p !== 'TBD' && p !== '-') persons.add(p);
+  for (const p of Object.values(newRoleMap)) if (p && p !== 'TBD' && p !== NO_PERSON) persons.add(p);
 
   const changelog: string[] = [];
 

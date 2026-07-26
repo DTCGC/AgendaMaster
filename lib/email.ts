@@ -20,18 +20,18 @@ import path from 'path';
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // Sender identity shown in recipient inboxes. Falls back to Resend's sandbox domain.
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'DTCGC Portal <onboarding@resend.dev>';
+export const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'DTCGC Portal <onboarding@resend.dev>';
 
 /**
  * Production HTTP API bridge for all app-initiated emails.
  * Avoids DO droplet SMTP port blocks and streamlines mass announcements.
  * Falls back to mock logging in development if credentials aren't set.
  */
-export async function quietlySendEmail(to: string, subject: string, html: string, options?: { reply_to?: string }) {
+export async function quietlySendEmail(to: string, subject: string, html: string, options?: { replyTo?: string }) {
   if (!resend) {
     // Development fallback: write a human-readable mock to console and a log file
     const logHeader = `\n================== [MOCK EMAIL BRIDGE: ${new Date().toLocaleString()}] ==================\n`;
-    const logEntry = `${logHeader}To: ${to}\nReply-To: ${options?.reply_to || 'None'}\nSubject: ${subject}\nBody (HTML):\n${html}\n===========================================================\n`;
+    const logEntry = `${logHeader}To: ${to}\nReply-To: ${options?.replyTo || 'None'}\nSubject: ${subject}\nBody (HTML):\n${html}\n===========================================================\n`;
     
     console.log(logEntry);
 
@@ -46,13 +46,16 @@ export async function quietlySendEmail(to: string, subject: string, html: string
   }
 
   try {
-    // POST /emails via Resend HTTP API — single recipient, direct delivery
+    // POST /emails via Resend HTTP API — single recipient, direct delivery.
+    // NOTE: the SDK field is `replyTo` (camelCase). It normalizes the payload
+    // through an allowlist (`reply_to: email.replyTo`), so a snake_case
+    // `reply_to` key here is silently DROPPED and the header never ships.
     const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
       to,
       subject,
       html,
-      ...(options?.reply_to ? { reply_to: options.reply_to } : {}),
+      ...(options?.replyTo ? { replyTo: options.replyTo } : {}),
     });
     
     if (error) throw new Error(error.message);
@@ -67,12 +70,12 @@ export async function quietlySendEmail(to: string, subject: string, html: string
 /**
  * Sends a single email to multiple recipients via BCC using the Resend API.
  */
-export async function sendBccEmail(recipients: string[], subject: string, html: string, options?: { reply_to?: string }) {
+export async function sendBccEmail(recipients: string[], subject: string, html: string, options?: { replyTo?: string }) {
   const unique = Array.from(new Set(recipients));
   if (unique.length === 0) return { succeeded: 0, failed: 0, total: 0 };
 
   if (!resend) {
-    console.log(`[MOCK BCC]: Simulated HTTP dispatch to ${unique.length} users. Reply-To: ${options?.reply_to || 'None'}`);
+    console.log(`[MOCK BCC]: Simulated HTTP dispatch to ${unique.length} users. Reply-To: ${options?.replyTo || 'None'}`);
     return { succeeded: unique.length, failed: 0, total: unique.length };
   }
 
@@ -86,7 +89,7 @@ export async function sendBccEmail(recipients: string[], subject: string, html: 
       bcc: unique,
       subject,
       html,
-      ...(options?.reply_to ? { reply_to: options.reply_to } : {}),
+      ...(options?.replyTo ? { replyTo: options.replyTo } : {}),
     });
     
     if (error) throw new Error(error.message);

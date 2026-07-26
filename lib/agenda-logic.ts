@@ -7,8 +7,12 @@
  * The auto-assignment heuristic works by:
  * 1. Querying all MEMBER users with their most recent role assignment date.
  * 2. Sorting by recency (oldest first = highest priority).
- * 3. Distributing MINOR_ROLES sequentially, skipping members who already
- *    hold a MAJOR_ROLE for that meeting.
+ * 3. Restoring any minor roles already saved for the meeting.
+ * 4. Distributing the remaining, still-empty MINOR_ROLES sequentially among
+ *    members who hold no role for that meeting yet.
+ *
+ * Step 3 is what makes the wizard safe to reopen: saved rosters are preserved
+ * rather than regenerated, so pressing "Update" never scrambles finalized roles.
  */
 
 import { db } from './db';
@@ -84,31 +88,48 @@ export async function getAutoAssignments(meetingId: string): Promise<AutoAssignm
   // Sort ascending: members who haven't had a role recently (or ever) get priority
   userStats.sort((a, b) => a.lastAssignedAt - b.lastAssignedAt);
 
-  // Exclude members who already have a manually-assigned Major Role for this meeting
   const existingAssignments = await db.roleAssignment.findMany({
     where: { meetingId }
   });
 
-  const usersWithMajorRole = new Set(
-    existingAssignments
-      .filter((a) => MAJOR_ROLES.includes(a.roleName))
-      .map((a) => a.userId)
+  // Lookup of member id → display-name-decorated user
+  const usersById = new Map(userStats.map((stats) => [stats.user.id, stats.user]));
+
+  // STEP 1 — Restore minor roles already saved for this meeting.
+  // The heuristic is a *starting point*, not a source of truth: once the
+  // Toastmaster has saved a roster, re-deriving it would silently reshuffle
+  // (or drop) their work every time the wizard is reopened to make an update.
+  const assignments: Record<string, UserWithDisplayName | null> = {};
+  for (const role of MINOR_ROLES) {
+    assignments[role] = null;
+  }
+
+  for (const a of existingAssignments) {
+    if (!a.userId || !MINOR_ROLES.includes(a.roleName)) continue;
+    const saved = usersById.get(a.userId);
+    // Skip assignments pointing at users who are no longer active members —
+    // leaving the slot empty lets the heuristic below fill it.
+    if (saved) assignments[a.roleName] = saved;
+  }
+
+  // Anyone already holding a role for this meeting — an admin-set major role or
+  // a restored minor role — is out of the running for the remaining empty slots.
+  const usersWithExistingRole = new Set(
+    existingAssignments.filter((a) => a.userId).map((a) => a.userId)
   );
 
   const eligibleUsers = userStats
     .map((stats) => stats.user)
-    .filter((u) => !usersWithMajorRole.has(u.id));
+    .filter((u) => !usersWithExistingRole.has(u.id));
 
-  // Round-robin distribute minor roles to eligible members (priority order)
-  const assignments: Record<string, UserWithDisplayName | null> = {};
-  
+  // STEP 2 — Round-robin the *still-empty* minor roles to members who hold
+  // nothing yet, in priority order (least-recently-assigned first).
   let userIndex = 0;
   for (const role of MINOR_ROLES) {
+    if (assignments[role]) continue;
     if (userIndex < eligibleUsers.length) {
       assignments[role] = eligibleUsers[userIndex];
       userIndex++;
-    } else {
-      assignments[role] = null;
     }
   }
 

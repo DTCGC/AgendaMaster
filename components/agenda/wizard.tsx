@@ -15,7 +15,7 @@
  */
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { AlertCircle, CheckCircle2, ExternalLink, Copy, Loader2 } from 'lucide-react'
 import TiptapEditor from './tiptap-editor'
@@ -42,13 +42,25 @@ function WizardContent({ meetingId }: { meetingId: string }) {
   // Roles Data
   const [loadingRoles, setLoadingRoles] = useState(true)
   const [minorRoles, setMinorRoles] = useState<Record<string, UserWithDisplayName | null>>({})
-  const [unassigned, setUnassigned] = useState<UserWithDisplayName[]>([])
+  // Full club roster (deduped, sorted). The Attendance List is derived from this
+  // rather than stored, so it can never drift out of sync with the role dropdowns.
+  const [roster, setRoster] = useState<UserWithDisplayName[]>([])
   const [preAssigned, setPreAssigned] = useState<PreAssignedMajorRole[]>([])
-  
+
   const [allowDoubleRoles, setAllowDoubleRoles] = useState(false)
   const [clipboardStatus, setClipboardStatus] = useState('Copy to Clipboard')
   const [isSaving, setIsSaving] = useState(false)
   const [conflictError, setConflictError] = useState<string | null>(null)
+
+  // --- Derived Attendance List ---
+  // A member is "attending without a role" only when they hold NO role at all —
+  // neither a minor/major dropdown slot nor a locked pre-assigned major role.
+  // Deriving this (instead of pushing/popping a separate array) is what keeps
+  // double-role holders off the list when one of their two roles is reassigned.
+  const assignedUserIds = new Set<string>()
+  Object.values(minorRoles).forEach(u => { if (u) assignedUserIds.add(u.id) })
+  preAssigned.forEach(a => { if (a.userId) assignedUserIds.add(a.userId) })
+  const unassigned = roster.filter(u => !assignedUserIds.has(u.id))
 
   // Step 4 execution state
   const [isExecuting, setIsExecuting] = useState(false)
@@ -87,8 +99,34 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                 }
             });
 
+            // Roster = everyone the server knows about: the unassigned pool plus
+            // every member already holding an editable or locked role.
+            const fullRoster: UserWithDisplayName[] = [...data.unassigned];
+            const addToRoster = (u: UserWithDisplayName | null) => {
+                if (u && !fullRoster.some(existing => existing.id === u.id)) fullRoster.push(u);
+            };
+            Object.values(editableRoles).forEach(addToRoster);
+            lockedRoles.forEach(a => addToRoster(a.user));
+            fullRoster.sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+            // If the saved roster already contains someone holding two roles (an
+            // admin can hand a major role to a member who already has a minor one),
+            // switch the override ON so the UI reflects reality. Otherwise the
+            // checkbox would read "off" while doubles are plainly on screen.
+            const seen = new Set<string>();
+            const hasDoubles = [
+                ...Object.values(editableRoles),
+                ...lockedRoles.map(a => a.user)
+            ].some(u => {
+                if (!u) return false;
+                if (seen.has(u.id)) return true;
+                seen.add(u.id);
+                return false;
+            });
+            if (hasDoubles) setAllowDoubleRoles(true)
+
             setMinorRoles(editableRoles)
-            setUnassigned(data.unassigned)
+            setRoster(fullRoster)
             setPreAssigned(lockedRoles)
             setLoadingRoles(false)
         } catch (e) {
@@ -99,35 +137,51 @@ function WizardContent({ meetingId }: { meetingId: string }) {
   }, [meetingId])
 
   // --- Double Role Cleansing ---
-  // When "Allow Multiple Roles" is toggled OFF, automatically remove
-  // duplicate assignments and return displaced members to the unassigned pool.
+  // When "Allow Multiple Roles" is toggled OFF, clear any duplicate assignment so
+  // each member holds at most one role. Displaced members reappear on the
+  // Attendance List automatically, since that list is derived from minorRoles.
+  const wasAllowingDoubleRoles = useRef(allowDoubleRoles);
   useEffect(() => {
-    if (!allowDoubleRoles) {
-        const newMinorRoles = { ...minorRoles };
-        const pool = [...unassigned];
-        const alreadyAssigned = new Set();
-        
+    const toggledOff = wasAllowingDoubleRoles.current && !allowDoubleRoles;
+    wasAllowingDoubleRoles.current = allowDoubleRoles;
+
+    // Only cleanse on a deliberate ON→OFF toggle. Running this on mount would
+    // wipe doubles that were intentionally saved to the database before the
+    // Toastmaster has even had a chance to see them.
+    if (!toggledOff) return;
+
+    setMinorRoles(prev => {
+        const next = { ...prev };
+        const alreadyAssigned = new Set<string>();
+
+        // The locked Toastmaster assignment outranks everything.
         preAssigned.forEach(a => {
             if (a.userId) alreadyAssigned.add(a.userId);
         });
 
+        // Major roles are resolved before minor ones so that a member holding
+        // both keeps the MAJOR role. Clearing the major instead would delete an
+        // admin's deliberate assignment on the next save.
+        const roleKeys = Object.keys(next);
+        const orderedKeys = [
+            ...roleKeys.filter(r => MAJOR_ROLES.includes(r)),
+            ...roleKeys.filter(r => !MAJOR_ROLES.includes(r))
+        ];
+
         let changed = false;
-        Object.keys(newMinorRoles).forEach(role => {
-            const user = newMinorRoles[role];
-            if (user && alreadyAssigned.has(user.id)) {
-                pool.push(user);
-                newMinorRoles[role] = null;
+        orderedKeys.forEach(role => {
+            const user = next[role];
+            if (!user) return;
+            if (alreadyAssigned.has(user.id)) {
+                next[role] = null;
                 changed = true;
-            } else if (user) {
+            } else {
                 alreadyAssigned.add(user.id);
             }
         });
 
-        if (changed) {
-            setMinorRoles(newMinorRoles);
-            setUnassigned(pool);
-        }
-    }
+        return changed ? next : prev;
+    });
   }, [allowDoubleRoles, preAssigned]);
 
   useEffect(() => {
@@ -156,12 +210,10 @@ function WizardContent({ meetingId }: { meetingId: string }) {
    * Enforces single-assignment constraint unless "Allow Multiple Roles" is on.
    */
   const handleRoleChange = (roleName: string, userId: string) => {
-    const allUsers = [...unassigned, ...Object.values(minorRoles).filter((u): u is UserWithDisplayName => u !== null), ...preAssigned.map(a => a.user).filter((u): u is UserWithDisplayName => u !== null)];
-    const selectedUser = allUsers.find(u => u.id === userId) || null;
-    const displacedUser = minorRoles[roleName];
+    const selectedUser = roster.find(u => u.id === userId) || null;
 
     if (!allowDoubleRoles && selectedUser) {
-        const hasOtherMinor = Object.values(minorRoles).some(u => u?.id === selectedUser.id);
+        const hasOtherMinor = Object.entries(minorRoles).some(([r, u]) => r !== roleName && u?.id === selectedUser.id);
         const hasMajor = preAssigned.some(a => a.userId === selectedUser.id);
         
         if (hasOtherMinor || hasMajor) {
@@ -171,16 +223,11 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         }
     }
 
+    // The Attendance List recomputes itself from this — no manual pool bookkeeping.
     setMinorRoles(prev => ({
         ...prev,
         [roleName]: selectedUser
     }));
-
-    setUnassigned(prev => {
-        let newUnassigned = [...prev].filter(u => u.id !== userId);
-        if (displacedUser) newUnassigned.push(displacedUser);
-        return newUnassigned;
-    });
   }
 
   /** Quick save for Step 3 update mode — saves roles and silently updates the sheet. */
@@ -420,11 +467,11 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                              {Object.entries(minorRoles)
                                  .filter(([role]) => !MAJOR_ROLES.includes(role))
                                  .map(([role, user]) => {
-                                 // Safely construct a unique list of all known users
-                                 const staticUsers = [...unassigned];
-                                 Object.values(minorRoles).forEach(u => { if (u && !staticUsers.some(existing => existing.id === u.id)) staticUsers.push(u); });
-                                 preAssigned.forEach(a => { if (a.user && !staticUsers.some(existing => existing.id === a.user!.id)) staticUsers.push(a.user); });
-                                 staticUsers.sort((a, b) => a.displayName.localeCompare(b.displayName));
+                                 // Double roles on: any member is selectable. Off: only
+                                 // members with no role yet, plus the current holder.
+                                 const options = allowDoubleRoles
+                                     ? roster
+                                     : [...unassigned, ...(user ? [user] : [])].sort((a, b) => a.displayName.localeCompare(b.displayName));
 
                                  return (
                                  <div key={role} className="flex justify-between items-center text-sm border-b border-gray-100 pb-2">
@@ -435,7 +482,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                         onChange={(e) => handleRoleChange(role, e.target.value)}
                                      >
                                          <option value="">-- UNASSIGNED --</option>
-                                         {(allowDoubleRoles ? staticUsers : [...unassigned, ...(user ? [user] : [])]).filter((u, i, arr) => arr.findIndex(t => t.id === u.id) === i).map((u) => (
+                                         {options.map((u) => (
                                              <option key={u.id} value={u.id}>{u.displayName}</option>
                                          ))}
                                      </select>
@@ -454,11 +501,10 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                 {Object.entries(minorRoles)
                                     .filter(([role]) => MAJOR_ROLES.includes(role))
                                     .map(([role, user]) => {
-                                    const staticUsers = [...unassigned];
-                                    Object.values(minorRoles).forEach(u => { if (u && !staticUsers.some(existing => existing.id === u.id)) staticUsers.push(u); });
-                                    preAssigned.forEach(a => { if (a.user && !staticUsers.some(existing => existing.id === a.user!.id)) staticUsers.push(a.user); });
-                                    staticUsers.sort((a, b) => a.displayName.localeCompare(b.displayName));
-   
+                                    const options = allowDoubleRoles
+                                        ? roster
+                                        : [...unassigned, ...(user ? [user] : [])].sort((a, b) => a.displayName.localeCompare(b.displayName));
+
                                     return (
                                     <div key={role} className="flex justify-between items-center border-b pb-2 last:border-0">
                                         <span className="font-semibold text-gray-600">{role}</span>
@@ -468,7 +514,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                            onChange={(e) => handleRoleChange(role, e.target.value)}
                                         >
                                             <option value="">-- UNASSIGNED --</option>
-                                            {(allowDoubleRoles ? staticUsers : [...unassigned, ...(user ? [user] : [])]).filter((u, i, arr) => arr.findIndex(t => t.id === u.id) === i).map((u) => (
+                                            {options.map((u) => (
                                                 <option key={u.id} value={u.id}>{u.displayName}</option>
                                             ))}
                                         </select>
