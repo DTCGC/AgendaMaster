@@ -69,4 +69,10 @@ export type AutoAssignmentResult = {
   assignments: Record<string, UserWithDisplayName | null>
   unassigned: UserWithDisplayName[]
   preAssignedMajor: PreAssignedMajorRole[]
+  /**
+   * The standby speaker, kept out of `assignments` on purpose — the title
+   * confers no duties, so the holder also appears in `unassigned` and stays
+   * eligible for a minor role.
+   */
+  backupSpeaker: UserWithDisplayName | null
 }

@@ -104,11 +104,6 @@ export function populateTemplate(
         }
       }
     }
-
-    // BACKUP SPEAKER is always TBD (never auto-assigned)
-    if (roleLabel === 'BACKUP SPEAKER:' && row.length > 3 && (row[3] || '').trim() === 'NAME') {
-      row[3] = 'TBD';
-    }
   }
 
   // Fill the "No Roles" section with leftover attendee names
@@ -227,6 +222,14 @@ export async function createAgendaSheet(
  * @returns Array of human-readable changelog strings.
  */
 function computeChangelog(existingRows: string[][], newRoleMap: Record<string, string>): string[] {
+  // Rows that must never produce a changelog line. General Feedback is unstaffed
+  // by design; the Backup Speaker is a standby title that routinely changes
+  // hands without anyone's actual duties changing, so diffing it is pure noise.
+  const isExempt = (roleLabel: string) => {
+    const l = roleLabel.toLowerCase();
+    return l.includes('general') || l.includes('backup speaker');
+  };
+
   const oldRoleMap: Record<string, string> = {};
   
   for (const row of existingRows) {
@@ -246,8 +249,8 @@ function computeChangelog(existingRows: string[][], newRoleMap: Record<string, s
   const changelog: string[] = [];
 
   for (const p of persons) {
-    const oldR = Object.keys(oldRoleMap).filter(r => oldRoleMap[r] === p && !r.toLowerCase().includes('general'));
-    const newR = Object.keys(newRoleMap).filter(r => newRoleMap[r] === p && !r.toLowerCase().includes('general'));
+    const oldR = Object.keys(oldRoleMap).filter(r => oldRoleMap[r] === p && !isExempt(r));
+    const newR = Object.keys(newRoleMap).filter(r => newRoleMap[r] === p && !isExempt(r));
 
     const lost = oldR.filter(r => !newR.includes(r));
     const gained = newR.filter(r => !oldR.includes(r));

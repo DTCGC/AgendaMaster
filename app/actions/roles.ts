@@ -6,13 +6,16 @@
  */
 'use server'
 
-import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/auth-guard'
+import { persistMajorRoles } from '@/lib/roles-logic'
 
 /**
  * Saves all major role assignments for a meeting.
- * Uses a transactional delete-then-create to atomically replace stale assignments.
+ *
+ * Role names outside MAJOR_ROLES are discarded server-side — the write
+ * re-stamps `assignedAt`, so accepting a minor role here would corrupt the
+ * participation-recency data the auto-assignment heuristic depends on.
  *
  * @param meetingId   - Target meeting ID.
  * @param assignments - Array of { roleName, userId } pairs.
@@ -20,20 +23,7 @@ import { requireAdmin } from '@/lib/auth-guard'
 export async function saveAllMajorRoles(meetingId: string, assignments: { roleName: string, userId: string }[]) {
     await requireAdmin();
 
-    const roleNames = assignments.map(a => a.roleName);
-    
-    await db.$transaction([
-        db.roleAssignment.deleteMany({
-            where: { meetingId, roleName: { in: roleNames } }
-        }),
-        db.roleAssignment.createMany({
-            data: assignments.filter(a => !!a.userId).map(a => ({
-                meetingId,
-                roleName: a.roleName,
-                userId: a.userId
-            }))
-        })
-    ]);
+    await persistMajorRoles(meetingId, assignments);
 
     revalidatePath('/admin/roles');
     revalidatePath('/agenda');

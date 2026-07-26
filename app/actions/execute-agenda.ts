@@ -18,6 +18,7 @@ import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { createAgendaSheet, updateAgendaSheet, sendGmailAsUser } from '@/lib/google-api'
 import { getDisplayName, type NameableUser } from '@/lib/user-logic'
+import { BACKUP_SPEAKER } from '@/lib/agenda-logic'
 import { revalidatePath } from 'next/cache'
 
 /**
@@ -69,6 +70,10 @@ function buildRoleMap(
   // Derived roles (same person as another role)
   alias('Comments and Closing Remarks', 'Toastmaster');
   alias('Dismissal', 'Sergeant at Arms');
+
+  // The CSV label carries a colon (row reads "BACKUP SPEAKER: "). Left unmapped
+  // it renders as 'TBD', which is the correct output for an empty standby slot.
+  alias('BACKUP SPEAKER:', BACKUP_SPEAKER);
 
   // Break Time is unstaffed by design. An empty string is the marker for that:
   // populateTemplate() renders it as '-' rather than 'TBD'.
@@ -136,8 +141,16 @@ export async function executeAgendaPipeline(
     // person, and an ADMIN can never hold a role anyway (both the auto-assignment
     // engine and the admin Role Management panel only ever offer MEMBER users).
     // This mirrors the wizard's Attendance List, which is MEMBER-only.
+    //
+    // The Backup Speaker is excluded from the "has a role" test on purpose: the
+    // title carries no duties, so the holder is still an attendee without a role
+    // and belongs in this list. They appear twice on the sheet — once on the
+    // BACKUP SPEAKER line, once here — which is the accurate description.
     const assignedUserIds = new Set(
-      meeting.roleAssignments.map((a: { userId: string | null }) => a.userId).filter(Boolean)
+      meeting.roleAssignments
+        .filter((a: { roleName: string }) => a.roleName !== BACKUP_SPEAKER)
+        .map((a: { userId: string | null }) => a.userId)
+        .filter(Boolean)
     );
     const unassignedNames = allMembers
       .filter((m: { role: string }) => m.role === 'MEMBER')

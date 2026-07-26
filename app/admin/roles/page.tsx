@@ -9,6 +9,7 @@ import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { redirect } from 'next/navigation'
 import RolesForm from './roles-form'
+import { MAJOR_ROLES, BACKUP_SPEAKER } from '@/lib/agenda-logic'
 import { AlertCircle, Calendar as CalendarIcon, ChevronRight } from 'lucide-react'
 
 type RoleAssignment = {
@@ -43,6 +44,21 @@ export default async function RolesPage({
   // Determine which meeting we are currently editing
   const targetMeetingId = params.meetingId || upcomingMeetings[0]?.id;
   const currentMeeting = upcomingMeetings.find((m) => m.id === targetMeetingId) || upcomingMeetings[0];
+
+  // Who was on standby most recently before this meeting? If all three speakers
+  // turned up, that person never spoke and is owed a real speaking slot — this
+  // surfaces the reminder at the exact moment the admin is handing out roles.
+  const previousBackup = currentMeeting
+    ? await db.roleAssignment.findFirst({
+        where: {
+          roleName: BACKUP_SPEAKER,
+          userId: { not: null },
+          meeting: { date: { lt: currentMeeting.date } }
+        },
+        orderBy: { meeting: { date: 'desc' } },
+        include: { user: true, meeting: true }
+      })
+    : null;
 
   // Grab active roster
   const members = await db.user.findMany({
@@ -116,23 +132,34 @@ export default async function RolesPage({
 
                         <RolesForm 
                             meetingId={currentMeeting.id}
-                            initialAssignments={currentMeeting.roleAssignments.reduce((acc: Record<string, string>, curr: RoleAssignment) => {
-                                acc[curr.roleName] = curr.userId || ""
-                                return acc
-                            }, {})}
+                            initialAssignments={currentMeeting.roleAssignments
+                                // Panel-owned roles only — minor roles belong to the Agenda
+                                // Wizard. Seeding the form with them would round-trip them
+                                // back through saveAllMajorRoles and re-stamp their
+                                // assignedAt (see lib/roles-logic.ts).
+                                .filter((curr: RoleAssignment) =>
+                                    MAJOR_ROLES.includes(curr.roleName) || curr.roleName === BACKUP_SPEAKER)
+                                .reduce((acc: Record<string, string>, curr: RoleAssignment) => {
+                                    acc[curr.roleName] = curr.userId || ""
+                                    return acc
+                                }, {})}
                             members={members.map((u) => ({
                                 id: u.id,
                                 firstName: u.firstName,
                                 lastName: u.lastName,
                                 roleAssignments: u.roleAssignments.map((ra) => ({ assignedAt: ra.assignedAt }))
                             }))}
+                            previousBackup={previousBackup?.user ? {
+                                name: `${previousBackup.user.firstName} ${previousBackup.user.lastName}`,
+                                meetingDate: previousBackup.meeting.date.toISOString()
+                            } : null}
                         />
                     </div>
 
                     <div className="bg-white shadow-sm border rounded-xl p-6">
                         <h3 className="font-bold text-lg mb-6 text-gray-800">Participation History</h3>
                         <p className="text-sm text-gray-500 mb-6 border-b pb-4 leading-relaxed">
-                            Members who haven't had a role in a while are prioritized. Lower in the list = Higher availability.
+                            Members who haven&apos;t had a role in a while are prioritized. Lower in the list = Higher availability.
                         </p>
                         
                         <div className="space-y-2 overflow-y-auto max-h-[600px] pr-2">

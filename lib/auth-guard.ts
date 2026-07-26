@@ -21,3 +21,23 @@ export async function requireAdmin() {
   }
   return session
 }
+
+/**
+ * Asserts that the current session belongs to an approved club account —
+ * either a MEMBER or an ADMIN. Throws for PENDING/DELETED accounts and for
+ * callers with no session at all.
+ *
+ * Use this for mutations any club member may legitimately perform (such as
+ * the Toastmaster finalizing a roster), where `requireAdmin` would be too
+ * strict but "publicly callable" is far too loose.
+ *
+ * @returns The authenticated member or admin session.
+ */
+export async function requireMember() {
+  const session = await auth()
+  const role = session?.user?.role
+  if (role !== 'MEMBER' && role !== 'ADMIN') {
+    throw new Error('Unauthorized: club membership required.')
+  }
+  return session
+}

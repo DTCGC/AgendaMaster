@@ -13,6 +13,8 @@
  *
  * Step 3 is what makes the wizard safe to reopen: saved rosters are preserved
  * rather than regenerated, so pressing "Update" never scrambles finalized roles.
+ * Passing `ignoreSavedMinorRoles` skips it, which is the only way to force a
+ * deliberate reshuffle — that is what the wizard's Regenerate button does.
  */
 
 import { db } from './db';
@@ -42,6 +44,22 @@ export const MAJOR_ROLES = [
   "Quizmaster"
 ];
 
+/**
+ * The standby speaker slot.
+ *
+ * Deliberately absent from both MAJOR_ROLES and MINOR_ROLES, because it is a
+ * *title*, not a job: the backup speaker only ever speaks if one of the three
+ * booked speakers drops out. If all three show up, they do not perform at all
+ * and are instead given a real speaking slot at a later meeting.
+ *
+ * Everything downstream must therefore treat the holder as roleless — they stay
+ * eligible for a minor role, stay on the attendance list, and (critically) are
+ * NOT counted as recently active. Counting it would let a member sit backup
+ * twice and be pushed to the back of the priority queue without ever having
+ * spoken.
+ */
+export const BACKUP_SPEAKER = 'Backup Speaker';
+
 /** Roles permanently assigned to specific people per club standing rules. */
 export const FIXED_ROLES = {
   "Business Meeting": "Andrew",
@@ -52,10 +70,17 @@ export const FIXED_ROLES = {
  * Runs the heuristic auto-assignment algorithm for a given meeting.
  *
  * @param meetingId - The meeting to generate assignments for.
+ * @param options   - `ignoreSavedMinorRoles` discards the existing roster and
+ *                    reshuffles from scratch (the wizard's Regenerate button).
  * @returns Object containing `assignments` (role→user map), `unassigned` (leftover members),
- *          and `preAssignedMajor` (admin-set major roles with user data attached).
+ *          `preAssignedMajor` (admin-set major roles with user data attached), and
+ *          `backupSpeaker` (the standby, who is counted as roleless throughout).
  */
-export async function getAutoAssignments(meetingId: string): Promise<AutoAssignmentResult> {
+export async function getAutoAssignments(
+  meetingId: string,
+  options?: { ignoreSavedMinorRoles?: boolean }
+): Promise<AutoAssignmentResult> {
+  const ignoreSavedMinorRoles = options?.ignoreSavedMinorRoles === true;
   // Fetch all approved members (MEMBER role only; ADMINs are excluded from auto-assignment)
   const activeUsers = await db.user.findMany({
     where: {
@@ -63,6 +88,8 @@ export async function getAutoAssignments(meetingId: string): Promise<AutoAssignm
     },
     include: {
       roleAssignments: {
+        // Standby duty is not participation — see BACKUP_SPEAKER above.
+        where: { roleName: { not: BACKUP_SPEAKER } },
         orderBy: {
           assignedAt: 'desc' // Most recent first
         },
@@ -104,18 +131,30 @@ export async function getAutoAssignments(meetingId: string): Promise<AutoAssignm
     assignments[role] = null;
   }
 
-  for (const a of existingAssignments) {
-    if (!a.userId || !MINOR_ROLES.includes(a.roleName)) continue;
-    const saved = usersById.get(a.userId);
-    // Skip assignments pointing at users who are no longer active members —
-    // leaving the slot empty lets the heuristic below fill it.
-    if (saved) assignments[a.roleName] = saved;
+  if (!ignoreSavedMinorRoles) {
+    for (const a of existingAssignments) {
+      if (!a.userId || !MINOR_ROLES.includes(a.roleName)) continue;
+      const saved = usersById.get(a.userId);
+      // Skip assignments pointing at users who are no longer active members —
+      // leaving the slot empty lets the heuristic below fill it.
+      if (saved) assignments[a.roleName] = saved;
+    }
   }
 
   // Anyone already holding a role for this meeting — an admin-set major role or
   // a restored minor role — is out of the running for the remaining empty slots.
+  // The backup speaker is the one exception: the whole point of the title is
+  // that it leaves them free to take a minor role as well.
+  //
+  // When reshuffling, the saved minor roles are being thrown away — so their
+  // holders must be released back into the pool here too. Skipping this would
+  // exclude nearly the whole club from their own reshuffle and return a roster
+  // of empty slots.
   const usersWithExistingRole = new Set(
-    existingAssignments.filter((a) => a.userId).map((a) => a.userId)
+    existingAssignments
+      .filter((a) => a.userId && a.roleName !== BACKUP_SPEAKER)
+      .filter((a) => !(ignoreSavedMinorRoles && MINOR_ROLES.includes(a.roleName)))
+      .map((a) => a.userId)
   );
 
   const eligibleUsers = userStats
@@ -135,9 +174,22 @@ export async function getAutoAssignments(meetingId: string): Promise<AutoAssignm
 
   const unassigned = eligibleUsers.slice(userIndex);
 
+  // Resolved separately from `assignments` so no caller can mistake it for a
+  // real role slot. Note the holder deliberately remains in `unassigned` too.
+  const backupRow = existingAssignments.find((a) => a.roleName === BACKUP_SPEAKER && a.userId);
+  const backupUser = backupRow ? activeUsers.find((u) => u.id === backupRow.userId) : undefined;
+
   return {
     assignments,
     unassigned,
+    backupSpeaker: backupUser
+      ? {
+          id: backupUser.id,
+          firstName: backupUser.firstName,
+          lastName: backupUser.lastName,
+          displayName: getDisplayName(backupUser, activeUsers)
+        }
+      : null,
     preAssignedMajor: existingAssignments.filter((a) => MAJOR_ROLES.includes(a.roleName)).map((a) => {
         // Find the user object from the activeUsers list we already fetched
         const u = activeUsers.find((user) => user.id === a.userId);

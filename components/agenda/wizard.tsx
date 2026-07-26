@@ -17,11 +17,11 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { AlertCircle, CheckCircle2, ExternalLink, Copy, Loader2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ExternalLink, Copy, Loader2, RefreshCw } from 'lucide-react'
 import TiptapEditor from './tiptap-editor'
-import { fetchRoleAssignments, formatDraft, saveFinalAgenda } from '@/app/actions/agenda'
+import { fetchRoleAssignments, formatDraft, saveFinalAgenda, regenerateRoster } from '@/app/actions/agenda'
 import { executeAgendaPipeline } from '@/app/actions/execute-agenda'
-import { MAJOR_ROLES } from '@/lib/agenda-logic'
+import { MAJOR_ROLES, BACKUP_SPEAKER } from '@/lib/agenda-logic'
 import type { UserWithDisplayName, PreAssignedMajorRole } from '@/lib/types'
 
 // Empty default — most Toastmasters write the email from scratch each week
@@ -41,14 +41,34 @@ function WizardContent({ meetingId }: { meetingId: string }) {
   
   // Roles Data
   const [loadingRoles, setLoadingRoles] = useState(true)
-  const [minorRoles, setMinorRoles] = useState<Record<string, UserWithDisplayName | null>>({})
+  // Every editable role slot — minor AND major. Major roles are only writable
+  // when `allowMajorRoleEdit` is on, but they live in the same map so that
+  // conflict detection and attendance derivation see one unified picture.
+  const [roleSlots, setRoleSlots] = useState<Record<string, UserWithDisplayName | null>>({})
   // Full club roster (deduped, sorted). The Attendance List is derived from this
   // rather than stored, so it can never drift out of sync with the role dropdowns.
   const [roster, setRoster] = useState<UserWithDisplayName[]>([])
   const [preAssigned, setPreAssigned] = useState<PreAssignedMajorRole[]>([])
 
+  // Held OUTSIDE roleSlots on purpose. Standby duty confers no obligations, so
+  // the holder must stay eligible for a minor role and stay on the Attendance
+  // List — keeping it out of the map means every derivation below ignores it
+  // automatically, instead of needing an exception in each one.
+  const [backupSpeaker, setBackupSpeaker] = useState<UserWithDisplayName | null>(null)
+
+  // Server-side truth for the major roles, captured at load. Toggling the
+  // override back OFF restores these, so a discarded edit disappears from the
+  // screen instead of lingering as a change that will never be saved.
+  const majorRoleBaseline = useRef<Record<string, UserWithDisplayName | null>>({})
+  const backupSpeakerBaseline = useRef<UserWithDisplayName | null>(null)
+
   const [allowDoubleRoles, setAllowDoubleRoles] = useState(false)
+  // Guard rail, not a state mirror: major roles are admin territory, so this
+  // always starts OFF and must be deliberately switched on each session.
+  const [allowMajorRoleEdit, setAllowMajorRoleEdit] = useState(false)
   const [clipboardStatus, setClipboardStatus] = useState('Copy to Clipboard')
+  const [confirmingRegen, setConfirmingRegen] = useState(false)
+  const [isRegenerating, setIsRegenerating] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [conflictError, setConflictError] = useState<string | null>(null)
 
@@ -58,7 +78,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
   // Deriving this (instead of pushing/popping a separate array) is what keeps
   // double-role holders off the list when one of their two roles is reassigned.
   const assignedUserIds = new Set<string>()
-  Object.values(minorRoles).forEach(u => { if (u) assignedUserIds.add(u.id) })
+  Object.values(roleSlots).forEach(u => { if (u) assignedUserIds.add(u.id) })
   preAssigned.forEach(a => { if (a.userId) assignedUserIds.add(a.userId) })
   const unassigned = roster.filter(u => !assignedUserIds.has(u.id))
 
@@ -90,13 +110,23 @@ function WizardContent({ meetingId }: { meetingId: string }) {
             
             const editableRoles = { ...data.assignments };
             const lockedRoles: PreAssignedMajorRole[] = [];
-            
+
+            const majorByRole = new Map<string, UserWithDisplayName | null>();
             data.preAssignedMajor.forEach((a) => {
                 if (a.roleName === 'Toastmaster') {
                     lockedRoles.push(a);
                 } else {
-                    editableRoles[a.roleName] = a.user;
+                    majorByRole.set(a.roleName, a.user);
                 }
+            });
+
+            // Surface EVERY major role, not only the ones an admin has filled in.
+            // Walking MAJOR_ROLES (rather than the assignment rows) keeps the
+            // on-screen order stable and turns an empty Speaker 3 into a slot the
+            // Toastmaster can fill, instead of a row that never renders.
+            MAJOR_ROLES.forEach((role) => {
+                if (role === 'Toastmaster') return;  // locked — rendered from lockedRoles
+                editableRoles[role] = majorByRole.get(role) ?? null;
             });
 
             // Roster = everyone the server knows about: the unassigned pool plus
@@ -125,7 +155,16 @@ function WizardContent({ meetingId }: { meetingId: string }) {
             });
             if (hasDoubles) setAllowDoubleRoles(true)
 
-            setMinorRoles(editableRoles)
+            // Snapshot the major roles exactly as the server reported them.
+            const baseline: Record<string, UserWithDisplayName | null> = {};
+            Object.entries(editableRoles).forEach(([role, u]) => {
+                if (MAJOR_ROLES.includes(role)) baseline[role] = u;
+            });
+            majorRoleBaseline.current = baseline;
+            backupSpeakerBaseline.current = data.backupSpeaker;
+
+            setBackupSpeaker(data.backupSpeaker)
+            setRoleSlots(editableRoles)
             setRoster(fullRoster)
             setPreAssigned(lockedRoles)
             setLoadingRoles(false)
@@ -139,7 +178,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
   // --- Double Role Cleansing ---
   // When "Allow Multiple Roles" is toggled OFF, clear any duplicate assignment so
   // each member holds at most one role. Displaced members reappear on the
-  // Attendance List automatically, since that list is derived from minorRoles.
+  // Attendance List automatically, since that list is derived from roleSlots.
   const wasAllowingDoubleRoles = useRef(allowDoubleRoles);
   useEffect(() => {
     const toggledOff = wasAllowingDoubleRoles.current && !allowDoubleRoles;
@@ -150,7 +189,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
     // Toastmaster has even had a chance to see them.
     if (!toggledOff) return;
 
-    setMinorRoles(prev => {
+    setRoleSlots(prev => {
         const next = { ...prev };
         const alreadyAssigned = new Set<string>();
 
@@ -159,14 +198,26 @@ function WizardContent({ meetingId }: { meetingId: string }) {
             if (a.userId) alreadyAssigned.add(a.userId);
         });
 
-        // Major roles are resolved before minor ones so that a member holding
-        // both keeps the MAJOR role. Clearing the major instead would delete an
-        // admin's deliberate assignment on the next save.
         const roleKeys = Object.keys(next);
-        const orderedKeys = [
-            ...roleKeys.filter(r => MAJOR_ROLES.includes(r)),
-            ...roleKeys.filter(r => !MAJOR_ROLES.includes(r))
-        ];
+        const majorKeys = roleKeys.filter(r => MAJOR_ROLES.includes(r));
+        const minorKeys = roleKeys.filter(r => !MAJOR_ROLES.includes(r));
+
+        let orderedKeys: string[];
+        if (allowMajorRoleEdit) {
+            // Majors are resolved before minors so a member holding both keeps
+            // the MAJOR role — clearing the major instead would delete an
+            // admin's deliberate assignment on the next save.
+            orderedKeys = [...majorKeys, ...minorKeys];
+        } else {
+            // Majors are locked, so they cannot be cleared: this save will not
+            // write them at all, and blanking one on screen would show a change
+            // that never reaches the database. Seed them as taken instead.
+            majorKeys.forEach(r => {
+                const u = next[r];
+                if (u) alreadyAssigned.add(u.id);
+            });
+            orderedKeys = minorKeys;
+        }
 
         let changed = false;
         orderedKeys.forEach(role => {
@@ -182,7 +233,32 @@ function WizardContent({ meetingId }: { meetingId: string }) {
 
         return changed ? next : prev;
     });
-  }, [allowDoubleRoles, preAssigned]);
+  }, [allowDoubleRoles, preAssigned, allowMajorRoleEdit]);
+
+  // --- Major Role Override Revert ---
+  // Switching the override back OFF discards any unsaved major-role edits by
+  // restoring the values loaded from the server. Without this the screen would
+  // keep showing an edit that `saveFinalAgenda` has been told to ignore.
+  const wasAllowingMajorEdit = useRef(allowMajorRoleEdit);
+  useEffect(() => {
+    const toggledOff = wasAllowingMajorEdit.current && !allowMajorRoleEdit;
+    wasAllowingMajorEdit.current = allowMajorRoleEdit;
+    if (!toggledOff) return;
+
+    setBackupSpeaker(backupSpeakerBaseline.current);
+    setRoleSlots(prev => {
+        const next = { ...prev };
+        let changed = false;
+        Object.entries(majorRoleBaseline.current).forEach(([role, user]) => {
+            const current = next[role];
+            if ((current?.id || null) !== (user?.id || null)) {
+                next[role] = user;
+                changed = true;
+            }
+        });
+        return changed ? next : prev;
+    });
+  }, [allowMajorRoleEdit]);
 
   useEffect(() => {
     if (emailDraft) {
@@ -210,13 +286,17 @@ function WizardContent({ meetingId }: { meetingId: string }) {
    * Enforces single-assignment constraint unless "Allow Multiple Roles" is on.
    */
   const handleRoleChange = (roleName: string, userId: string) => {
+    // Locked slots render as plain text, so this is unreachable through the UI.
+    // It exists so the rule holds even if a stale render is interacted with.
+    if (MAJOR_ROLES.includes(roleName) && !allowMajorRoleEdit) return;
+
     const selectedUser = roster.find(u => u.id === userId) || null;
 
     if (!allowDoubleRoles && selectedUser) {
-        const hasOtherMinor = Object.entries(minorRoles).some(([r, u]) => r !== roleName && u?.id === selectedUser.id);
-        const hasMajor = preAssigned.some(a => a.userId === selectedUser.id);
-        
-        if (hasOtherMinor || hasMajor) {
+        const hasOtherRole = Object.entries(roleSlots).some(([r, u]) => r !== roleName && u?.id === selectedUser.id);
+        const hasLockedRole = preAssigned.some(a => a.userId === selectedUser.id);
+
+        if (hasOtherRole || hasLockedRole) {
             setConflictError(`${selectedUser.displayName} already holds a role. Enable 'Multiple Role Override' to bypass.`)
             setTimeout(() => setConflictError(null), 5000)
             return;
@@ -224,17 +304,51 @@ function WizardContent({ meetingId }: { meetingId: string }) {
     }
 
     // The Attendance List recomputes itself from this — no manual pool bookkeeping.
-    setMinorRoles(prev => ({
+    setRoleSlots(prev => ({
         ...prev,
         [roleName]: selectedUser
     }));
+  }
+
+  /**
+   * Discards the current minor-role roster and re-runs the heuristic.
+   *
+   * Only minor roles move: major roles, the locked Toastmaster and the Backup
+   * Speaker are left exactly as they are. The result lives in state until the
+   * Toastmaster saves, so an unwanted shuffle can be abandoned by leaving.
+   */
+  const handleRegenerate = async () => {
+    setConfirmingRegen(false)
+    setIsRegenerating(true)
+    try {
+        const data = await regenerateRoster(meetingId)
+        setRoleSlots(prev => {
+            const next = { ...prev }
+            // data.assignments only ever contains MINOR_ROLES keys.
+            Object.entries(data.assignments).forEach(([role, u]) => { next[role] = u })
+            return next
+        })
+        // A fresh shuffle never doubles anyone up, so drop the override to
+        // match — leaving it on would imply conflicts that no longer exist.
+        setAllowDoubleRoles(false)
+    } catch (e) {
+        console.error("Failed to regenerate roster:", e)
+        setConflictError('Could not regenerate the roster. Please try again.')
+        setTimeout(() => setConflictError(null), 5000)
+    } finally {
+        setIsRegenerating(false)
+    }
   }
 
   /** Quick save for Step 3 update mode — saves roles and silently updates the sheet. */
   const handleFinish = async () => {
     setIsSaving(true);
     try {
-        await saveFinalAgenda(meetingId, minorRoles);
+        await saveFinalAgenda(
+            meetingId,
+            { ...roleSlots, [BACKUP_SPEAKER]: backupSpeaker },
+            { includeMajorRoles: allowMajorRoleEdit }
+        );
         // If a sheet already exists, silently update it with the new roles
         try {
           await executeAgendaPipeline(
@@ -260,7 +374,23 @@ function WizardContent({ meetingId }: { meetingId: string }) {
 
     try {
       // Save the roles first
-      await saveFinalAgenda(meetingId, minorRoles)
+      await saveFinalAgenda(
+        meetingId,
+        { ...roleSlots, [BACKUP_SPEAKER]: backupSpeaker },
+        { includeMajorRoles: allowMajorRoleEdit }
+      )
+
+      // Those major roles are now the server's truth, so re-baseline them.
+      // Otherwise switching the override off after a save would "revert" the
+      // screen to values that no longer exist in the database.
+      if (allowMajorRoleEdit) {
+        const baseline: Record<string, UserWithDisplayName | null> = {};
+        Object.entries(roleSlots).forEach(([role, u]) => {
+          if (MAJOR_ROLES.includes(role)) baseline[role] = u;
+        });
+        majorRoleBaseline.current = baseline;
+        backupSpeakerBaseline.current = backupSpeaker;
+      }
 
       // Execute the pipeline
       const result = await executeAgendaPipeline(
@@ -322,7 +452,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                   const u = major.user;
                   holder = u?.displayName || "TBD";
               } else {
-                  const user = minorRoles[roleName];
+                  const user = roleSlots[roleName];
                   if (user) holder = user.displayName;
               }
           }
@@ -436,17 +566,29 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         {/* Step 3: Roles */}
         {step === 3 && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
-             <div className="flex justify-between items-center">
+             <div className="flex flex-wrap justify-between items-center gap-3">
                  <h2 className="text-xl font-bold border-l-4 pl-3 border-brand-loyal-blue">Role Assignments</h2>
-                 <div className="flex items-center text-sm bg-gray-100 p-2 rounded cursor-pointer border border-gray-200" onClick={() => setAllowDoubleRoles(!allowDoubleRoles)}>
-                     <span className={allowDoubleRoles ? 'text-brand-true-maroon font-bold mr-2' : 'text-gray-600 font-medium mr-2'}>Allow Multiple Roles</span>
-                     <input type="checkbox" className="accent-brand-true-maroon w-4 h-4 cursor-pointer" checked={allowDoubleRoles} readOnly />
+                 <div className="flex items-center gap-2">
+                     <div className="flex items-center text-sm bg-gray-100 p-2 rounded cursor-pointer border border-gray-200" onClick={() => setAllowDoubleRoles(!allowDoubleRoles)}>
+                         <span className={allowDoubleRoles ? 'text-brand-true-maroon font-bold mr-2' : 'text-gray-600 font-medium mr-2'}>Allow Multiple Roles</span>
+                         <input type="checkbox" className="accent-brand-true-maroon w-4 h-4 cursor-pointer" checked={allowDoubleRoles} readOnly />
+                     </div>
+                     <div className="flex items-center text-sm bg-gray-100 p-2 rounded cursor-pointer border border-gray-200" onClick={() => setAllowMajorRoleEdit(!allowMajorRoleEdit)}>
+                         <span className={allowMajorRoleEdit ? 'text-brand-true-maroon font-bold mr-2' : 'text-gray-600 font-medium mr-2'}>Edit Major Roles</span>
+                         <input type="checkbox" className="accent-brand-true-maroon w-4 h-4 cursor-pointer" checked={allowMajorRoleEdit} readOnly />
+                     </div>
                  </div>
              </div>
 
              {allowDoubleRoles && (
                  <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm border border-red-200 shadow-sm font-medium">
                      <strong>Warning:</strong> Double roles are enabled. Automatic role shuffle is paused. You must manually assign attendees to resolve conflicts.
+                 </div>
+             )}
+
+             {allowMajorRoleEdit && (
+                 <div className="bg-amber-50 text-amber-800 p-4 rounded-lg text-sm border border-amber-200 shadow-sm font-medium">
+                     <strong>Heads up:</strong> Major roles are unlocked. Your changes overwrite what the executive team assigned — switch this back off to discard them.
                  </div>
              )}
 
@@ -462,9 +604,43 @@ function WizardContent({ meetingId }: { meetingId: string }) {
              ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
-                        <h3 className="font-bold text-gray-700 mb-4 bg-gray-100 p-2 rounded text-sm">Minor Roles</h3>
+                        <h3 className="font-bold text-gray-700 mb-4 bg-gray-100 p-2 rounded text-sm flex justify-between items-center gap-2">
+                            <span>Minor Roles</span>
+                            <button
+                                onClick={() => setConfirmingRegen(true)}
+                                disabled={isRegenerating || confirmingRegen}
+                                title="Discard this roster and reshuffle by participation history"
+                                className="flex items-center gap-1.5 text-[11px] font-bold text-brand-loyal-blue bg-white border border-gray-200 px-2 py-1 rounded hover:bg-brand-loyal-blue/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                <RefreshCw size={12} className={isRegenerating ? 'animate-spin' : ''} />
+                                {isRegenerating ? 'Shuffling...' : 'Regenerate'}
+                            </button>
+                        </h3>
+
+                        {confirmingRegen && (
+                            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg animate-in fade-in slide-in-from-top-1 duration-200">
+                                <p className="text-xs text-amber-900 leading-relaxed mb-3">
+                                    Reshuffle all minor roles from participation history? <strong>The current minor-role assignments will be discarded.</strong> Major roles, the Toastmaster and the Backup Speaker are left alone, and nothing is saved until you finish.
+                                </p>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleRegenerate}
+                                        className="text-[11px] font-bold bg-brand-true-maroon text-white px-3 py-1.5 rounded hover:bg-opacity-90 transition-colors"
+                                    >
+                                        Yes, reshuffle
+                                    </button>
+                                    <button
+                                        onClick={() => setConfirmingRegen(false)}
+                                        className="text-[11px] font-bold bg-white text-gray-600 border border-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="space-y-2">
-                             {Object.entries(minorRoles)
+                             {Object.entries(roleSlots)
                                  .filter(([role]) => !MAJOR_ROLES.includes(role))
                                  .map(([role, user]) => {
                                  // Double roles on: any member is selectable. Off: only
@@ -495,12 +671,26 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                         <div>
                             <h3 className="font-bold text-gray-700 mb-4 bg-brand-true-maroon text-white p-2 rounded text-sm flex justify-between">
                                 <span>Major Roles</span>
-                                <span className="text-[10px] font-normal opacity-75">Admin/TM Entry</span>
+                                <span className="text-[10px] font-normal opacity-75">{allowMajorRoleEdit ? 'Unlocked' : 'Admin Entry'}</span>
                             </h3>
                             <div className="space-y-3 text-sm">
-                                {Object.entries(minorRoles)
+                                {Object.entries(roleSlots)
                                     .filter(([role]) => MAJOR_ROLES.includes(role))
                                     .map(([role, user]) => {
+                                    // Locked by default: these are the executive team's
+                                    // picks, and an accidental dropdown nudge here is a
+                                    // much bigger deal than one on a minor role.
+                                    if (!allowMajorRoleEdit) {
+                                        return (
+                                        <div key={role} className="flex justify-between items-center border-b pb-2 last:border-0">
+                                            <span className="font-semibold text-gray-600">{role}</span>
+                                            <span className={`font-black px-2 py-0.5 rounded ${user ? 'text-brand-loyal-blue bg-brand-loyal-blue/5' : 'text-gray-400 bg-gray-50'}`}>
+                                                {user ? user.displayName : 'TBD'}
+                                            </span>
+                                        </div>
+                                        )
+                                    }
+
                                     const options = allowDoubleRoles
                                         ? roster
                                         : [...unassigned, ...(user ? [user] : [])].sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -508,9 +698,9 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                     return (
                                     <div key={role} className="flex justify-between items-center border-b pb-2 last:border-0">
                                         <span className="font-semibold text-gray-600">{role}</span>
-                                        <select 
-                                           className={`px-2 py-1 rounded text-xs border bg-white focus:ring-2 focus:ring-brand-true-maroon outline-none transition-shadow ${user ? 'bg-brand-happy-yellow/10 border-brand-happy-yellow/50' : 'bg-red-50 border-red-200 border-dashed'}`} 
-                                           value={user?.id || ""} 
+                                        <select
+                                           className={`px-2 py-1 rounded text-xs border bg-white focus:ring-2 focus:ring-brand-true-maroon outline-none transition-shadow ${user ? 'bg-brand-happy-yellow/10 border-brand-happy-yellow/50' : 'bg-red-50 border-red-200 border-dashed'}`}
+                                           value={user?.id || ""}
                                            onChange={(e) => handleRoleChange(role, e.target.value)}
                                         >
                                             <option value="">-- UNASSIGNED --</option>
@@ -528,6 +718,33 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                         <span className="text-brand-loyal-blue font-black bg-brand-loyal-blue/5 px-2 py-0.5 rounded">{a.user ? `${a.user.firstName} ${a.user.lastName}` : "TBD"}</span>
                                     </div>
                                 ))}
+                            </div>
+
+                            {/* Standby slot. Any member is selectable regardless of the
+                                double-role setting, because holding it is not holding a role. */}
+                            <div className="mt-4 pt-3 border-t border-dashed border-gray-200">
+                                <div className="flex justify-between items-center">
+                                    <span className="font-semibold text-gray-600 text-sm">{BACKUP_SPEAKER}</span>
+                                    {allowMajorRoleEdit ? (
+                                        <select
+                                            className={`px-2 py-1 rounded text-xs border bg-white focus:ring-2 focus:ring-brand-true-maroon outline-none transition-shadow ${backupSpeaker ? 'bg-brand-happy-yellow/10 border-brand-happy-yellow/50' : 'bg-gray-50 border-gray-200 border-dashed'}`}
+                                            value={backupSpeaker?.id || ""}
+                                            onChange={(e) => setBackupSpeaker(roster.find(u => u.id === e.target.value) || null)}
+                                        >
+                                            <option value="">-- UNASSIGNED --</option>
+                                            {roster.map((u) => (
+                                                <option key={u.id} value={u.id}>{u.displayName}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <span className={`font-black px-2 py-0.5 rounded text-sm ${backupSpeaker ? 'text-brand-loyal-blue bg-brand-loyal-blue/5' : 'text-gray-400 bg-gray-50'}`}>
+                                            {backupSpeaker ? backupSpeaker.displayName : 'TBD'}
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-[11px] text-gray-400 mt-1.5 leading-snug">
+                                    Standby only — still counts as roleless, so they remain eligible for a minor role and stay on the attendance list.
+                                </p>
                             </div>
                         </div>
 
