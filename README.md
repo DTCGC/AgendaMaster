@@ -96,6 +96,13 @@ Each test file gets its own throwaway SQLite database in the OS temp directory, 
 `tests/helpers/env.ts` and torn down on exit — `dev.db` is never touched. Node runs each test
 file in a separate process, so the databases cannot collide.
 
+`npm test` goes through `scripts/run-tests.mjs`, which enumerates the test files and passes
+them to `tsx` explicitly. That indirection is deliberate: `node --test` only gained glob
+expansion in Node 22 and the pipeline pins Node 20, while `cmd.exe` expands no globs at all —
+so neither a quoted nor an unquoted pattern works on both. Passing explicit paths sidesteps the
+question, and keeps the runner free to stay on Node 20 (required, since `better-sqlite3` is
+compiled there and rsynced to the Droplet, so its ABI must match).
+
 What is covered (all of it invisible-when-broken behaviour, which is why it is pinned):
 
 | File | Guards |
