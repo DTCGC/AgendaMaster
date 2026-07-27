@@ -1,0 +1,49 @@
+# Dependabot keeps dependency drift to small, reviewable PRs that the existing
+# deploy workflow already gates (npm ci -> tests -> build). The point is to find
+# out a package broke something in a pull request rather than on a Friday.
+version: 2
+
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+    open-pull-requests-limit: 5
+    groups:
+      # One batched PR for routine same-major drift. Majors are deliberately
+      # left ungrouped so each arrives as its own reviewable PR.
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # @types/node must track the Node actually running on the runner and the
+      # Droplet, not npm's latest. Bump it by hand as part of a Node upgrade.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # better-sqlite3 is a native module. npm ci recompiles it on the runner
+      # every deploy, so same-major bumps are fine, but a major could drop
+      # support for the Droplet's Node or change what the Prisma adapter uses.
+      - dependency-name: "better-sqlite3"
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 is the Go rewrite and ESLint 10 is a config-format break.
+      # Both are opt-in migrations, not routine upgrades.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
