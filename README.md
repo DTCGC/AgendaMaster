@@ -88,7 +88,7 @@ npm test
 
 Tests use **Node's built-in test runner** (`node:test`) executed through `tsx`. This is a
 deliberate choice over Vitest or Jest: the deploy pipeline rsyncs `node_modules` wholesale to
-the Droplet after a plain `npm install`, so any test framework added as a dependency would ship
+the Droplet after `npm ci`, so any test framework added as a dependency would ship
 to production. `tsx` is already a dependency and already runs there for the seed script, so this
 setup adds **no new packages and no production surface**.
 
