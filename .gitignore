@@ -53,3 +53,6 @@ next-env.d.ts
 test_*.ts
 test_*.js
 test*.js
+
+# local agent tooling — holds throwaway git worktrees, never commit
+.claude/
