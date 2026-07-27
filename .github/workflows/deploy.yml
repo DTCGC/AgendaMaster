@@ -18,7 +18,11 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies
-        run: npm install
+        # `npm ci` (not `npm install`) so the runner builds from the committed
+        # lockfile exactly. `npm install` may silently resolve newer versions and
+        # rewrite the lock, which would mean the artifact rsynced to the Droplet
+        # is not the dependency set that was reviewed and tested.
+        run: npm ci
 
       - name: Generate Prisma Client
         run: npx prisma generate
