@@ -34,6 +34,13 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "eslint"
         update-types: ["version-update:semver-major"]
+      # googleapis majors regenerate the API surface for Sheets, Gmail and
+      # Drive. A break there can be a runtime failure in agenda generation or
+      # delivery that the TypeScript pass does not catch, and it is the one
+      # integration tied to an externally verified OAuth consent screen. Bump
+      # it deliberately, with the agenda flow exercised afterwards.
+      - dependency-name: "googleapis"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
