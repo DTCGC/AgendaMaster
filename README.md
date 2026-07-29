@@ -97,11 +97,10 @@ Each test file gets its own throwaway SQLite database in the OS temp directory, 
 file in a separate process, so the databases cannot collide.
 
 `npm test` goes through `scripts/run-tests.mjs`, which enumerates the test files and passes
-them to `tsx` explicitly. That indirection is deliberate: `node --test` only gained glob
-expansion in Node 22 and the pipeline pins Node 20, while `cmd.exe` expands no globs at all —
-so neither a quoted nor an unquoted pattern works on both. Passing explicit paths sidesteps the
-question, and keeps the runner free to stay on Node 20 (required, since `better-sqlite3` is
-compiled there and rsynced to the Droplet, so its ABI must match).
+them to `tsx` explicitly. That indirection is deliberate: `cmd.exe` expands no globs, so an
+unquoted pattern fails on Windows, while a quoted one depends on the runner's Node being new
+enough to expand it itself (glob support landed in Node 22). Passing explicit paths works
+everywhere and keeps the test command independent of the pinned Node version.
 
 What is covered (all of it invisible-when-broken behaviour, which is why it is pinned):
 

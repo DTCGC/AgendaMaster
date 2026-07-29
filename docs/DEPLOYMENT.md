@@ -35,7 +35,7 @@ ssh-keygen -t ed25519 -C "agendamaster-deploy" -f ./agendamaster_deploy
 # 1. Update and install Node.js (via NVM)
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 source ~/.bashrc
-nvm install 20
+nvm install 24
 
 # 2. Install PM2 and Git
 npm install -g pm2

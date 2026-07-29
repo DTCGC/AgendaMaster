@@ -3,16 +3,16 @@
  *
  * Exists to remove two portability variables that bit the CI runner:
  *
- *   1. `node --test` only learned to expand glob patterns in Node 22. The
- *      pipeline pins Node 20, where a quoted "tests/ **\/*.test.ts" is taken
- *      literally and reported as a missing file.
+ *   1. `node --test` only learned to expand glob patterns in Node 22, so a
+ *      quoted "tests/ **\/*.test.ts" is taken literally and reported as a
+ *      missing file on any older runner.
  *   2. cmd.exe does not expand globs at all, so leaving the pattern unquoted
  *      would fix CI and break Windows.
  *
- * Enumerating the files here settles both, and keeps the runner Node version
- * free to stay at 20 — which it must, because better-sqlite3 is compiled during
- * `npm install` on the runner and then rsynced, so its ABI has to match the
- * Node running on the Droplet.
+ * Enumerating the files here settles both and decouples the test command from
+ * the pinned Node version — which matters, because that version is not chosen
+ * freely: better-sqlite3 is compiled during `npm ci` on the runner and then
+ * rsynced, so its ABI has to match the Node running on the Droplet.
  *
  * tsx is invoked through its .mjs entry with the current node binary rather
  * than via node_modules/.bin, because Node refuses to spawn a .cmd shim
