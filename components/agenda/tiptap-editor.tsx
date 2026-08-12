@@ -3,7 +3,7 @@
  *
  * Provides a WYSIWYG editing experience for the Agenda Wizard's email draft
  * and the admin Mass Broadcast panel. Built on Tiptap/ProseMirror with
- * explicit BulletList and OrderedList extensions for reliable list rendering.
+ * StarterKit's list extensions configured to carry Tailwind list classes.
  *
  * The `initialized` ref prevents content from being overwritten when the
  * component re-renders after localStorage hydration on the client.
@@ -12,9 +12,6 @@
 
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import BulletList from '@tiptap/extension-bullet-list'
-import OrderedList from '@tiptap/extension-ordered-list'
-import ListItem from '@tiptap/extension-list-item'
 import { Bold, Italic, Strikethrough, List, ListOrdered } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -31,22 +28,24 @@ export default function TiptapEditor({
 
   const editor = useEditor({
     extensions: [
+      // The list classes are configured through StarterKit rather than by
+      // disabling its lists and re-adding them from '@tiptap/extension-bullet-list'
+      // and friends. Those packages were never declared in package.json: they
+      // only ever resolved because npm happened to hoist StarterKit's own
+      // dependencies to the top of node_modules, and tiptap 3.29.2 nests them
+      // instead — which broke the build. StarterKit takes the same options.
       StarterKit.configure({
-        bulletList: false, // Override to use explicit extensions
-        orderedList: false,
-        listItem: false,
-      }),
-      BulletList.configure({
-        HTMLAttributes: {
-          class: 'list-disc ml-4',
+        bulletList: {
+          HTMLAttributes: {
+            class: 'list-disc ml-4',
+          },
+        },
+        orderedList: {
+          HTMLAttributes: {
+            class: 'list-decimal ml-4',
+          },
         },
       }),
-      OrderedList.configure({
-        HTMLAttributes: {
-          class: 'list-decimal ml-4',
-        },
-      }),
-      ListItem,
     ],
     content: content,
     immediatelyRender: false,
