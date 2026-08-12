@@ -38,18 +38,41 @@ async function main() {
       },
     });
     console.log('✓ Seeded "Regular" Meeting Template from CSV.')
-  } else if (existingRegular.schemaStructure.includes('Feadback')) {
-    // Repair the legacy "General Feadback" typo baked into already-seeded
-    // templates. The CSV file is corrected, but the seed is idempotent and
-    // never overwrites an existing template — so older DBs keep the typo in
-    // their stored schemaStructure until this targeted repair runs.
-    await prisma.meetingTemplate.update({
-      where: { id: existingRegular.id },
-      data: { schemaStructure: existingRegular.schemaStructure.replace(/Feadback/g, 'Feedback') },
-    });
-    console.log('✓ Repaired "Feadback" typo in existing Regular template.')
   } else {
-    console.log('• Regular template already exists, skipping.')
+    // Targeted repairs for already-seeded templates. The seed is idempotent and
+    // never wholesale-overwrites an existing template — a live DB may carry
+    // hand-edits worth keeping — so corrections made to the CSV file have to be
+    // replayed onto the stored schemaStructure one at a time. Each repair is
+    // written to be a no-op once applied, so this stays safe to run every deploy.
+    let repaired = existingRegular.schemaStructure;
+    const applied: string[] = [];
+
+    // Legacy "General Feadback" typo.
+    if (repaired.includes('Feadback')) {
+      repaired = repaired.replace(/Feadback/g, 'Feedback');
+      applied.push('"Feadback" typo');
+    }
+
+    // Dismissal is now permanently Franklin's, like the other hard-coded names
+    // baked into the template (Roles For Next Meeting → John, Business Meeting
+    // → Andrew). Older templates carry the NAME placeholder there — and the
+    // rule is permanent, so overwrite whatever the cell holds. The lookahead is
+    // what makes the repair a no-op once it has already been applied.
+    const withFranklin = repaired.replace(/,Dismissal,,(?!Franklin,)[^,]*,/g, ',Dismissal,,Franklin,');
+    if (withFranklin !== repaired) {
+      repaired = withFranklin;
+      applied.push('Dismissal → Franklin');
+    }
+
+    if (applied.length > 0) {
+      await prisma.meetingTemplate.update({
+        where: { id: existingRegular.id },
+        data: { schemaStructure: repaired },
+      });
+      console.log(`✓ Repaired existing Regular template: ${applied.join(', ')}.`)
+    } else {
+      console.log('• Regular template already exists and is up to date, skipping.')
+    }
   }
 
   // --- 2. Create Production Admin Account ---

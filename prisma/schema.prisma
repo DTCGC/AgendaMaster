@@ -29,6 +29,10 @@ model Meeting {
   date            DateTime
   typeId          String
   theme           String?
+  // Question of the Day. Persisted (rather than living only in the wizard's
+  // state) so that a re-run or an update-mode entry — neither of which shows
+  // Step 2 — can restore it instead of overwriting the sheet with 'TBD'.
+  qotd            String?
   status          String           @default("SCHEDULED")
   googleSheetId   String?
   googleSheetUrl  String?

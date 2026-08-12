@@ -35,6 +35,10 @@ function buildRoleMap(
   // 1. Fixed roles (hardcoded people per spec)
   map['Roles For Next Meeting'] = 'John';
   map['Business Meeting'] = 'Andrew';
+  // Dismissal is permanently Franklin's — it no longer follows the Sergeant at
+  // Arms. Listed here as well as in the CSV so computeChangelog() diffs it
+  // against a matching entry and never reports it as a swap.
+  map['Dismissal'] = 'Franklin';
 
   // 2. DB assignments (major + minor roles assigned in the app)
   for (const a of roleAssignments) {
@@ -69,7 +73,6 @@ function buildRoleMap(
 
   // Derived roles (same person as another role)
   alias('Comments and Closing Remarks', 'Toastmaster');
-  alias('Dismissal', 'Sergeant at Arms');
 
   // The CSV label carries a colon (row reads "BACKUP SPEAKER: "). Left unmapped
   // it renders as 'TBD', which is the correct output for an empty standby slot.
@@ -157,6 +160,15 @@ export async function executeAgendaPipeline(
       .filter((m: { id: string }) => !assignedUserIds.has(m.id))
       .map((m: NameableUser) => getDisplayName(m, allMembers));
 
+    // The theme and QOTD live in Step 2 of the wizard, which update-mode entries
+    // and silent re-runs never render — so the caller can legitimately arrive
+    // with empty strings. Falling back to the stored values (and only then to a
+    // placeholder) is what stops a quick roster edit from wiping the question
+    // already printed on the sheet. Whatever we resolve here is also what gets
+    // persisted below, so the next run starts from a filled-in value.
+    const effectiveTheme = meetingTheme.trim() || meeting.theme?.trim() || 'Meeting';
+    const effectiveQotd = qotd.trim() || meeting.qotd?.trim() || 'TBD';
+
     let csvTemplate = meeting.template.schemaStructure;
 
     // HEALING FALLBACK: Early meetings may reference a corrupted '{}' template
@@ -181,8 +193,8 @@ export async function executeAgendaPipeline(
       await updateAgendaSheet(
         accessToken,
         meeting.googleSheetId!,
-        meetingTheme,
-        qotd,
+        effectiveTheme,
+        effectiveQotd,
         roleMap,
         csvTemplate,
         unassignedNames
@@ -193,8 +205,8 @@ export async function executeAgendaPipeline(
       const result = await createAgendaSheet(
         accessToken,
         meeting.date,
-        meetingTheme,
-        qotd,
+        effectiveTheme,
+        effectiveQotd,
         roleMap,
         csvTemplate,
         unassignedNames
@@ -207,7 +219,8 @@ export async function executeAgendaPipeline(
         data: {
           googleSheetId: result.sheetId,
           googleSheetUrl: result.sheetUrl,
-          theme: meetingTheme
+          theme: effectiveTheme,
+          qotd: effectiveQotd
         }
       });
 
@@ -236,13 +249,11 @@ export async function executeAgendaPipeline(
       await sendGmailAsUser(accessToken, allRecipients, emailSubject, emailWithLink);
     }
 
-    // Save theme (if not already saved)
-    if (!isUpdate) {
-      // Already saved above
-    } else {
+    // On the create path these were persisted alongside the sheet IDs above.
+    if (isUpdate) {
       await db.meeting.update({
         where: { id: meetingId },
-        data: { theme: meetingTheme }
+        data: { theme: effectiveTheme, qotd: effectiveQotd }
       });
     }
 

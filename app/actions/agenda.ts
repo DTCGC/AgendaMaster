@@ -22,6 +22,26 @@ export async function fetchRoleAssignments(meetingId: string) {
 }
 
 /**
+ * Returns the meeting's saved theme and Question of the Day.
+ *
+ * The wizard needs these to rehydrate Step 2 on every load. Without it, an
+ * update-mode entry (`?step=3`, which never renders Step 2) or a plain page
+ * refresh would hold empty strings and then push those empties through the
+ * execution pipeline, blanking the values already written to the sheet.
+ *
+ * Deliberately separate from fetchRoleAssignments: that call is the roster
+ * heuristic, and meeting metadata has no business travelling through it.
+ */
+export async function fetchMeetingSettings(meetingId: string) {
+    await requireMember();
+    const meeting = await db.meeting.findUnique({
+        where: { id: meetingId },
+        select: { theme: true, qotd: true }
+    });
+    return { theme: meeting?.theme ?? '', qotd: meeting?.qotd ?? '' };
+}
+
+/**
  * Reshuffles the minor roles from scratch, discarding the saved roster.
  *
  * Normal loads deliberately preserve whatever the Toastmaster last saved, so

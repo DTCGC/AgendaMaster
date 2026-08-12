@@ -19,7 +19,7 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { AlertCircle, CheckCircle2, ExternalLink, Copy, Loader2, RefreshCw } from 'lucide-react'
 import TiptapEditor from './tiptap-editor'
-import { fetchRoleAssignments, formatDraft, saveFinalAgenda, regenerateRoster } from '@/app/actions/agenda'
+import { fetchRoleAssignments, fetchMeetingSettings, formatDraft, saveFinalAgenda, regenerateRoster } from '@/app/actions/agenda'
 import { executeAgendaPipeline } from '@/app/actions/execute-agenda'
 import { MAJOR_ROLES, BACKUP_SPEAKER } from '@/lib/agenda-logic'
 import type { UserWithDisplayName, PreAssignedMajorRole } from '@/lib/types'
@@ -103,6 +103,22 @@ function WizardContent({ meetingId }: { meetingId: string }) {
     if (savedSubject) {
       setEmailSubject(savedSubject)
     }
+
+    // Rehydrate Step 2 from the database. Update mode (`?step=3`) never renders
+    // Step 2, so without this the theme and QOTD would stay empty and the
+    // execution pipeline would blank them on the sheet. Only fill fields the
+    // Toastmaster has not already typed into — this resolves after mount, and
+    // must never overwrite live keystrokes.
+    const loadSettings = async () => {
+        try {
+            const settings = await fetchMeetingSettings(meetingId)
+            if (settings.theme) setMeetingTheme(prev => prev || settings.theme)
+            if (settings.qotd) setMeetingQotd(prev => prev || settings.qotd)
+        } catch (e) {
+            console.error("Failed to load meeting settings:", e)
+        }
+    }
+    loadSettings()
 
     const loadRoles = async () => {
         try {
@@ -351,12 +367,16 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         );
         // If a sheet already exists, silently update it with the new roles
         try {
+          // Pass the theme and QOTD through as-is, empty or not. Substituting
+          // placeholders here is what used to stamp 'TBD' over a real question:
+          // this path runs in update mode, where Step 2 was never shown. The
+          // server resolves empties against the stored values instead.
           await executeAgendaPipeline(
             meetingId,
             emailSubject || `Gavel Club MM/DD - Theme`,
             emailDraft,
-            meetingTheme || 'Meeting',
-            meetingQotd || 'TBD'
+            meetingTheme,
+            meetingQotd
           );
         } catch { /* silent — sheet update is best-effort */ }
         router.push('/agenda');
@@ -398,7 +418,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         emailSubject || `Gavel Club MM/DD - Theme`,
         emailDraft,
         meetingTheme,
-        meetingQotd || 'TBD'
+        meetingQotd
       )
 
       setExecutionResult(result)
