@@ -18,6 +18,7 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
 - **Automated Sequencing**: Intelligent role assignment based on historical participation and club-specific sequencing rules.
 - **Guest Subscription**: Dedicated system for managing guest subscribers and converted members.
 - **Admin Dashboard**: Centralized control for account approvals, inline name editing, role overrides, and meeting scheduling.
+- **Admin Agenda Editing**: Admins can open any upcoming meeting's roster in the wizard's update mode and push changes to the existing agenda sheet. Since the admin login has no Google identity, those sheet updates authenticate as a **Google service account** (`GOOGLE_SERVICE_ACCOUNT_KEY`), which the app automatically grants Editor access on every newly created sheet. Sheets created before this feature must be shared with the service account manually once.
 - **Mass Communications (Resend API)**: Admin broadcasts and account-approval notifications are delivered via the Resend API (BCC) to bypass server SMTP blocks.
 
 ### ☁️ Google Cloud Integration
@@ -62,6 +63,7 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
    GOOGLE_CLIENT_SECRET="your-client-secret"
    RESEND_API_KEY="re_your_api_key"          # optional in dev — omit to mock-log emails
    RESEND_FROM_EMAIL="AgendaMaster <info@coquitlamgavel.com>"
+   GOOGLE_SERVICE_ACCOUNT_KEY=""             # optional — service-account JSON (or base64), enables admin sheet edits
    SEED_ADMIN_PASSWORD="choose-a-dev-admin-password"
    ```
 
@@ -109,6 +111,8 @@ What is covered (all of it invisible-when-broken behaviour, which is why it is p
 | `tests/roles-recency.test.ts` | The admin panel only writes roles it owns, and preserves `assignedAt` for unchanged holders — both silently corrupt the fairness rotation when broken. |
 | `tests/backup-speaker.test.ts` | The Backup Speaker stays roleless: still eligible for a minor role, still on the attendance list, never counted as recent participation. |
 | `tests/roster-regeneration.test.ts` | A normal load preserves the saved roster; `ignoreSavedMinorRoles` reshuffles without persisting or disturbing other roles. |
+| `tests/guest-education.test.ts` | The Guest Education override relabels only the `Speaker 3` row (to `Guest Speaker`) and stays byte-identical to Regular output everywhere else — and is fully inert when inactive. |
+| `tests/service-account.test.ts` | `GOOGLE_SERVICE_ACCOUNT_KEY` parses as raw or base64 JSON, and anything broken degrades to `null` instead of throwing — a bad env var must never break the Toastmaster's sheet creation. |
 
 **Do not deploy test files.** The artifact list in `.github/workflows/deploy.yml` copies only
 `.next`, `public`, `node_modules`, `package.json`, `ecosystem.config.js` and `prisma`, so
@@ -138,7 +142,12 @@ shipped application diverges from it in a few notable ways:
   rather than the spec's three-value enum.
 - The admin **Archive** browsing view from the spec is **not yet implemented** (archival logic
   runs, but there is no dedicated archive page).
-- Only the **Regular** meeting template is seeded; an `Education` template is not yet provided.
+- Only the **Regular** meeting template is seeded; a separate `Education` template is not
+  provided. Instead, a **Guest Education Session** works by overriding one row of the Regular
+  template: the admin enters a free-text guest speaker name on the Roles panel, and if (and
+  only if) the Toastmaster also selects "Guest Education Session" in the wizard's Step 2, the
+  sheet's `Speaker 3` row is relabeled `Guest Speaker` and carries the guest's name. With
+  either half missing, the value sits inert and the meeting renders as Regular.
 - The post-development **Discord bot** guide remains a pending task.
 
 ---

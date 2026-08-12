@@ -113,6 +113,48 @@ GOOGLE_CLIENT_SECRET="<paste your Client Secret here>"
 
 ---
 
+## Step 6: Service Account (Admin Sheet Editing)
+
+The ADMIN account signs in with email + password, never Google OAuth, so it has no
+Google identity of its own. To let admins update existing agenda sheets, the app
+authenticates as a **service account** — a robot Google identity belonging to the
+project. The app automatically shares every newly created agenda sheet with it as
+an Editor; no manual sharing is needed for new sheets.
+
+1. In the same `AgendaMaster-DTCGC` project, go to **IAM & Admin → Service Accounts**
+2. Click **"+ Create Service Account"**
+3. Name it `agendamaster-sheet-editor`, then click **Create and Continue**
+4. **Skip the project-role step entirely** — no project-level IAM role is needed.
+   Sheets/Drive access is granted per-file via normal sheet sharing (which the app
+   does programmatically), not via IAM roles.
+5. Click **Done**, then open the new service account
+6. Go to the **Keys** tab → **Add Key → Create new key → JSON** → **Create**, and
+   download the key file
+7. Put the key file's contents into `GOOGLE_SERVICE_ACCOUNT_KEY` in `.env` —
+   base64-encoding it first is recommended (see [`.env.example`](../.env.example))
+
+> [!IMPORTANT]
+> For production, the variable must also be added to `/var/www/agendamaster/.env`
+> on the Droplet **by hand, before deploying** — new env vars never reach
+> production automatically (see the [Deployment Guide](./DEPLOYMENT.md)).
+
+> [!WARNING]
+> Do **not** set up domain-wide delegation. The service account only ever needs
+> direct per-file Editor access via normal sheet sharing — never impersonation.
+
+Notes:
+
+- The Sheets and Drive APIs enabled in Step 2 cover the service account too —
+  nothing new to enable.
+- The service account's email looks like
+  `agendamaster-sheet-editor@agendamaster-dtcgc.iam.gserviceaccount.com`. You don't
+  need to add it anywhere manually for **new** sheets — but sheets created
+  **before** this feature shipped were never shared with it. Editing those as
+  admin fails with a clear error until someone opens that sheet → **Share** → adds
+  the service-account email as **Editor**.
+
+---
+
 ## Summary Checklist
 
 - [ ] Created Google Cloud project
@@ -122,3 +164,4 @@ GOOGLE_CLIENT_SECRET="<paste your Client Secret here>"
 - [ ] Created OAuth client ID credentials
 - [ ] Copied Client ID and Client Secret to `.env`
 - [ ] Enabled 2-Step Verification on the Gmail account
+- [ ] Created the `agendamaster-sheet-editor` service account + JSON key, and put it in `GOOGLE_SERVICE_ACCOUNT_KEY` (local **and** Droplet `.env`)

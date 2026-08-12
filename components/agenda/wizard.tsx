@@ -35,9 +35,16 @@ function WizardContent({ meetingId }: { meetingId: string }) {
   const [step, setStep] = useState(initialStepParam)
   const [emailSubject, setEmailSubject] = useState('')
   const [emailDraft, setEmailDraft] = useState('')
-  const [meetingType, setMeetingType] = useState('Regular')
+  // '' = not yet resolved against the database. Like theme/qotd, the stored
+  // choice is rehydrated after mount; the sentinel keeps a fast "Save & Close"
+  // in update mode from stamping the default over a stored Education choice
+  // (the server treats '' as "keep what's stored").
+  const [meetingType, setMeetingType] = useState('')
   const [meetingTheme, setMeetingTheme] = useState('')
   const [meetingQotd, setMeetingQotd] = useState('')
+  // Admin-entered, read-only here. Non-empty + meeting type "Education" is
+  // what activates the Guest Speaker override on the sheet.
+  const [guestSpeakerName, setGuestSpeakerName] = useState('')
   
   // Roles Data
   const [loadingRoles, setLoadingRoles] = useState(true)
@@ -82,6 +89,14 @@ function WizardContent({ meetingId }: { meetingId: string }) {
   preAssigned.forEach(a => { if (a.userId) assignedUserIds.add(a.userId) })
   const unassigned = roster.filter(u => !assignedUserIds.has(u.id))
 
+  // --- Guest Speaker Override (derived) ---
+  // Mirrors the server-side gating in buildRoleMap(): BOTH the admin-entered
+  // guest name AND the Toastmaster's "Guest Education Session" choice must be
+  // present. Uses the LIVE meetingType selection (falling back to the stored
+  // value via rehydration) because that is exactly what the pipeline will
+  // persist and gate on when this wizard executes.
+  const guestEducationActive = meetingType === 'Education' && guestSpeakerName.trim() !== ''
+
   // Step 4 execution state
   const [isExecuting, setIsExecuting] = useState(false)
   const [executionResult, setExecutionResult] = useState<{
@@ -114,6 +129,8 @@ function WizardContent({ meetingId }: { meetingId: string }) {
             const settings = await fetchMeetingSettings(meetingId)
             if (settings.theme) setMeetingTheme(prev => prev || settings.theme)
             if (settings.qotd) setMeetingQotd(prev => prev || settings.qotd)
+            setMeetingType(prev => prev || (settings.isGuestEducationSession ? 'Education' : 'Regular'))
+            setGuestSpeakerName(settings.guestSpeakerName)
         } catch (e) {
             console.error("Failed to load meeting settings:", e)
         }
@@ -365,20 +382,37 @@ function WizardContent({ meetingId }: { meetingId: string }) {
             { ...roleSlots, [BACKUP_SPEAKER]: backupSpeaker },
             { includeMajorRoles: allowMajorRoleEdit }
         );
-        // If a sheet already exists, silently update it with the new roles
+        // If a sheet already exists, update it with the new roles. A REPORTED
+        // failure blocks the quiet exit: the pipeline's error strings carry
+        // instructions the caller must actually read — most importantly the
+        // admin case where an older sheet was never shared with the app's
+        // service account and needs a one-time manual share to fix.
+        let syncError: string | null = null;
         try {
           // Pass the theme and QOTD through as-is, empty or not. Substituting
           // placeholders here is what used to stamp 'TBD' over a real question:
           // this path runs in update mode, where Step 2 was never shown. The
           // server resolves empties against the stored values instead.
-          await executeAgendaPipeline(
+          const result = await executeAgendaPipeline(
             meetingId,
             emailSubject || `Gavel Club MM/DD - Theme`,
             emailDraft,
             meetingTheme,
-            meetingQotd
+            meetingQotd,
+            meetingType
           );
-        } catch { /* silent — sheet update is best-effort */ }
+          // 'NO_SHEET' is the benign case: an admin edited a meeting that was
+          // never finalized, so there is simply nothing to sync — the roles
+          // saved fine and blocking the exit would only cry wolf.
+          if (!result.success && result.code !== 'NO_SHEET') {
+            syncError = result.error || 'The Google Sheet could not be updated.';
+          }
+        } catch { /* network hiccup — sheet update stays best-effort */ }
+        if (syncError) {
+          alert(`Roles were saved, but the agenda sheet was NOT updated:\n\n${syncError}`);
+          setIsSaving(false);
+          return;
+        }
         router.push('/agenda');
     } catch (e) {
         console.error("Failed to save final agenda:", e);
@@ -418,7 +452,8 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         emailSubject || `Gavel Club MM/DD - Theme`,
         emailDraft,
         meetingTheme,
-        meetingQotd
+        meetingQotd,
+        meetingType
       )
 
       setExecutionResult(result)
@@ -453,7 +488,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
       let textData = (tempDiv.textContent || tempDiv.innerText || "")
         .replace(/\n{3,}/g, "\n\n");
       
-      textData += `\n\n---\nTheme: ${meetingTheme}\nType: ${meetingType}\n`;
+      textData += `\n\n---\nTheme: ${meetingTheme}\nType: ${meetingType === 'Education' ? 'Guest Education Session' : 'Regular'}\n`;
       textData += `\n[MEETING ROLES - CHRONOLOGICAL]\n`;
       
       const roleSequence = [
@@ -463,6 +498,12 @@ function WizardContent({ meetingId }: { meetingId: string }) {
       ];
 
       roleSequence.forEach(roleName => {
+          // Keep the copy fallback consistent with the sheet: an active guest
+          // override prints the guest under the swapped label, not Speaker 3.
+          if (roleName === "Speaker 3" && guestEducationActive) {
+              textData += `Guest Speaker: ${guestSpeakerName}\n`;
+              return;
+          }
           let holder = "TBD";
           if (roleName === "Roles For Next Meeting") holder = "John";
           else if (roleName === "Business Meeting") holder = "Andrew";
@@ -566,11 +607,21 @@ function WizardContent({ meetingId }: { meetingId: string }) {
              <h2 className="text-xl font-bold border-l-4 pl-3 border-brand-loyal-blue">Meeting Details</h2>
              <div className="space-y-2">
                  <label className="font-semibold text-sm">Meeting Type</label>
-                 <select className="w-full border p-3 rounded" value={meetingType} onChange={(e) => setMeetingType(e.target.value)}>
+                 <select className="w-full border p-3 rounded" value={meetingType || 'Regular'} onChange={(e) => setMeetingType(e.target.value)}>
                      <option value="Regular">Regular Meeting</option>
-                     <option value="Education" disabled>Education Session</option>
+                     <option value="Education">Guest Education Session</option>
                      <option value="Contest" disabled>Contest</option>
                  </select>
+                 {guestEducationActive && (
+                     <p className="text-xs text-brand-true-maroon font-medium pt-1">
+                         Guest speaker &quot;{guestSpeakerName}&quot; (set by the executive team) will replace Speaker 3 on the agenda sheet.
+                     </p>
+                 )}
+                 {meetingType === 'Education' && !guestSpeakerName.trim() && (
+                     <p className="text-xs text-gray-500 pt-1">
+                         No guest speaker has been entered by the executive team yet — the agenda will keep the regular Speaker 3 slot until one is set.
+                     </p>
+                 )}
              </div>
              <div className="space-y-2">
                  <label className="font-semibold text-sm">Meeting Theme (Required)</label>
@@ -697,6 +748,24 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                 {Object.entries(roleSlots)
                                     .filter(([role]) => MAJOR_ROLES.includes(role))
                                     .map(([role, user]) => {
+                                    // Guest override active: the sheet will print the
+                                    // guest, not whatever member sits in this slot — so
+                                    // never render an editable dropdown that suggests
+                                    // otherwise, even with "Edit Major Roles" on.
+                                    if (role === 'Speaker 3' && guestEducationActive) {
+                                        return (
+                                        <div key={role} className="flex justify-between items-center border-b pb-2 last:border-0">
+                                            <span className="font-semibold text-gray-600 flex items-center gap-2">
+                                                Guest Speaker
+                                                <span className="text-[10px] font-bold uppercase tracking-tight bg-brand-true-maroon/10 text-brand-true-maroon px-2 py-0.5 rounded-full">Education</span>
+                                            </span>
+                                            <span className="text-brand-true-maroon font-black bg-brand-true-maroon/5 px-2 py-0.5 rounded">
+                                                {guestSpeakerName}
+                                            </span>
+                                        </div>
+                                        )
+                                    }
+
                                     // Locked by default: these are the executive team's
                                     // picks, and an accidental dropdown nudge here is a
                                     // much bigger deal than one on a minor role.

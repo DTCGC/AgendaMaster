@@ -47,7 +47,11 @@ export function populateTemplate(
   qotd: string,
   roleMap: Record<string, string>,
   unassignedNames: string[],
-  changelog: string[] = []
+  changelog: string[] = [],
+  // Guest Education Session with a guest name set: relabel the Speaker 3 row
+  // as "Guest Speaker" on the output sheet. The roleMap already carries the
+  // guest's name under 'Speaker 3' when this is true (see buildRoleMap()).
+  guestEducationActive: boolean = false
 ): string[][] {
   // Parse each CSV row, then process template sections in order
   const rows = csvTemplate.split('\n')
@@ -104,6 +108,12 @@ export function populateTemplate(
         }
       }
     }
+
+    // Label swap runs AFTER the name substitution above — 'Speaker 3' must
+    // stay intact as the roleMap lookup key while the person is resolved.
+    if (guestEducationActive && roleLabel === 'Speaker 3') {
+      row[1] = row[1].replace('Speaker 3', 'Guest Speaker');
+    }
   }
 
   // Fill the "No Roles" section with leftover attendee names
@@ -153,6 +163,70 @@ function getGoogleAuth(accessToken: string) {
   return auth;
 }
 
+// ---------- Service-account auth (admin sheet edits) ----------
+
+/**
+ * Parses GOOGLE_SERVICE_ACCOUNT_KEY — the full service-account JSON key,
+ * stored either verbatim or base64-encoded (base64 avoids the quoting
+ * hazards of multi-line JSON inside a .env file).
+ *
+ * Returns null when the variable is unset or unusable. Callers decide how
+ * loud to be about that: the writer grant in createAgendaSheet() degrades
+ * silently (the Toastmaster flow must never break over an optional admin
+ * feature), while getServiceAccountAuth() throws, because an admin is
+ * actively asking for a capability that isn't configured.
+ */
+function parseServiceAccountKey(): { client_email: string; private_key: string } | null {
+  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY?.trim();
+  if (!raw) return null;
+  try {
+    const json = raw.startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8');
+    const key = JSON.parse(json);
+    if (!key.client_email || !key.private_key) return null;
+    return {
+      client_email: key.client_email,
+      // .env round-trips can leave the key's newlines as literal "\n" pairs;
+      // a correctly parsed key contains none, so the replace is a no-op there.
+      private_key: key.private_key.replace(/\\n/g, '\n'),
+    };
+  } catch (err) {
+    console.error('[GoogleAPI] GOOGLE_SERVICE_ACCOUNT_KEY is set but could not be parsed:', err);
+    return null;
+  }
+}
+
+/** The service account's email, for per-sheet writer grants. Null if unconfigured. */
+export function getServiceAccountEmail(): string | null {
+  return parseServiceAccountKey()?.client_email ?? null;
+}
+
+/**
+ * App-level Google credential for admin sheet edits.
+ *
+ * Admins sign in with credentials, never Google OAuth, so they have no
+ * per-user access token — this JWT client authenticates as the club's
+ * service account instead. Scoped to Sheets + Drive only (no Gmail: this
+ * path only ever updates existing sheets, it never sends the agenda email).
+ * The service account can only touch sheets it was explicitly granted
+ * writer access on — see the per-sheet grant in createAgendaSheet().
+ */
+export function getServiceAccountAuth() {
+  const key = parseServiceAccountKey();
+  if (!key) {
+    throw new Error(
+      'Admin sheet editing is not configured: the GOOGLE_SERVICE_ACCOUNT_KEY environment variable is missing or invalid. See docs/GOOGLE_CLOUD_SETUP.md.'
+    );
+  }
+  return new google.auth.JWT({
+    email: key.client_email,
+    key: key.private_key,
+    scopes: [
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/drive.file',
+    ],
+  });
+}
+
 /**
  * Creates a Google Sheet, writes data, and makes it shareable.
  */
@@ -163,13 +237,14 @@ export async function createAgendaSheet(
   qotd: string,
   roleMap: Record<string, string>,
   csvTemplate: string,
-  unassignedNames: string[]
+  unassignedNames: string[],
+  guestEducationActive: boolean = false
 ): Promise<{ sheetUrl: string; sheetId: string }> {
   const month = String(meetingDate.getMonth() + 1).padStart(2, '0');
   const day = String(meetingDate.getDate()).padStart(2, '0');
   const title = `Gavel Club ${month}/${day} - ${theme}`;
 
-  const populatedRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames);
+  const populatedRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames, [], guestEducationActive);
   const auth = getGoogleAuth(accessToken);
   const sheets = google.sheets({ version: 'v4', auth });
   const drive = google.drive({ version: 'v3', auth });
@@ -208,6 +283,29 @@ export async function createAgendaSheet(
     });
   } catch (err) {
     console.error('[GoogleAPI] Permission error (non-fatal):', err);
+  }
+
+  // Step 4: Grant the app's service account writer access, so an ADMIN (who
+  // has no Google identity of their own) can later update this sheet through
+  // getServiceAccountAuth(). Runs automatically on every creation; sheets
+  // created before this shipped never got the grant and must be shared with
+  // the service-account email by hand before admin edits work on them.
+  const serviceAccountEmail = getServiceAccountEmail();
+  if (serviceAccountEmail) {
+    console.log('[GoogleAPI] Granting service account writer access');
+    try {
+      await drive.permissions.create({
+        fileId: sheetId,
+        sendNotificationEmail: false,
+        requestBody: {
+          type: 'user',
+          role: 'writer',
+          emailAddress: serviceAccountEmail
+        }
+      });
+    } catch (err) {
+      console.error('[GoogleAPI] Service-account grant error (non-fatal):', err);
+    }
   }
 
   return { sheetUrl, sheetId };
@@ -270,17 +368,23 @@ function computeChangelog(existingRows: string[][], newRoleMap: Record<string, s
 
 /**
  * Updates an existing Google Sheet with new role data.
+ *
+ * `accessToken` may be null: that is the ADMIN path, which authenticates as
+ * the app's service account instead of a signed-in Google user. It only works
+ * on sheets the service account was granted writer access to (automatic for
+ * sheets created after the grant in createAgendaSheet() shipped).
  */
 export async function updateAgendaSheet(
-  accessToken: string,
+  accessToken: string | null,
   existingSheetId: string,
   theme: string,
   qotd: string,
   roleMap: Record<string, string>,
   csvTemplate: string,
-  unassignedNames: string[]
+  unassignedNames: string[],
+  guestEducationActive: boolean = false
 ): Promise<void> {
-  const auth = getGoogleAuth(accessToken);
+  const auth = accessToken ? getGoogleAuth(accessToken) : getServiceAccountAuth();
   const sheets = google.sheets({ version: 'v4', auth });
   
   // Fetch existing sheet data to compute the changelog
@@ -296,7 +400,7 @@ export async function updateAgendaSheet(
   }
 
   const changelog = computeChangelog(existingRows, roleMap);
-  const populatedRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames, changelog);
+  const populatedRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames, changelog, guestEducationActive);
   
   await writeSheetData(sheets, existingSheetId, populatedRows);
 }

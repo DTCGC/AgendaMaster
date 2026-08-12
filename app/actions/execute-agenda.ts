@@ -10,13 +10,15 @@
  *   2. Re-run:     Updates the existing Google Sheet with new role data
  *                  (no email re-send).
  *
- * Requires the user's Google OAuth access token with drive.file + gmail.send scopes.
+ * Requires the user's Google OAuth access token with drive.file + gmail.send
+ * scopes — except for ADMIN callers, who have no Google identity (credentials
+ * login) and instead update existing sheets via the app's service account.
  */
 'use server'
 
 import { auth } from '@/auth'
 import { db } from '@/lib/db'
-import { createAgendaSheet, updateAgendaSheet, sendGmailAsUser } from '@/lib/google-api'
+import { createAgendaSheet, updateAgendaSheet, sendGmailAsUser, getServiceAccountEmail } from '@/lib/google-api'
 import { getDisplayName, type NameableUser } from '@/lib/user-logic'
 import { BACKUP_SPEAKER } from '@/lib/agenda-logic'
 import { revalidatePath } from 'next/cache'
@@ -28,7 +30,8 @@ import { revalidatePath } from 'next/cache'
  */
 function buildRoleMap(
   roleAssignments: { roleName: string; user: NameableUser | null }[],
-  allMembers: NameableUser[]
+  allMembers: NameableUser[],
+  meeting: { isGuestEducationSession: boolean; guestSpeakerName: string | null }
 ): Record<string, string> {
   const map: Record<string, string> = {};
 
@@ -82,6 +85,22 @@ function buildRoleMap(
   // populateTemplate() renders it as '-' rather than 'TBD'.
   map['Break Time'] = '';
 
+  // 4. Guest Education override — derived here at read time, ON PURPOSE, rather
+  // than gated at write time: guestSpeakerName may sit inert in the DB for any
+  // meeting. It only reaches the sheet when BOTH the admin entered a name AND
+  // the Toastmaster marked the meeting a Guest Education Session. With only one
+  // condition true, Speaker 3 falls through to the normal assignment above (or
+  // TBD) — and when both hold, the guest wins even over an assigned member.
+  const guestName = meeting.guestSpeakerName?.trim();
+  if (meeting.isGuestEducationSession && guestName) {
+    map['Speaker 3'] = guestName;
+    // Also under the label the sheet will actually display after the swap in
+    // populateTemplate(). computeChangelog() diffs the sheet's labels against
+    // this map, and without this entry every re-run of an active session would
+    // log a phantom "[<guest>: Guest Speaker ---> Speaker 3]" swap.
+    map['Guest Speaker'] = guestName;
+  }
+
   return map;
 }
 
@@ -96,18 +115,41 @@ export async function executeAgendaPipeline(
   emailSubject: string,
   emailHtmlBody: string,
   meetingTheme: string,
-  qotd: string
-): Promise<{ success: boolean; sheetUrl?: string; error?: string; isUpdate?: boolean }> {
+  qotd: string,
+  // '' = the caller never resolved Step 2 (update mode before rehydration
+  // finished) — keep the stored choice, same contract as theme/qotd.
+  meetingType: string = ''
+): Promise<{
+  success: boolean;
+  sheetUrl?: string;
+  error?: string;
+  isUpdate?: boolean;
+  // 'NO_SHEET' marks the one refusal that is benign in update mode: an admin
+  // touched a meeting that was never finalized, so there is nothing to sync.
+  code?: 'NO_SHEET';
+}> {
   const session = await auth();
 
-  if (!session?.user?.accessToken) {
+  if (!session?.user) {
+    return { success: false, error: 'Not signed in.' };
+  }
+
+  // Two Google auth paths, chosen by what the caller HAS, not who they are:
+  // a caller with a Google OAuth token (the Toastmaster) uses it exactly as
+  // before; an ADMIN has no token by construction — the Credentials provider
+  // never touches Google, so session.user.accessToken is structurally
+  // undefined for every admin session — and falls through to the app's
+  // service account. That fallback can only update an EXISTING sheet (it is
+  // never the sender of the agenda email), which is enforced below.
+  const accessToken = session.user.accessToken ?? null;
+  const usingServiceAccount = !accessToken && session.user.role === 'ADMIN';
+
+  if (!accessToken && !usingServiceAccount) {
     return {
       success: false,
       error: 'Google API permissions not available. Please sign out and sign back in with Google to grant the required permissions.'
     };
   }
-
-  const accessToken = session.user.accessToken;
 
   try {
     // Fetch meeting with all assignments
@@ -130,14 +172,28 @@ export async function executeAgendaPipeline(
       where: { role: { in: ['MEMBER', 'ADMIN'] } }
     });
 
+    // Resolve the meeting type the same way theme/qotd are resolved below: an
+    // empty string means the caller never saw Step 2, so the stored choice
+    // stands. Whatever resolves here is what gets persisted and what gates the
+    // guest override for THIS sheet write.
+    const effectiveIsGuestEd = meetingType
+      ? meetingType === 'Education'
+      : meeting.isGuestEducationSession;
+
     // Build the role map
     const roleMap = buildRoleMap(
       meeting.roleAssignments.map((a: { roleName: string; user: NameableUser | null }) => ({
         roleName: a.roleName,
         user: a.user as NameableUser | null
       })),
-      allMembers
+      allMembers,
+      { isGuestEducationSession: effectiveIsGuestEd, guestSpeakerName: meeting.guestSpeakerName }
     );
+
+    // Drives the "Speaker 3" → "Guest Speaker" column-B label swap in
+    // populateTemplate(). Must mirror the buildRoleMap() gating exactly, or the
+    // sheet would show a relabeled row with a member's name in it (or vice versa).
+    const guestEducationActive = effectiveIsGuestEd && !!meeting.guestSpeakerName?.trim();
 
     // Compute the "No Roles" list: members attending without a formal role.
     // ADMIN accounts are excluded — the club's shared admin credential is not a
@@ -197,10 +253,23 @@ export async function executeAgendaPipeline(
         effectiveQotd,
         roleMap,
         csvTemplate,
-        unassignedNames
+        unassignedNames,
+        guestEducationActive
       );
       sheetUrl = meeting.googleSheetUrl!;
     } else {
+      // First-time creation also sends the agenda email as the Toastmaster —
+      // a Google identity the service account cannot and must not stand in
+      // for. An admin landing here (meeting never finalized) gets a clear
+      // refusal instead of a half-executed pipeline.
+      if (!accessToken) {
+        return {
+          success: false,
+          code: 'NO_SHEET',
+          error: 'This meeting has no agenda sheet yet. The sheet is created (and the agenda email sent) by the assigned Toastmaster signing in with Google — admin editing only works on a meeting that has already been finalized.'
+        };
+      }
+
       // FIRST TIME: create the sheet + send email
       const result = await createAgendaSheet(
         accessToken,
@@ -209,7 +278,8 @@ export async function executeAgendaPipeline(
         effectiveQotd,
         roleMap,
         csvTemplate,
-        unassignedNames
+        unassignedNames,
+        guestEducationActive
       );
       sheetUrl = result.sheetUrl;
 
@@ -220,7 +290,8 @@ export async function executeAgendaPipeline(
           googleSheetId: result.sheetId,
           googleSheetUrl: result.sheetUrl,
           theme: effectiveTheme,
-          qotd: effectiveQotd
+          qotd: effectiveQotd,
+          isGuestEducationSession: effectiveIsGuestEd
         }
       });
 
@@ -253,7 +324,7 @@ export async function executeAgendaPipeline(
     if (isUpdate) {
       await db.meeting.update({
         where: { id: meetingId },
-        data: { theme: effectiveTheme, qotd: effectiveQotd }
+        data: { theme: effectiveTheme, qotd: effectiveQotd, isGuestEducationSession: effectiveIsGuestEd }
       });
     }
 
@@ -262,11 +333,36 @@ export async function executeAgendaPipeline(
 
     return { success: true, sheetUrl, isUpdate };
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'An unexpected error occurred during the execution pipeline.'
     console.error('Agenda execution pipeline error:', error);
+
+    // KNOWN LIMITATION, surfaced on purpose: sheets created before the
+    // service-account grant existed were never shared with the service
+    // account, so Google rejects the admin's update with a 403/404. That is
+    // fixed by a one-time manual share of that sheet — say so, instead of
+    // leaking a bare "The caller does not have permission".
+    if (usingServiceAccount && isGooglePermissionError(error)) {
+      const saEmail = getServiceAccountEmail();
+      return {
+        success: false,
+        error: `Google denied the app's service account access to this meeting's sheet. Sheets created before admin editing shipped were never shared with it automatically — open the sheet in Google Sheets, hit Share, and add ${saEmail ?? 'the service account email'} as an Editor, then try again.`
+      };
+    }
+
+    const message = error instanceof Error ? error.message : 'An unexpected error occurred during the execution pipeline.'
     return {
       success: false,
       error: message
     };
   }
+}
+
+/**
+ * True when a googleapis error means "you can't see/touch this file".
+ * Drive/Sheets answer 403 for a known-but-forbidden file and 404 for a file
+ * the caller can't even see — for an unshared sheet, either can appear.
+ */
+function isGooglePermissionError(error: unknown): boolean {
+  const e = error as { code?: number | string; status?: number; response?: { status?: number } };
+  const status = Number(e?.code ?? e?.status ?? e?.response?.status);
+  return status === 403 || status === 404;
 }

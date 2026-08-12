@@ -36,9 +36,14 @@ export async function fetchMeetingSettings(meetingId: string) {
     await requireMember();
     const meeting = await db.meeting.findUnique({
         where: { id: meetingId },
-        select: { theme: true, qotd: true }
+        select: { theme: true, qotd: true, isGuestEducationSession: true, guestSpeakerName: true }
     });
-    return { theme: meeting?.theme ?? '', qotd: meeting?.qotd ?? '' };
+    return {
+        theme: meeting?.theme ?? '',
+        qotd: meeting?.qotd ?? '',
+        isGuestEducationSession: meeting?.isGuestEducationSession ?? false,
+        guestSpeakerName: meeting?.guestSpeakerName ?? ''
+    };
 }
 
 /**

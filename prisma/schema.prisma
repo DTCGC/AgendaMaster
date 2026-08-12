@@ -33,6 +33,14 @@ model Meeting {
   // state) so that a re-run or an update-mode entry — neither of which shows
   // Step 2 — can restore it instead of overwriting the sheet with 'TBD'.
   qotd            String?
+  // The Toastmaster's Step 2 meeting-type choice. Persisted like theme/qotd so
+  // update-mode entries and re-runs (which never render Step 2) keep it.
+  isGuestEducationSession Boolean @default(false)
+  // Admin-entered guest speaker for a Guest Education Session. A guest is not
+  // a User row, so this lives on the Meeting (like theme/qotd) rather than on
+  // RoleAssignment. Inert until the Toastmaster also marks the meeting a Guest
+  // Education Session — only then does it override Speaker 3 on the sheet.
+  guestSpeakerName        String?
   status          String           @default("SCHEDULED")
   googleSheetId   String?
   googleSheetUrl  String?

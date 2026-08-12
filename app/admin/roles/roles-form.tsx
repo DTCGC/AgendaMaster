@@ -8,7 +8,7 @@
 'use client'
 
 import { useState } from 'react'
-import { saveAllMajorRoles } from '@/app/actions/roles'
+import { saveAllMajorRoles, saveGuestSpeakerName } from '@/app/actions/roles'
 import { MAJOR_ROLES, BACKUP_SPEAKER } from '@/lib/agenda-logic'
 import { Save, CheckCircle2, Info } from 'lucide-react'
 
@@ -23,15 +23,19 @@ export default function RolesForm({
     meetingId,
     initialAssignments,
     members,
-    previousBackup
+    previousBackup,
+    initialGuestSpeakerName
 }: {
     meetingId: string
     initialAssignments: Record<string, string>
     members: UserData[]
     /** Most recent standby before this meeting, for the promotion reminder. */
     previousBackup: { name: string; meetingDate: string } | null
+    /** Free-text guest speaker (meeting-level, not a member). */
+    initialGuestSpeakerName: string
 }) {
     const [assignments, setAssignments] = useState<Record<string, string>>(initialAssignments)
+    const [guestSpeakerName, setGuestSpeakerName] = useState(initialGuestSpeakerName)
     const [isSaving, setIsSaving] = useState(false)
     const [saved, setSaved] = useState(false)
 
@@ -48,7 +52,10 @@ export default function RolesForm({
             userId: assignments[roleName] || ""
         }))
 
-        await saveAllMajorRoles(meetingId, payload)
+        await Promise.all([
+            saveAllMajorRoles(meetingId, payload),
+            saveGuestSpeakerName(meetingId, guestSpeakerName)
+        ])
         
         setIsSaving(false)
         setSaved(true)
@@ -82,6 +89,27 @@ export default function RolesForm({
                             </select>
                         </div>
                     ))}
+
+                    {/* Guest speaker — free text, NOT a member dropdown. A guest
+                        has no User row. Inert unless the Toastmaster also marks
+                        the meeting a Guest Education Session in the wizard; only
+                        then does it replace Speaker 3 on the agenda sheet. */}
+                    <div className="flex flex-col space-y-1 pb-4 border-b">
+                        <label className="text-sm font-semibold text-gray-600 flex items-center gap-2">
+                            Guest Speaker Name
+                            <span className="text-[10px] font-bold uppercase tracking-tight bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Education Session</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={guestSpeakerName}
+                            onChange={(e) => setGuestSpeakerName(e.target.value)}
+                            placeholder="e.g., Dr. Jane Doe (external guest)"
+                            className={`w-full p-2 border rounded-lg text-sm bg-gray-50 focus:ring focus:ring-brand-loyal-blue/20 outline-none transition ${guestSpeakerName.trim() ? 'border-brand-loyal-blue text-brand-loyal-blue font-bold shadow-sm' : ''}`}
+                        />
+                        <p className="text-[11px] text-gray-400 leading-snug pt-1">
+                            Only takes effect if the Toastmaster selects &quot;Guest Education Session&quot; in the wizard — it then replaces Speaker 3 on the sheet. Otherwise it is ignored and the Speaker 3 dropdown above applies as usual.
+                        </p>
+                    </div>
 
                     {/* Standby slot — deliberately separated from the major roles
                         above, because holding it leaves a member fully eligible

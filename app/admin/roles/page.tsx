@@ -153,6 +153,7 @@ export default async function RolesPage({
                                 name: `${previousBackup.user.firstName} ${previousBackup.user.lastName}`,
                                 meetingDate: previousBackup.meeting.date.toISOString()
                             } : null}
+                            initialGuestSpeakerName={currentMeeting.guestSpeakerName ?? ''}
                         />
                     </div>
 
