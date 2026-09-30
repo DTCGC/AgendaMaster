@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { KeyRound, AlertCircle } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 
 export default function EmailLoginForm() {
     const [email, setEmail] = useState('')
@@ -47,11 +47,7 @@ export default function EmailLoginForm() {
 
     return (
         <form onSubmit={handleSubmit} className="space-y-3 w-full">
-            <div className="flex items-center gap-2 mb-1">
-                <KeyRound size={16} className="text-brand-loyal-blue" />
-                <span className="text-[10px] font-bold text-brand-loyal-blue uppercase tracking-widest">Email Login</span>
-            </div>
-            <p className="text-[10px] text-gray-400 leading-relaxed mb-4">
+            <p className="text-[10px] text-gray-400 leading-relaxed italic text-center max-w-[240px] mx-auto mb-4">
                 For executives, and members who registered without a Google account.
             </p>
 

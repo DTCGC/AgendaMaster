@@ -62,9 +62,9 @@ export default async function LoginPage() {
         <p className="text-[10px] text-gray-400 mt-3 text-center italic max-w-[240px]">
           New members: Sign in with Google to request access. Your account will be reviewed by the Executive Team.
         </p>
-        <p className="text-[10px] text-gray-300 mt-2 text-center">
+        <p className="text-[10px] text-gray-400 mt-2 text-center italic">
           No Google account?{" "}
-          <Link href="/signup" className="underline hover:text-gray-500 transition-colors">
+          <Link href="/signup" className="underline hover:text-brand-loyal-blue transition-colors">
             Register with email instead
           </Link>
         </p>
@@ -73,7 +73,7 @@ export default async function LoginPage() {
         <details className="w-full mt-8 group">
           <summary className="flex items-center w-full cursor-pointer select-none">
             <div className="flex-grow border-t border-gray-100"></div>
-            <span className="px-4 text-[10px] font-bold text-gray-300 uppercase tracking-widest group-open:text-brand-loyal-blue transition-colors">
+            <span className="px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest group-open:text-brand-loyal-blue transition-colors">
               Email &amp; Password
             </span>
             <div className="flex-grow border-t border-gray-100"></div>
