@@ -10,6 +10,7 @@
  *   - createAgendaSheet()  — Creates a new Google Sheet and makes it shareable
  *   - updateAgendaSheet()  — Updates an existing sheet with new role assignments
  *   - sendGmailAsUser()    — Sends email via Gmail API as the authenticated user
+ *                            (a Toastmaster, or the club account on a member's behalf)
  */
 import { google, sheets_v4 } from 'googleapis';
 
@@ -439,29 +440,52 @@ async function writeSheetData(
   console.log(`[GoogleAPI] Write result: ${res.data.updatedCells} cells updated`);
 }
 
+/** Header values must never carry a line break — that would inject extra headers. */
+function sanitizeHeaderValue(value: string): string {
+  return value.replace(/[\r\n]+/g, ' ').trim();
+}
+
 /**
- * Sends an email via the Gmail API from the authenticated user's account.
+ * Builds the RFC 2822 message the Gmail API expects (before base64url encoding).
+ * We use BCC for multiple recipients to protect member email privacy.
+ */
+export function buildRawGmailMessage(
+  recipients: string[],
+  subject: string,
+  htmlBody: string,
+  options?: { replyTo?: string }
+): string {
+  const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
+  const headers = [
+    `Content-Type: text/html; charset="UTF-8"`,
+    `MIME-Version: 1.0`,
+    `To: ${sanitizeHeaderValue(recipients[0])}`, // Standard 'To' field
+    `Bcc: ${sanitizeHeaderValue(recipients.join(', '))}`, // Send all others as BCC
+    `Subject: ${utf8Subject}`,
+  ];
+  // Set when the club account sends on a member's behalf, so replies reach
+  // the Toastmaster instead of the club inbox.
+  if (options?.replyTo) {
+    headers.push(`Reply-To: ${sanitizeHeaderValue(options.replyTo)}`);
+  }
+  return [...headers, '', htmlBody].join('\r\n');
+}
+
+/**
+ * Sends an email via the Gmail API from the authenticated user's account —
+ * the Toastmaster's own, or the club's on behalf of a member without Google.
  */
 export async function sendGmailAsUser(
   accessToken: string,
   recipients: string[],
   subject: string,
-  htmlBody: string
+  htmlBody: string,
+  options?: { replyTo?: string }
 ) {
   console.log(`[GoogleAPI] Sending Gmail to ${recipients.length} recipients...`);
 
   // Gmail API requires RFC 2822 formatted messages, base64url-encoded.
-  // We use BCC for multiple recipients to protect member email privacy.
-  const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
-  const message = [
-    `Content-Type: text/html; charset="UTF-8"`,
-    `MIME-Version: 1.0`,
-    `To: ${recipients[0]}`, // Standard 'To' field
-    `Bcc: ${recipients.join(', ')}`, // Send all others as BCC
-    `Subject: ${utf8Subject}`,
-    '',
-    htmlBody
-  ].join('\r\n');
+  const message = buildRawGmailMessage(recipients, subject, htmlBody, options);
 
   const encodedMessage = Buffer.from(message)
     .toString('base64')

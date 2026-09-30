@@ -21,6 +21,7 @@ export async function resetDb() {
   await db.meetingTemplate.deleteMany()
   await db.user.deleteMany()
   await db.subscriber.deleteMany()
+  await db.settings.deleteMany()
 }
 
 /** Creates a meeting (with its required template) and returns it. */

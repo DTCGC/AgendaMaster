@@ -9,11 +9,12 @@
  */
 import { NextResponse } from 'next/server';
 import { quietlySendEmail, FROM_EMAIL } from '@/lib/email';
+import { CLUB_GOOGLE_EMAIL } from '@/lib/club-google';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
 /** Where inbound club mail gets forwarded. */
-const CLUB_INBOX = 'coquitlamgavel@gmail.com';
+const CLUB_INBOX = CLUB_GOOGLE_EMAIL;
 
 /**
  * Addresses that must never be forwarded FROM.

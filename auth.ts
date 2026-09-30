@@ -1,8 +1,9 @@
 /**
  * NextAuth Full Configuration
  *
- * Extends auth.config.ts with Node.js-only providers (Google OAuth, Credentials)
- * and richer callbacks that interact with the database.
+ * Extends auth.config.ts with Node.js-only providers (Google OAuth for members,
+ * email/password Credentials for admins and members without Google) and richer
+ * callbacks that interact with the database.
  *
  * Exports: handlers (API route), auth (session getter), signIn, signOut,
  *          unstable_update (session mutation for role transitions).
@@ -13,7 +14,8 @@ import { authConfig } from './auth.config';
 import Google from 'next-auth/providers/google';
 import Credentials from 'next-auth/providers/credentials';
 import { db } from '@/lib/db';
-import bcrypt from 'bcryptjs';
+import { verifyPasswordLogin } from '@/lib/password-auth';
+import { CLUB_GOOGLE_EMAIL, saveClubGoogleConnection } from '@/lib/club-google';
 
 export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
@@ -38,37 +40,20 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         },
       },
     }),
-    // --- Credentials: Admin-only email/password login ---
+    // --- Credentials: email/password login ---
+    // Used by the club's shared ADMIN credential AND by the rare members who
+    // registered without a Google account (see lib/password-auth.ts).
     Credentials({
-        name: 'Admin Login',
+        name: 'Email Login',
         credentials: {
-          email: { label: "Email", type: "email", placeholder: "admin@example.com" },
+          email: { label: "Email", type: "email" },
           password: { label: "Password", type: "password" }
         },
         async authorize(credentials) {
-            if (!credentials?.email || !credentials?.password) return null;
-            
-            // Look up the user by email in the database
-            const user = await db.user.findUnique({ 
-                where: { email: credentials.email as string } 
-            });
-            
-            // Only ADMIN users may use credential login; MEMBER accounts must use Google
-            if (!user || user.role !== 'ADMIN' || !user.passwordHash) return null;
-            
-            // Verify password against bcrypt hash
-            const isValid = await bcrypt.compare(credentials.password as string, user.passwordHash);
-            
-            if (isValid) {
-                return {
-                    id: user.id,
-                    email: user.email,
-                    name: `${user.firstName} ${user.lastName}`,
-                    role: user.role,
-                };
-            }
-            
-            return null;
+            return verifyPasswordLogin(
+                (credentials?.email as string) ?? '',
+                (credentials?.password as string) ?? ''
+            );
         }
     })
   ],
@@ -118,6 +103,9 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
             // Initial sign-in: seed the token with user metadata
             token.role = user.role;
             token.dbId = user.id;
+            // HOW they signed in decides which Google credential the agenda
+            // pipeline uses (lib/google-auth-path.ts) — see types/next-auth.d.ts.
+            token.authMethod = account?.provider === 'google' ? 'google' : 'credentials';
         } else if (token.dbId) {
             // Live revalidation on EVERY subsequent request so that admin
             // approvals (PENDING → MEMBER), role changes, and account
@@ -138,6 +126,22 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         if (account?.provider === 'google') {
             token.accessToken = account.access_token;
             token.refreshToken = account.refresh_token;
+
+            // An admin signing in with Google as the club account (the
+            // "Connect" button on Member Management) stores that account's
+            // refresh token, so agendas of members without Google can be
+            // created and emailed through it. Never allowed to block a login.
+            if (
+                account.refresh_token &&
+                (user?.email ?? token.email)?.toLowerCase() === CLUB_GOOGLE_EMAIL &&
+                token.role === 'ADMIN'
+            ) {
+                try {
+                    await saveClubGoogleConnection(account.refresh_token);
+                } catch (error) {
+                    console.error("Failed to store the club Google connection:", error);
+                }
+            }
         }
         return token;
     },
@@ -148,6 +152,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
             session.user.id = token.sub as string;
             session.user.dbId = token.dbId as string;
             session.user.accessToken = token.accessToken as string | undefined;
+            session.user.authMethod = token.authMethod;
         }
         return session;
     }

@@ -2,6 +2,7 @@
 
 import { auth, unstable_update } from '@/auth'
 import { db } from '@/lib/db'
+import { createPasswordAccount } from '@/lib/password-auth'
 
 /**
  * Completes a new member's profile by saving their self-reported name.
@@ -82,4 +83,22 @@ export async function syncSessionRole(): Promise<{ role: string | null }> {
   await unstable_update({ user: { role: session.user.role } });
 
   return { role: session.user.role ?? null };
+}
+
+/**
+ * Registers an email/password account for a member who cannot use Google.
+ * The account starts INCOMPLETE — the client signs in right after and lands
+ * on /complete-profile, then /pending, exactly like a first Google sign-in.
+ */
+export async function registerWithPassword(formData: FormData): Promise<{ success: boolean; error?: string }> {
+  const email = (formData.get('email') as string | null) ?? '';
+  const password = (formData.get('password') as string | null) ?? '';
+  const confirmPassword = (formData.get('confirmPassword') as string | null) ?? '';
+
+  if (password !== confirmPassword) {
+    return { success: false, error: 'The two passwords do not match.' };
+  }
+
+  const result = await createPasswordAccount(email, password);
+  return result.success ? { success: true } : { success: false, error: result.error };
 }

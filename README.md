@@ -15,6 +15,7 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
 
 ### 👥 Member & Role Management
 - **Identity Verification**: Members provide their own name during a Profile Completion step after first sign-in, ensuring accurate club records even when using a parent's or shared Google account.
+- **Members Without Google**: The rare member who cannot use any Google account can register with an email and password at `/signup` (linked quietly from the login page, behind a notice that steers them back to Google). They sign in through the same **Email & Password** form the admin uses, then go through the same name entry and admin approval. When such a member is Toastmaster, their agenda sheet is created in — and the agenda email sent from — the club's Google account (`coquitlamgavel@gmail.com`, with Reply-To set to the member); later updates go through the service account. An admin connects the club account once from **Member Management** (see the [Google Cloud Setup Guide](./docs/GOOGLE_CLOUD_SETUP.md#step-7-connect-the-club-google-account-members-without-google)). There is no password reset: an admin removes the account and the member registers again.
 - **Automated Sequencing**: Intelligent role assignment based on historical participation and club-specific sequencing rules.
 - **Guest Subscription**: Dedicated system for managing guest subscribers and converted members.
 - **Admin Dashboard**: Centralized control for account approvals, inline name editing, role overrides, and meeting scheduling.
@@ -30,7 +31,7 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
 
 - **Framework**: [Next.js 16](https://nextjs.org/) (App Router)
 - **Database**: [Prisma 7](https://www.prisma.io/) with SQLite via the `better-sqlite3` driver adapter (optimized for low-overhead archival)
-- **Authentication**: [NextAuth.js (Auth.js v5)](https://authjs.dev/) — Google OAuth 2.0 for members, hashed credentials for admins
+- **Authentication**: [NextAuth.js (Auth.js v5)](https://authjs.dev/) — Google OAuth 2.0 for members, hashed email/password credentials for admins and the few members without Google
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) with [shadcn/ui](https://ui.shadcn.com/) components built on [Base UI](https://base-ui.com/) primitives
 - **Rich Text**: [Tiptap](https://tiptap.dev/)
 - **Email**: [Gmail API](https://developers.google.com/gmail/api) (agenda delivery) & [Resend](https://resend.com/) (admin broadcasts)
@@ -112,6 +113,7 @@ What is covered (all of it invisible-when-broken behaviour, which is why it is p
 | `tests/backup-speaker.test.ts` | The Backup Speaker stays roleless: still eligible for a minor role, still on the attendance list, never counted as recent participation. |
 | `tests/roster-regeneration.test.ts` | A normal load preserves the saved roster; `ignoreSavedMinorRoles` reshuffles without persisting or disturbing other roles. |
 | `tests/guest-education.test.ts` | The Guest Education override relabels only the `Speaker 3` row (to `Guest Speaker`) and stays byte-identical to Regular output everywhere else — and is fully inert when inactive. |
+| `tests/password-accounts.test.ts` | Email/password accounts: a Google-only account can never be signed into with a password, emails can't be duplicated by capitalization, and each caller's agenda runs under the right Google credential (admins always the service account; members without Google create through the club account). |
 | `tests/service-account.test.ts` | `GOOGLE_SERVICE_ACCOUNT_KEY` parses as raw or base64 JSON, and anything broken degrades to `null` instead of throwing — a bad env var must never break the Toastmaster's sheet creation. |
 
 **Do not deploy test files.** The artifact list in `.github/workflows/deploy.yml` copies only
@@ -135,7 +137,7 @@ pipeline. Full provisioning and operations instructions live in the dedicated gu
 The [original specification](./docs/spec-original.md) is preserved as a historical brief. The
 shipped application diverges from it in a few notable ways:
 
-- **Agenda email** is sent via the **Gmail API** (as the Toastmaster), not Resend. Resend is
+- **Agenda email** is sent via the **Gmail API** (as the Toastmaster — or, for a member without Google, as the club's connected Google account), not Resend. Resend is
   used only for admin broadcasts and approval notifications.
 - **Meeting status** uses `SCHEDULED → ARCHIVED` (not the spec's `CANCELLED`/`COMPLETED`).
 - **User roles** are `INCOMPLETE → PENDING → MEMBER`/`ADMIN` (plus a transient `DELETED`),

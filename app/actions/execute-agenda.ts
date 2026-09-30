@@ -11,14 +11,19 @@
  *                  (no email re-send).
  *
  * Requires the user's Google OAuth access token with drive.file + gmail.send
- * scopes — except for ADMIN callers, who have no Google identity (credentials
- * login) and instead update existing sheets via the app's service account.
+ * scopes — except for callers who signed in with a password:
+ *   - ADMINs update existing sheets via the app's service account;
+ *   - members without Google update via the service account too, and create
+ *     the sheet + send the email through the club's connected Google account
+ *     (lib/club-google.ts).
  */
 'use server'
 
 import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { createAgendaSheet, updateAgendaSheet, sendGmailAsUser, getServiceAccountEmail } from '@/lib/google-api'
+import { getClubAccessToken, ClubGoogleUnavailableError } from '@/lib/club-google'
+import { resolveGoogleAuthPath } from '@/lib/google-auth-path'
 import { buildSheetPayload } from '@/lib/agenda-sheet'
 import { revalidatePath } from 'next/cache'
 
@@ -52,22 +57,32 @@ export async function executeAgendaPipeline(
     return { success: false, error: 'Not signed in.' };
   }
 
-  // Two Google auth paths, chosen by what the caller HAS, not who they are:
-  // a caller with a Google OAuth token (the Toastmaster) uses it exactly as
-  // before; an ADMIN has no token by construction — the Credentials provider
-  // never touches Google, so session.user.accessToken is structurally
-  // undefined for every admin session — and falls through to the app's
-  // service account. That fallback can only update an EXISTING sheet (it is
-  // never the sender of the agenda email), which is enforced below.
-  const accessToken = session.user.accessToken ?? null;
-  const usingServiceAccount = !accessToken && session.user.role === 'ADMIN';
+  // Which Google credential this caller runs under (lib/google-auth-path.ts):
+  //   - a Toastmaster who signed in with Google uses their own token;
+  //   - an ADMIN always uses the app's service account, which can only update
+  //     an EXISTING sheet (it never sends the agenda email — enforced below);
+  //   - a member who registered with email + password also updates through the
+  //     service account, and creates the sheet + sends the email through the
+  //     club's connected Google account.
+  const authPath = resolveGoogleAuthPath({
+    role: session.user.role,
+    authMethod: session.user.authMethod,
+    accessToken: session.user.accessToken,
+  });
 
-  if (!accessToken && !usingServiceAccount) {
+  if (authPath.kind === 'none') {
     return {
       success: false,
       error: 'Google API permissions not available. Please sign out and sign back in with Google to grant the required permissions.'
     };
   }
+
+  const usingServiceAccount = authPath.kind === 'service-account';
+  const accessToken = authPath.kind === 'user-token' ? authPath.accessToken : null;
+
+  // Set once the service account is about to write to an existing sheet, so a
+  // 403/404 is only blamed on a missing share when it really came from there.
+  let serviceAccountUpdate = false;
 
   try {
     // Everything the sheet needs, resolved from the DB (shared with the
@@ -89,6 +104,7 @@ export async function executeAgendaPipeline(
 
     if (isUpdate) {
       // SILENT UPDATE: just re-populate the existing sheet
+      serviceAccountUpdate = usingServiceAccount;
       await updateAgendaSheet(
         accessToken,
         meeting.googleSheetId!,
@@ -101,21 +117,37 @@ export async function executeAgendaPipeline(
       );
       sheetUrl = meeting.googleSheetUrl!;
     } else {
-      // First-time creation also sends the agenda email as the Toastmaster —
-      // a Google identity the service account cannot and must not stand in
-      // for. An admin landing here (meeting never finalized) gets a clear
-      // refusal instead of a half-executed pipeline.
-      if (!accessToken) {
+      // First-time creation also sends the agenda email — as the Toastmaster,
+      // or as the club account on behalf of a member without Google. The
+      // service account cannot and must not stand in for either. An admin
+      // landing here (meeting never finalized) gets a clear refusal instead
+      // of a half-executed pipeline.
+      const isClubCreate = authPath.kind === 'service-account' && authPath.clubCreate;
+      if (!accessToken && !isClubCreate) {
         return {
           success: false,
           code: 'NO_SHEET',
-          error: 'This meeting has no agenda sheet yet. The sheet is created (and the agenda email sent) by the assigned Toastmaster signing in with Google — admin editing only works on a meeting that has already been finalized.'
+          error: 'This meeting has no agenda sheet yet. The sheet is created (and the agenda email sent) by the assigned Toastmaster — admin editing only works on a meeting that has already been finalized.'
         };
+      }
+
+      let creatorToken: string;
+      if (accessToken) {
+        creatorToken = accessToken;
+      } else {
+        try {
+          creatorToken = await getClubAccessToken();
+        } catch (error) {
+          if (error instanceof ClubGoogleUnavailableError) {
+            return { success: false, error: error.message };
+          }
+          throw error;
+        }
       }
 
       // FIRST TIME: create the sheet + send email
       const result = await createAgendaSheet(
-        accessToken,
+        creatorToken,
         meeting.date,
         effectiveTheme,
         effectiveQotd,
@@ -138,6 +170,21 @@ export async function executeAgendaPipeline(
         }
       });
 
+      // Sent through the club account: say who it is really from, and route
+      // replies to the Toastmaster instead of the club inbox.
+      let onBehalfNote = '';
+      let replyTo: string | undefined;
+      if (!accessToken && session.user.dbId) {
+        const sender = await db.user.findUnique({
+          where: { id: session.user.dbId },
+          select: { firstName: true, lastName: true, email: true }
+        });
+        if (sender) {
+          replyTo = sender.email;
+          onBehalfNote = `<p style="font-size: 11px; color: #999;">Sent from the club's account on behalf of ${escapeHtml(`${sender.firstName} ${sender.lastName}`.trim())}, this meeting's Toastmaster. Replies go to them directly.</p>`;
+        }
+      }
+
       // Build the email with the sheet link appended
       const emailWithLink = `
         ${emailHtmlBody}
@@ -151,6 +198,7 @@ export async function executeAgendaPipeline(
         <p style="font-size: 11px; color: #999;">
           Sent via DTCGC AgendaMaster — Downtown Coquitlam Gavel Club
         </p>
+        ${onBehalfNote}
       `;
 
       // Collect all recipients
@@ -159,8 +207,8 @@ export async function executeAgendaPipeline(
       const subscriberEmails = subscribers.map((s: { email: string }) => s.email);
       const allRecipients = Array.from(new Set([...memberEmails, ...subscriberEmails]));
 
-      // Send via Gmail API (as the logged-in Toastmaster)
-      await sendGmailAsUser(accessToken, allRecipients, emailSubject, emailWithLink);
+      // Send via Gmail API (as the Toastmaster, or the club account for them)
+      await sendGmailAsUser(creatorToken, allRecipients, emailSubject, emailWithLink, { replyTo });
     }
 
     // On the create path these were persisted alongside the sheet IDs above.
@@ -180,14 +228,14 @@ export async function executeAgendaPipeline(
 
     // KNOWN LIMITATION, surfaced on purpose: sheets created before the
     // service-account grant existed were never shared with the service
-    // account, so Google rejects the admin's update with a 403/404. That is
-    // fixed by a one-time manual share of that sheet — say so, instead of
-    // leaking a bare "The caller does not have permission".
-    if (usingServiceAccount && isGooglePermissionError(error)) {
+    // account, so Google rejects a service-account update with a 403/404.
+    // That is fixed by a one-time manual share of that sheet — say so,
+    // instead of leaking a bare "The caller does not have permission".
+    if (serviceAccountUpdate && isGooglePermissionError(error)) {
       const saEmail = getServiceAccountEmail();
       return {
         success: false,
-        error: `Google denied the app's service account access to this meeting's sheet. Sheets created before admin editing shipped were never shared with it automatically — open the sheet in Google Sheets, hit Share, and add ${saEmail ?? 'the service account email'} as an Editor, then try again.`
+        error: `Google denied the app's service account access to this meeting's sheet. Sheets created before admin editing shipped were never shared with it automatically — open the sheet in Google Sheets, hit Share, and add ${saEmail ?? 'the service account email'} as an Editor, then try again. (An executive may need to do this.)`
       };
     }
 
@@ -197,6 +245,15 @@ export async function executeAgendaPipeline(
       error: message
     };
   }
+}
+
+/** Minimal HTML escaping for a member-entered name placed in the email body. */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 /**

@@ -3,7 +3,9 @@
  *
  * Two audiences, two shapes of access:
  *   - Toastmaster: strictly gated to the closest upcoming SCHEDULED meeting
- *     they are assigned to, full 4-step wizard. Unchanged.
+ *     they are assigned to, full 4-step wizard. Unchanged. (A Toastmaster who
+ *     registered without Google gets the same wizard; the pipeline creates
+ *     and emails through the club's Google account for them.)
  *   - Admin: may edit ANY upcoming scheduled meeting (selector sidebar, same
  *     pattern as /admin/roles), always in the wizard's roster-only update
  *     mode (?step=3). Their sheet updates run through the app's service

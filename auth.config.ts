@@ -7,7 +7,7 @@
  * Node.js APIs (bcrypt, Prisma) — those live in auth.ts.
  *
  * Role lifecycle: INCOMPLETE → PENDING → MEMBER / ADMIN
- *   - INCOMPLETE: New Google sign-in, needs to enter real name
+ *   - INCOMPLETE: New Google sign-in (or email/password signup), needs to enter real name
  *   - PENDING:    Name submitted, awaiting admin approval
  *   - MEMBER:     Approved, can view agendas
  *   - ADMIN:      Full access to admin panels
@@ -26,7 +26,8 @@ export const authConfig = {
       const role = auth?.user?.role as string | undefined;
       const isOnAdmin = nextUrl.pathname.startsWith('/admin');
       const isOnAgenda = nextUrl.pathname.startsWith('/agenda');
-      const isOnLogin = nextUrl.pathname === '/login';
+      // /signup (email/password registration) routes exactly like /login.
+      const isOnLogin = nextUrl.pathname === '/login' || nextUrl.pathname === '/signup';
       const isOnPending = nextUrl.pathname === '/pending';
       const isOnCompleteProfile = nextUrl.pathname === '/complete-profile';
 

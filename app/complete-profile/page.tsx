@@ -1,7 +1,8 @@
 /**
  * Profile Completion Page
  *
- * Shown to INCOMPLETE users after their first Google sign-in.
+ * Shown to INCOMPLETE users after their first Google sign-in (or right after
+ * registering with email + password on /signup).
  * Collects first/last name (decoupled from Google account name)
  * and transitions the user to PENDING for admin review.
  */
@@ -57,7 +58,11 @@ export default async function CompleteProfilePage() {
 
         <div className="w-full bg-brand-happy-yellow/10 border border-brand-happy-yellow/30 rounded-lg p-3 mb-6">
           <p className="text-[11px] text-yellow-800 leading-relaxed text-center font-medium">
-            Please enter <strong>your own name</strong> below — not the name on the Google account you used to sign in. This is how you will appear on meeting agendas and club records.
+            {session.user?.authMethod === "credentials" ? (
+              <>Please enter <strong>your own name</strong> below. This is how you will appear on meeting agendas and club records.</>
+            ) : (
+              <>Please enter <strong>your own name</strong> below — not the name on the Google account you used to sign in. This is how you will appear on meeting agendas and club records.</>
+            )}
           </p>
         </div>
 

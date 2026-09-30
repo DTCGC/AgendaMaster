@@ -3,16 +3,18 @@
  *
  * The primary authentication entry point. Provides three access methods:
  *   1. Google OAuth (primary — for all members)
- *   2. Admin credentials (collapsible section — for exec-only access)
+ *   2. Email & password (collapsible section — the admin credential, plus the
+ *      rare members who registered without Google via /signup)
  *   3. Guest mailing list subscription (no account required)
  *
  * Redirects authenticated users based on their role state.
  */
 import { auth, signIn } from "@/auth";
 import Image from "next/image";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import GuestSubscribe from "@/components/login/guest-subscribe";
-import AdminLoginForm from "@/components/login/admin-login-form";
+import EmailLoginForm from "@/components/login/email-login-form";
 
 export default async function LoginPage() {
   const session = await auth();
@@ -60,19 +62,25 @@ export default async function LoginPage() {
         <p className="text-[10px] text-gray-400 mt-3 text-center italic max-w-[240px]">
           New members: Sign in with Google to request access. Your account will be reviewed by the Executive Team.
         </p>
+        <p className="text-[10px] text-gray-300 mt-2 text-center">
+          No Google account?{" "}
+          <Link href="/signup" className="underline hover:text-gray-500 transition-colors">
+            Register with email instead
+          </Link>
+        </p>
 
-        {/* ADMIN ACCESS — Collapsible Section */}
+        {/* EMAIL & PASSWORD — Collapsible Section (admins + members without Google) */}
         <details className="w-full mt-8 group">
           <summary className="flex items-center w-full cursor-pointer select-none">
             <div className="flex-grow border-t border-gray-100"></div>
-            <span className="px-4 text-[10px] font-bold text-gray-300 uppercase tracking-widest group-open:text-brand-true-maroon transition-colors">
-              Admin Access
+            <span className="px-4 text-[10px] font-bold text-gray-300 uppercase tracking-widest group-open:text-brand-loyal-blue transition-colors">
+              Email &amp; Password
             </span>
             <div className="flex-grow border-t border-gray-100"></div>
           </summary>
           
           <div className="pt-6 animate-in fade-in slide-in-from-top-2 duration-300">
-            <AdminLoginForm />
+            <EmailLoginForm />
           </div>
         </details>
 
@@ -83,7 +91,7 @@ export default async function LoginPage() {
 
         <div className="text-center mt-6">
             <p className="text-[10px] text-gray-400 leading-relaxed max-w-[240px] italic">
-                Authorized use only. Standard member applications are screened by the Executive Team after initial Google verification.
+                Authorized use only. Standard member applications are screened by the Executive Team before access is granted.
             </p>
         </div>
       </div>

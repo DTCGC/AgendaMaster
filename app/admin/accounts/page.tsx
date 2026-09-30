@@ -5,13 +5,15 @@
  *   1. Pending approvals queue (new sign-up requests)
  *   2. Active member directory (with inline name editing)
  *   3. Guest subscriber list
+ * Plus the club Google account connection used by members without Google.
  */
 import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { removeUser, removeSubscriber } from '@/app/actions/accounts'
-import { Check, Users, Mail, Trash2, ShieldCheck } from 'lucide-react'
+import { removeUser, removeSubscriber, connectClubGoogle } from '@/app/actions/accounts'
+import { getClubGoogleStatus, CLUB_GOOGLE_EMAIL } from '@/lib/club-google'
+import { Check, Users, Mail, Trash2, ShieldCheck, KeyRound, Link2 } from 'lucide-react'
 import EditableName from '@/components/admin/editable-name'
 import AccountActionButtons from '@/components/admin/account-action-buttons'
 
@@ -42,6 +44,17 @@ export default async function AccountsPage() {
   const guestSubscribers = await db.subscriber.findMany({
     orderBy: { subscribedAt: 'desc' }
   })
+
+  const clubGoogle = await getClubGoogleStatus()
+
+  // Members who registered with email + password rather than Google. The
+  // ADMIN credential also has a password but is not a member, so no badge.
+  const emailLoginBadge = (user: { role: string; passwordHash: string | null }) =>
+    user.role !== 'ADMIN' && user.passwordHash ? (
+      <span title="Registered with email and password (no Google account)" className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+        <KeyRound size={10} /> Email login
+      </span>
+    ) : null
 
   return (
     <div className="flex-1 p-8 bg-brand-cool-grey/10 min-h-screen">
@@ -83,7 +96,9 @@ export default async function AccountsPage() {
                         {pendingUsers.map((user) => (
                             <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
                             <td className="p-4 text-sm text-gray-500">{new Date(user.createdAt).toLocaleDateString()}</td>
-                            <td className="p-4 font-bold text-brand-loyal-blue">{user.firstName} {user.lastName}</td>
+                            <td className="p-4 font-bold text-brand-loyal-blue">
+                                <div className="flex items-center gap-2">{user.firstName} {user.lastName} {emailLoginBadge(user)}</div>
+                            </td>
                             <td className="p-4 text-sm text-gray-600 italic font-mono">{user.email}</td>
                             <td className="p-4">
                                 <AccountActionButtons userId={user.id} userName={`${user.firstName} ${user.lastName}`} />
@@ -115,6 +130,7 @@ export default async function AccountsPage() {
                                         <div className="flex items-center gap-2">
                                             <EditableName userId={user.id} firstName={user.firstName} lastName={user.lastName} />
                                             {user.role === 'ADMIN' && <ShieldCheck size={14} className="text-brand-true-maroon" />}
+                                            {emailLoginBadge(user)}
                                         </div>
                                         <div className="text-[10px] text-gray-500 font-mono italic">{user.email}</div>
                                     </div>
@@ -168,6 +184,36 @@ export default async function AccountsPage() {
                 </div>
             </div>
 
+        </div>
+
+        {/* Club Google account — used only for members without Google */}
+        <div className="space-y-4">
+            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Club Google Account</h2>
+            <div className="bg-white rounded-xl shadow-sm border p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="space-y-2 max-w-2xl">
+                    <div className="flex items-center gap-2">
+                        <span className={`w-2.5 h-2.5 rounded-full ${clubGoogle.connected ? 'bg-green-500' : 'bg-gray-300'}`} />
+                        <span className="font-bold text-gray-800">
+                            {clubGoogle.connected ? 'Connected' : 'Not connected'}
+                        </span>
+                        {clubGoogle.connectedAt && (
+                            <span className="text-xs text-gray-400">since {clubGoogle.connectedAt.toLocaleDateString()}</span>
+                        )}
+                    </div>
+                    <p className="text-sm text-gray-600">
+                        Members marked <strong>Email login</strong> have no Google account, so when they are Toastmaster the agenda sheet is created in — and the agenda email sent from — <span className="font-mono">{CLUB_GOOGLE_EMAIL}</span>. Google members are not affected.
+                    </p>
+                    <p className="text-xs text-amber-700">
+                        Choose <span className="font-mono">{CLUB_GOOGLE_EMAIL}</span> on the Google screen. Picking any other Google account signs you in as that account instead and connects nothing.
+                    </p>
+                </div>
+                <form action={connectClubGoogle}>
+                    <button type="submit" className="flex items-center gap-2 whitespace-nowrap bg-white border-2 border-brand-loyal-blue text-brand-loyal-blue font-bold rounded-xl px-4 py-2.5 hover:bg-brand-loyal-blue hover:text-white transition-all text-sm">
+                        <Link2 size={16} />
+                        {clubGoogle.connected ? 'Reconnect' : 'Connect'} with Google
+                    </button>
+                </form>
+            </div>
         </div>
 
       </div>

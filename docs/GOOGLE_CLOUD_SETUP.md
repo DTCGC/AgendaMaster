@@ -155,6 +155,32 @@ Notes:
 
 ---
 
+## Step 7: Connect the Club Google Account (Members Without Google)
+
+A few members may register with an email and password instead of Google. They
+have no Google identity, so when one of them is Toastmaster the app creates the
+agenda sheet in — and sends the agenda email from — the club's own account,
+`coquitlamgavel@gmail.com`. (Later updates to that sheet go through the service
+account from Step 6, like admin edits.)
+
+1. Sign in to the portal with the admin email + password
+2. Open **Member Management** and find the **Club Google Account** card
+3. Click **Connect with Google** and choose `coquitlamgavel@gmail.com` on Google's
+   screen, approving every permission it asks for
+4. You land back on Member Management and the card reads **Connected**
+
+The connection is stored in the database (the `Settings` table) — there is
+nothing to add to `.env`. Reconnect the same way if Google ever revokes it (for
+example after the club account's password changes); members see a clear
+"ask an executive to reconnect" message when that is needed.
+
+> [!IMPORTANT]
+> The OAuth consent screen must stay **In production** (Step 3). In **Testing**
+> status Google expires the stored connection after 7 days, and the club account
+> would need reconnecting every week.
+
+---
+
 ## Summary Checklist
 
 - [ ] Created Google Cloud project
@@ -165,3 +191,4 @@ Notes:
 - [ ] Copied Client ID and Client Secret to `.env`
 - [ ] Enabled 2-Step Verification on the Gmail account
 - [ ] Created the `agendamaster-sheet-editor` service account + JSON key, and put it in `GOOGLE_SERVICE_ACCOUNT_KEY` (local **and** Droplet `.env`)
+- [ ] Connected `coquitlamgavel@gmail.com` on Member Management → Club Google Account

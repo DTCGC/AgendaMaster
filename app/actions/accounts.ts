@@ -7,6 +7,7 @@
  *   - Guest mailing list subscription
  *   - User removal (soft-unlinking from roles, then hard delete)
  *   - Admin name correction
+ *   - Connecting the club's Google account (used for members without Google)
  */
 'use server'
 
@@ -14,7 +15,8 @@ import { db } from '@/lib/db'
 import { quietlySendEmail } from '@/lib/email'
 import { revalidatePath } from 'next/cache'
 import { requireAdmin } from '@/lib/auth-guard'
-import { auth } from '@/auth'
+import { auth, signIn } from '@/auth'
+import { CLUB_GOOGLE_EMAIL } from '@/lib/club-google'
 
 /**
  * Approves a pending user registration.
@@ -255,4 +257,15 @@ export async function updateUserName(formData: FormData) {
   });
 
   revalidatePath('/admin/accounts');
+}
+
+/**
+ * Starts a Google sign-in as the club account. When it completes, the jwt
+ * callback in auth.ts stores the club's refresh token (lib/club-google.ts),
+ * which is what lets members without Google create and email their agenda.
+ * The admin stays signed in afterwards — as the ADMIN account, via Google.
+ */
+export async function connectClubGoogle() {
+  await requireAdmin();
+  await signIn('google', { redirectTo: '/admin/accounts' }, { login_hint: CLUB_GOOGLE_EMAIL });
 }
