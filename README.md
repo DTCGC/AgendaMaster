@@ -22,6 +22,10 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
 - **Admin Agenda Editing**: Admins can open any upcoming meeting's roster in the wizard's update mode and push changes to the existing agenda sheet. Since the admin login has no Google identity, those sheet updates authenticate as a **Google service account** (`GOOGLE_SERVICE_ACCOUNT_KEY`), which the app automatically grants Editor access on every newly created sheet. Sheets created before this feature must be shared with the service account manually once.
 - **Mass Communications (Resend API)**: Admin broadcasts and account-approval notifications are delivered via the Resend API (BCC) to bypass server SMTP blocks.
 
+### 📖 Tutorial
+- **In-app Tutorial (`/tutorial`)**: A plain-language, illustrated guide linked from the top navigation, the landing page, the login page, the Toastmaster's dashboard card and the wizard's "How do I write the email?" link. The **Getting Started** part (what the app is, creating an account, the parents' guest mailing list) is public, so people can read it before they have an account. The **Toastmaster** and **Meeting Day** parts are rendered only for approved members (MEMBER/ADMIN), so they are never sent to anyone else.
+- **Screenshots** live in `app/tutorial/screenshots/` and show only made-up demo members. They are produced by [`scripts/tutorial-screenshots`](./scripts/tutorial-screenshots/README.md) against a throwaway demo database. Re-run it when a screen the tutorial shows changes.
+
 ### ☁️ Google Cloud Integration
 - Deep integration with **Google Sheets API**, **Gmail API**, and **Google Drive API** for seamless cloud-based operations.
 

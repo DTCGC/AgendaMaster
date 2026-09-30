@@ -112,6 +112,17 @@ export function TopNav({ role }: { role?: string }) {
                         </NavigationMenuItem>
                     </>
                 )}
+
+                {/* Open to everyone: the getting-started half is public, and
+                    the page itself decides what a visitor may read. */}
+                <NavigationMenuItem className={isAdmin ? "hidden md:block" : undefined}>
+                <Link
+                    href="/tutorial"
+                    className={getNavLinkClass("/tutorial")}
+                >
+                    Tutorial
+                </Link>
+                </NavigationMenuItem>
             </NavigationMenuList>
         </NavigationMenu>
 

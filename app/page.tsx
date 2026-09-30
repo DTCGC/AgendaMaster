@@ -50,6 +50,12 @@ export default async function LandingPage() {
                   </Link>
               </>
             )}
+            <Link
+                href="/tutorial"
+                className="bg-white/70 text-brand-loyal-blue border-2 border-brand-loyal-blue/20 px-10 py-3.5 rounded-xl font-bold text-lg hover:border-brand-loyal-blue/50 transition-colors duration-300"
+            >
+                How it works
+            </Link>
           </div>
 
           <div className="pt-20 grid grid-cols-1 md:grid-cols-3 gap-6 text-left w-full">

@@ -56,3 +56,6 @@ test*.js
 
 # local agent tooling — holds throwaway git worktrees, never commit
 .claude/
+
+# tutorial screenshot tooling output (demo database, demo credentials, browser profile)
+/scripts/tutorial-screenshots/.out/

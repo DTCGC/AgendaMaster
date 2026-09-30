@@ -68,6 +68,12 @@ export default async function LoginPage() {
             Register with email instead
           </Link>
         </p>
+        <p className="text-[10px] text-gray-400 mt-2 text-center italic">
+          New here?{" "}
+          <Link href="/tutorial#create-account" className="underline hover:text-brand-loyal-blue transition-colors">
+            Read how to get an account
+          </Link>
+        </p>
 
         {/* EMAIL & PASSWORD — Collapsible Section (admins + members without Google) */}
         <details className="w-full mt-8 group">

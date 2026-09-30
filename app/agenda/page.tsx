@@ -125,6 +125,12 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
                         >
                             {hasFinalized ? 'Update Agenda' : 'Begin Meeting Prep'}
                         </Link>
+                        <p className="text-xs text-gray-500 mt-4">
+                            First time as Toastmaster?{' '}
+                            <Link href="/tutorial#toastmaster" className="font-bold text-brand-loyal-blue hover:underline">
+                                Read the guide →
+                            </Link>
+                        </p>
                     </div>
                 </div>
             </div>

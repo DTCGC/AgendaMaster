@@ -578,7 +578,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
             <h2 className="text-xl font-bold border-l-4 pl-3 border-brand-loyal-blue">Email Draft</h2>
             <div className="flex justify-between items-center text-sm">
               <p className="text-gray-600">Draft the email body here. Progress is auto-saved locally.</p>
-              <a href="/assets/docs/toastmaster-tutorial.pdf" target="_blank" className="text-brand-loyal-blue font-bold flex items-center gap-1 hover:underline">
+              <a href="/tutorial#write-the-email" target="_blank" className="text-brand-loyal-blue font-bold flex items-center gap-1 hover:underline">
                 <AlertCircle size={14} /> How do I write the email?
               </a>
             </div>
