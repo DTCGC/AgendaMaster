@@ -7,6 +7,7 @@
  */
 import { auth } from '@/auth'
 import { db } from '@/lib/db'
+import { editableMeetingsSince } from '@/lib/archival'
 import { redirect } from 'next/navigation'
 import RolesForm from './roles-form'
 import { MAJOR_ROLES, BACKUP_SPEAKER } from '@/lib/agenda-logic'
@@ -35,7 +36,7 @@ export default async function RolesPage({
 
   // Fetch upcoming scheduled meetings (next 10)
   const upcomingMeetings = await db.meeting.findMany({
-    where: { date: { gte: new Date() }, status: 'SCHEDULED' },
+    where: { date: { gte: editableMeetingsSince() }, status: 'SCHEDULED' },
     orderBy: { date: 'asc' },
     include: { roleAssignments: true },
     take: 10

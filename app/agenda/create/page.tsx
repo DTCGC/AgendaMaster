@@ -12,6 +12,7 @@
  */
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { editableMeetingsSince } from "@/lib/archival";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import AgendaWizard from "@/components/agenda/wizard";
@@ -58,7 +59,7 @@ export default async function CreateAgendaPage({
     }
 
     const upcomingMeetings = await db.meeting.findMany({
-      where: { date: { gte: new Date() }, status: 'SCHEDULED' },
+      where: { date: { gte: editableMeetingsSince() }, status: 'SCHEDULED' },
       orderBy: { date: 'asc' },
       take: 10
     });
@@ -135,7 +136,7 @@ export default async function CreateAgendaPage({
   // Find the closest upcoming SCHEDULED meeting
   const nextMeeting = await db.meeting.findFirst({
     where: {
-        date: { gte: new Date() },
+        date: { gte: editableMeetingsSince() },
         status: 'SCHEDULED'
     },
     include: {

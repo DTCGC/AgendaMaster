@@ -9,6 +9,18 @@
 import { db } from './db'
 
 /**
+ * Meetings are stored at their 6:45 PM start, and end at 8:30 PM — 105 minutes later.
+ * The agenda/role editors stay open until then, so admins and the Toastmaster can
+ * still make onsite changes while the meeting is running.
+ */
+const EDIT_WINDOW_MS = 105 * 60 * 1000
+
+/** Earliest meeting date that is still editable right now (see EDIT_WINDOW_MS). */
+export function editableMeetingsSince(): Date {
+  return new Date(Date.now() - EDIT_WINDOW_MS)
+}
+
+/**
  * Archives all meetings whose scheduled time has passed the 9:00 PM threshold.
  *
  * Meetings are stored with a start time of 6:45 PM (18:45). The archival

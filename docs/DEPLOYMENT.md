@@ -148,6 +148,28 @@ To automate this on the Droplet, set up a system cron job:
 
 ---
 
+## 7. Pre-Meeting Agenda Refresh
+
+The database is the source of truth for the agenda, but the Toastmaster owns their Google Sheet
+and could bump a cell by accident. To guarantee members see the right agenda, a cron job rewrites
+today's sheet from the database at **6:30 PM Pacific** — 15 minutes before the 6:45 PM start.
+
+- It only touches meetings **today** that **already have a sheet**. It never creates a sheet or
+  sends an email.
+- It authenticates as the service account (`GOOGLE_SERVICE_ACCOUNT_KEY` must be set).
+- Any manual edit made directly on the sheet before 6:30 PM is reverted. Make changes in the app.
+
+Add a second crontab entry (same `CRON_SECRET` as archival):
+
+```
+30 18 * * 5 curl -sS --fail -X POST http://localhost:3000/api/cron/refresh-agenda -H "Authorization: Bearer YOUR_SECRET" >> /var/log/agendamaster-refresh.log 2>&1
+```
+
+Check it with `curl -X POST http://localhost:3000/api/cron/refresh-agenda -H "Authorization: Bearer YOUR_SECRET"`.
+The response lists each meeting's result; a `500` means at least one sheet failed.
+
+---
+
 ## Related Documentation
 
 - [README](../README.md) — project overview, features, and local setup.
