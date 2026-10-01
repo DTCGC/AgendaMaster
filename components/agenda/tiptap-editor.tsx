@@ -2,8 +2,7 @@
  * Tiptap Rich Text Editor Wrapper
  *
  * Provides a WYSIWYG editing experience for the Agenda Wizard's email draft
- * and the admin Mass Broadcast panel. Built on Tiptap/ProseMirror with
- * StarterKit's list extensions configured to carry Tailwind list classes.
+ * and the admin Mass Broadcast panel. Built on Tiptap/ProseMirror's StarterKit.
  *
  * The `initialized` ref prevents content from being overwritten when the
  * component re-renders after localStorage hydration on the client.
@@ -12,41 +11,39 @@
 
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { Bold, Italic, Strikethrough, List, ListOrdered } from 'lucide-react'
+import { Bold, Italic, Strikethrough, List, ListOrdered, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { Spinner } from '@/components/common/surfaces'
+import { cn } from '@/lib/utils'
 
-export default function TiptapEditor({ 
-  content, 
-  onChange 
-}: { 
-  content: string, 
-  onChange: (html: string) => void 
+/** Shown in an empty editor: a sample agenda email. */
+const SAMPLE_AGENDA_EMAIL = (
+  <>
+    <p>Good evening Toastmasters,</p>
+    <p>The theme for this week is: <strong>[THEME]</strong>!</p>
+    <p>Please review the attached agenda. If you cannot attend, please reply to this email to let us know immediately.</p>
+    <p>Best,<br/>Toastmaster</p>
+  </>
+)
+
+export default function TiptapEditor({
+  content,
+  onChange,
+  placeholder = SAMPLE_AGENDA_EMAIL,
+}: {
+  content: string,
+  onChange: (html: string) => void,
+  placeholder?: React.ReactNode,
 }) {
   const initialized = useRef(false);
 
-  const [_tick, setTick] = useState(0);
+  // Re-render on every transaction so the toolbar's active states stay current.
+  const [, setTick] = useState(0);
 
   const editor = useEditor({
-    extensions: [
-      // The list classes are configured through StarterKit rather than by
-      // disabling its lists and re-adding them from '@tiptap/extension-bullet-list'
-      // and friends. Those packages were never declared in package.json: they
-      // only ever resolved because npm happened to hoist StarterKit's own
-      // dependencies to the top of node_modules, and tiptap 3.29.2 nests them
-      // instead — which broke the build. StarterKit takes the same options.
-      StarterKit.configure({
-        bulletList: {
-          HTMLAttributes: {
-            class: 'list-disc ml-4',
-          },
-        },
-        orderedList: {
-          HTMLAttributes: {
-            class: 'list-decimal ml-4',
-          },
-        },
-      }),
-    ],
+    // List and paragraph styling comes from `.agenda-editor` in globals.css,
+    // so the HTML sent in the email carries no app class names.
+    extensions: [StarterKit],
     content: content,
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
@@ -57,7 +54,7 @@ export default function TiptapEditor({
     },
     editorProps: {
       attributes: {
-        class: 'prose prose-sm sm:prose lg:prose-lg max-w-none focus:outline-none min-h-[300px] p-6 bg-white border border-gray-200 rounded-b-lg transition-colors',
+        class: 'agenda-editor min-h-75 p-6 text-sm leading-relaxed text-gray-800 focus:outline-none',
       },
     },
   })
@@ -71,75 +68,50 @@ export default function TiptapEditor({
   }, [content, editor])
 
   if (!editor) {
-    return <div className="min-h-[300px] border rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 animate-pulse">Loading Editor Framework...</div>
+    return (
+      <div className="flex min-h-75 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-500">
+        <Spinner /> Loading editor…
+      </div>
+    )
   }
 
-  return (
-    <div className="flex flex-col shadow-sm rounded-lg overflow-hidden group">
-      <style jsx global>{`
-        .prose ul {
-          list-style-type: disc !important;
-          padding-left: 1.5rem !important;
-          margin-top: 0.5rem !important;
-          margin-bottom: 0.5rem !important;
-        }
-        .prose ol {
-          list-style-type: decimal !important;
-          padding-left: 1.5rem !important;
-          margin-top: 0.5rem !important;
-          margin-bottom: 0.5rem !important;
-        }
-        .prose li {
-          margin-top: 0.25rem !important;
-          margin-bottom: 0.25rem !important;
-        }
-      `}</style>
+  const tools: { label: string; icon: LucideIcon; active: string; run: () => void }[] = [
+    { label: 'Bold', icon: Bold, active: 'bold', run: () => editor.chain().focus().toggleBold().run() },
+    { label: 'Italic', icon: Italic, active: 'italic', run: () => editor.chain().focus().toggleItalic().run() },
+    { label: 'Strikethrough', icon: Strikethrough, active: 'strike', run: () => editor.chain().focus().toggleStrike().run() },
+    { label: 'Bulleted list', icon: List, active: 'bulletList', run: () => editor.chain().focus().toggleBulletList().run() },
+    { label: 'Numbered list', icon: ListOrdered, active: 'orderedList', run: () => editor.chain().focus().toggleOrderedList().run() },
+  ]
 
-      <div className="flex gap-1 p-2 bg-gray-50 border border-gray-200 border-b-0 rounded-t-lg opacity-80 group-focus-within:opacity-100 transition-opacity">
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          className={`p-2 rounded hover:bg-gray-200 transition ${editor.isActive('bold') ? 'bg-gray-200 text-brand-true-maroon' : 'text-gray-600'}`}
-        >
-          <Bold size={18} />
-        </button>
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          className={`p-2 rounded hover:bg-gray-200 transition ${editor.isActive('italic') ? 'bg-gray-200 text-brand-true-maroon' : 'text-gray-600'}`}
-        >
-          <Italic size={18} />
-        </button>
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleStrike().run()}
-          className={`p-2 rounded hover:bg-gray-200 transition ${editor.isActive('strike') ? 'bg-gray-200 text-brand-true-maroon' : 'text-gray-600'}`}
-        >
-          <Strikethrough size={18} />
-        </button>
-        <div className="w-px h-6 bg-gray-300 self-center mx-2"></div>
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className={`p-2 rounded hover:bg-gray-200 transition ${editor.isActive('bulletList') ? 'bg-gray-200 text-brand-true-maroon' : 'text-gray-600'}`}
-        >
-          <List size={18} />
-        </button>
-        <button
-          type="button"
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          className={`p-2 rounded hover:bg-gray-200 transition ${editor.isActive('orderedList') ? 'bg-gray-200 text-brand-true-maroon' : 'text-gray-600'}`}
-        >
-          <ListOrdered size={18} />
-        </button>
+  return (
+    <div
+      data-shot="email-editor"
+      className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-colors focus-within:border-brand-loyal-blue focus-within:ring-3 focus-within:ring-brand-loyal-blue/15"
+    >
+      <div className="flex items-center gap-1 border-b border-gray-200 bg-gray-50 p-2" role="toolbar" aria-label="Formatting">
+        {tools.map((tool, i) => (
+          <span key={tool.label} className="contents">
+            {i === 3 && <span aria-hidden className="mx-2 h-6 w-px bg-gray-300" />}
+            <button
+              type="button"
+              onClick={tool.run}
+              aria-label={tool.label}
+              aria-pressed={editor.isActive(tool.active)}
+              title={tool.label}
+              className={cn(
+                "rounded-lg p-2 transition-colors hover:bg-gray-200",
+                editor.isActive(tool.active) ? "bg-gray-200 text-brand-true-maroon" : "text-gray-600"
+              )}
+            >
+              <tool.icon size={18} />
+            </button>
+          </span>
+        ))}
       </div>
-      <div className="relative flex-grow">
+      <div className="relative grow">
         {editor.isEmpty && (
-          <div className="absolute inset-0 p-6 text-gray-400/70 pointer-events-none prose prose-sm sm:prose lg:prose-lg max-w-none">
-            <p>Good evening Toastmasters,</p>
-            <p>The theme for this week is: <strong>[THEME]</strong>!</p>
-            <p>Please review the attached agenda. If you cannot attend, please reply to this email to let us know immediately.</p>
-            <p>Best,<br/>Toastmaster</p>
+          <div aria-hidden className="agenda-editor pointer-events-none absolute inset-0 p-6 text-sm leading-relaxed text-gray-400">
+            {placeholder}
           </div>
         )}
         <EditorContent editor={editor} className="h-full" />

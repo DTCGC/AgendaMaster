@@ -5,25 +5,23 @@
  * The actual email composition logic lives in comms-client.tsx.
  */
 import { pageRequireAdmin } from '@/lib/auth-guard'
+import { PageShell, PageHeader } from '@/components/common/page'
 import CommsClient from './comms-client'
 
 export const metadata = {
-  title: 'Network Comms - DTCGC',
+  title: 'Mass Broadcast - DTCGC',
 }
 
 export default async function CommsPage() {
   await pageRequireAdmin()
 
   return (
-    <div className="flex-1 p-8 bg-brand-cool-grey/10 min-h-screen">
-      <div className="max-w-6xl mx-auto space-y-8">
-        <div className="flex flex-col border-b pb-4">
-          <h1 className="text-3xl font-extrabold text-brand-loyal-blue tracking-tight">Mass Broadcast</h1>
-          <p className="text-gray-600">Dispatch centralized club communications to targeted segments.</p>
-        </div>
-
-        <CommsClient />
-      </div>
-    </div>
+    <PageShell width="6xl">
+      <PageHeader
+        title="Mass Broadcast"
+        description="Email the whole club, the guest mailing list, or both."
+      />
+      <CommsClient />
+    </PageShell>
   )
 }

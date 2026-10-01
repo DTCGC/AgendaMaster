@@ -280,9 +280,10 @@ const EMAIL_HTML = [
   '<p>Best regards,<br>Olivia Park, Toastmaster</p>',
 ].join('<p></p>')
 
-const CARD = { css: '.max-w-sm' }
-const WIZARD = { css: '.max-w-5xl' }
-const DASH_CARD = { css: '.max-w-4xl > div' }
+// Stable hooks (data-shot attributes in the app), so restyling never breaks a shot.
+const CARD = { css: '[data-shot=auth-card]' }
+const WIZARD = { css: '[data-shot=wizard-page]' }
+const DASH_CARD = { css: '[data-shot=dashboard-card]' }
 
 const SHOTS = {
   fresh: [
@@ -315,7 +316,7 @@ const SHOTS = {
     }],
     ['pending', async () => {
       await signIn('pending')
-      await shoot('pending', { region: { css: '.max-w-md' } })
+      await shoot('pending', { region: CARD })
     }],
     ['dashboard-toastmaster', async () => {
       await signIn('toastmaster'); await goto('/agenda')
@@ -331,7 +332,7 @@ const SHOTS = {
       await waitFor(`document.querySelector('.ProseMirror')`, 'the email editor')
       await annotate([
         { specs: [{ css: 'label', text: 'Subject Line' }, { css: 'input[placeholder="Gavel Club MM/DD - Theme"]' }], label: '1', shape: 'box', pad: 8 },
-        { specs: [{ css: 'label', text: 'Email Body' }, { css: '.ProseMirror', closest: '.flex.flex-col' }], label: '2', shape: 'box', pad: 8 },
+        { specs: [{ css: 'label', text: 'Email Body' }, { css: '[data-shot=email-editor]' }], label: '2', shape: 'box', pad: 8 },
         { css: 'button', text: 'Next Step', label: '3' },
       ])
       await shoot('step1-draft', { region: WIZARD })
@@ -375,7 +376,7 @@ const SHOTS = {
   finalized: [
     ['dashboard-member', async () => {
       await signIn('member'); await goto('/agenda')
-      await annotate([{ css: 'div.justify-between.p-3', text: 'Noah', pad: 5 }])
+      await annotate([{ css: '[data-shot=roster-row]', text: 'Noah', pad: 5 }])
       await shoot('dashboard-member', { region: DASH_CARD })
     }],
     ['dashboard-update', async () => {

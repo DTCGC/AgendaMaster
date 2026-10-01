@@ -8,9 +8,9 @@
  * admin approval flow as Google sign-ups.
  */
 import { auth } from "@/auth";
-import Image from "next/image";
 import { redirect } from "next/navigation";
 import EmailSignup from "@/components/login/email-signup";
+import { AuthCard, AuthPage } from "@/components/common/auth-card";
 
 export const metadata = {
   title: "Register Without Google - DTCGC",
@@ -27,25 +27,10 @@ export default async function SignupPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-80px)] items-center justify-center p-4 bg-brand-cool-grey/20">
-      <div className="w-full max-w-sm p-8 bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col items-center">
-
-        <div className="mb-6">
-          <Image
-            src="/assets/images/LoyalBlue/GavelClubLogoLoyalBlue-RGB.png"
-            alt="DTCGC Logo"
-            width={1140}
-            height={1140}
-            className="w-20 h-auto"
-          />
-        </div>
-
-        <h1 className="text-2xl font-black mb-6 text-center text-brand-loyal-blue tracking-tighter uppercase">
-          Register Without Google
-        </h1>
-
+    <AuthPage>
+      <AuthCard title="Register Without Google">
         <EmailSignup />
-      </div>
-    </div>
+      </AuthCard>
+    </AuthPage>
   );
 }

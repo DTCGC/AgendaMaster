@@ -13,7 +13,13 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
-import { AlertTriangle, AlertCircle, ArrowLeft, ArrowRight } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ArrowRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { FormError, Notice, Spinner } from '@/components/common/surfaces'
+import { cn } from '@/lib/utils'
 import { registerWithPassword } from '@/app/actions/profile'
 import { isValidEmail, normalizeEmail, validateNewPassword } from '@/lib/password-rules'
 
@@ -31,56 +37,42 @@ export default function EmailSignup() {
   if (!showForm) {
     return (
       <div className="w-full space-y-5">
-        <div className="w-full bg-red-50 border-2 border-red-200 rounded-xl p-4 space-y-3">
-          <div className="flex items-center gap-2 text-red-700">
-            <AlertTriangle size={18} className="shrink-0" />
-            <h2 className="text-sm font-black uppercase tracking-wide">Please read before continuing</h2>
-          </div>
-          <p className="text-xs text-red-900 leading-relaxed">
+        <Notice tone="danger" icon={AlertTriangle} title="Please read before continuing" className="[&_li]:leading-relaxed">
+          <p>
             Signing up with an email and password is <strong>not recommended</strong>, and it is <strong>not how this portal is meant to be used</strong>. It is only here for the very few members who have no way to use a Google account.
           </p>
-          <p className="text-xs text-red-900 leading-relaxed">
-            Signing in with Google is <strong>much smoother</strong>:
-          </p>
-          <ul className="text-xs text-red-900 leading-relaxed list-disc pl-5 space-y-1">
+          <p className="pt-1">Signing in with Google is <strong>much smoother</strong>:</p>
+          <ul className="list-disc space-y-1 pl-5">
             <li>You won&apos;t have another password to remember.</li>
             <li>When you are Toastmaster, the agenda email goes out from your own inbox. Without Google, the club&apos;s account has to send it for you.</li>
             <li>There is no &ldquo;forgot password&rdquo; option. If you lose your password, you will need an executive&apos;s help to start over.</li>
           </ul>
-        </div>
+        </Notice>
 
-        <div className="w-full bg-brand-loyal-blue/5 border border-brand-loyal-blue/20 rounded-xl p-4">
-          <p className="text-xs text-gray-700 leading-relaxed">
-            <strong>You don&apos;t need a Gmail address to use Google sign-in.</strong> A parent&apos;s or family member&apos;s Google account works fine — you will still enter your own name afterwards. You can also make a free Google account in a few minutes.
+        <Notice tone="brand" icon={false}>
+          <p>
+            <strong className="text-gray-800">You don&apos;t need a Gmail address to use Google sign-in.</strong> A parent&apos;s or family member&apos;s Google account works fine — you will still enter your own name afterwards. You can also make a free Google account in a few minutes.
           </p>
-        </div>
+        </Notice>
 
-        <Link
-          href="/login"
-          className="w-full bg-brand-loyal-blue text-white font-bold rounded-xl p-3.5 hover:bg-brand-loyal-blue/90 transition-all flex items-center justify-center gap-2 text-sm shadow-lg"
-        >
-          <ArrowLeft size={16} />
+        <Link href="/login" className={cn(buttonVariants({ size: 'lg' }), 'h-auto min-h-12 w-full py-3 whitespace-normal text-sm')}>
+          <ArrowLeft />
           Go back and sign in with Google
         </Link>
 
-        <div className="pt-4 border-t border-dashed space-y-3">
-          <label className="flex items-start gap-2 text-[11px] text-gray-500 leading-relaxed cursor-pointer select-none">
+        <div className="space-y-3 border-t border-dashed border-gray-200 pt-4">
+          <label className="flex cursor-pointer items-start gap-2 text-xs leading-relaxed text-gray-500 select-none">
             <input
               type="checkbox"
               checked={acknowledged}
               onChange={(e) => setAcknowledged(e.target.checked)}
-              className="mt-0.5 accent-brand-loyal-blue"
+              className="mt-0.5 size-4 accent-brand-loyal-blue"
             />
             I understand this is not recommended, and I have no way to use a Google account.
           </label>
-          <button
-            type="button"
-            disabled={!acknowledged}
-            onClick={() => setShowForm(true)}
-            className="w-full text-xs font-bold text-gray-500 border border-gray-200 rounded-xl p-2.5 hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
+          <Button variant="secondary" size="sm" className="w-full" disabled={!acknowledged} onClick={() => setShowForm(true)}>
             Continue without Google
-          </button>
+          </Button>
         </div>
       </div>
     )
@@ -135,16 +127,11 @@ export default function EmailSignup() {
     }
   }
 
-  const inputClass =
-    'w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-medium text-gray-800 placeholder:text-gray-300 focus:border-brand-loyal-blue focus:ring-2 focus:ring-brand-loyal-blue/20 outline-none transition-all'
-
   return (
     <form onSubmit={handleSubmit} className="w-full space-y-5">
       <div>
-        <label htmlFor="email" className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">
-          Email
-        </label>
-        <input
+        <Label htmlFor="email">Email</Label>
+        <Input
           id="email"
           type="email"
           required
@@ -153,15 +140,12 @@ export default function EmailSignup() {
           value={email}
           onChange={(e) => { setEmail(e.target.value); setError('') }}
           placeholder="you@example.com"
-          className={inputClass}
         />
       </div>
 
       <div>
-        <label htmlFor="password" className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">
-          Password
-        </label>
-        <input
+        <Label htmlFor="password">Password</Label>
+        <Input
           id="password"
           type="password"
           required
@@ -169,56 +153,37 @@ export default function EmailSignup() {
           value={password}
           onChange={(e) => { setPassword(e.target.value); setError('') }}
           placeholder="At least 8 characters"
-          className={inputClass}
         />
       </div>
 
       <div>
-        <label htmlFor="confirmPassword" className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">
-          Confirm Password
-        </label>
-        <input
+        <Label htmlFor="confirmPassword">Confirm password</Label>
+        <Input
           id="confirmPassword"
           type="password"
           required
           autoComplete="new-password"
           value={confirmPassword}
           onChange={(e) => { setConfirmPassword(e.target.value); setError('') }}
-          className={inputClass}
         />
       </div>
 
-      {error && (
-        <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs font-medium animate-in fade-in slide-in-from-top-1 duration-200">
-          <AlertCircle size={14} className="mt-0.5 shrink-0" />
-          {error}
-        </div>
-      )}
+      {error && <FormError>{error}</FormError>}
 
-      <p className="text-[11px] text-gray-400 leading-relaxed text-center">
+      <p className="text-center text-xs leading-relaxed text-gray-500">
         Next, you&apos;ll enter your name. An executive will then review your request.
       </p>
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="w-full bg-brand-loyal-blue text-white font-bold rounded-xl p-3.5 hover:bg-brand-loyal-blue/90 transition-all flex items-center justify-center gap-2 text-sm shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-      >
+      <Button type="submit" size="lg" disabled={submitting} className="w-full">
         {submitting ? (
-          <span className="flex items-center gap-2">
-            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            Creating account…
-          </span>
+          <><Spinner /> Creating account…</>
         ) : (
-          <>
-            Create Account
-            <ArrowRight size={16} />
-          </>
+          <>Create Account <ArrowRight /></>
         )}
-      </button>
+      </Button>
 
       <p className="text-center">
-        <Link href="/login" className="text-[11px] text-gray-400 hover:text-brand-loyal-blue underline">
+        <Link href="/login" className="text-xs text-gray-500 underline hover:text-brand-loyal-blue">
           Changed your mind? Sign in with Google instead
         </Link>
       </p>

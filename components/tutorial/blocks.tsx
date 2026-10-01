@@ -8,6 +8,7 @@
 import Image, { type StaticImageData } from "next/image";
 import Link from "next/link";
 import { ChevronsRight, Lock } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button-variants";
 
 /** A top-level part of the article ("Part 1 — Getting Started"). */
 export function Part({ id, number, title, children }: { id?: string; number: number; title: string; children: React.ReactNode }) {
@@ -93,7 +94,7 @@ export function Figure({ src, alt, number, caption, narrow }: {
 }) {
   return (
     <figure className={`space-y-2 ${narrow ? "max-w-sm mx-auto" : ""}`}>
-      <div className="border-[6px] border-brand-loyal-blue rounded-xl overflow-hidden bg-white shadow-md">
+      <div className="border-6 border-brand-loyal-blue rounded-xl overflow-hidden bg-white shadow-md">
         <Image
           src={src}
           alt={alt}
@@ -140,10 +141,7 @@ export function MembersOnly({ pending }: { pending: boolean }) {
             Using your dashboard, being the Toastmaster and running a meeting are covered in the members&apos; part of
             this tutorial. Sign in to read it.
           </p>
-          <Link
-            href="/login"
-            className="inline-block bg-brand-loyal-blue text-white font-bold py-3 px-8 rounded-xl shadow-md hover:bg-brand-loyal-blue/90 transition-colors"
-          >
+          <Link href="/login" className={buttonVariants({ size: "lg" })}>
             Sign In
           </Link>
         </>

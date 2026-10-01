@@ -10,8 +10,13 @@ import { db } from '@/lib/db'
 import { editableMeetingsSince } from '@/lib/archival'
 import RolesForm from './roles-form'
 import { MAJOR_ROLES, BACKUP_SPEAKER } from '@/lib/roles'
-import { AlertCircle, Calendar as CalendarIcon, ChevronRight } from 'lucide-react'
-import { formatMeetingDateShort, formatMeetingDateLong } from '@/lib/meeting-time'
+import Link from 'next/link'
+import { Calendar as CalendarIcon, History } from 'lucide-react'
+import { PageShell, PageHeader, SectionLabel } from '@/components/common/page'
+import { Badge, Card, CardHeader, EmptyState, IconDisc } from '@/components/common/surfaces'
+import { MeetingSelector } from '@/components/common/meeting-selector'
+import { buttonVariants } from '@/components/ui/button-variants'
+import { formatMeetingDateLong } from '@/lib/meeting-time'
 
 type RoleAssignment = {
     userId: string | null;
@@ -20,6 +25,11 @@ type RoleAssignment = {
 
 export const metadata = {
   title: 'Role Management - DTCGC',
+}
+
+/** Whole days between `date` and now. */
+function daysSince(date: Date): number {
+  return Math.floor((Date.now() - date.getTime()) / (1000 * 3600 * 24))
 }
 
 export default async function RolesPage({
@@ -57,77 +67,60 @@ export default async function RolesPage({
       })
     : null;
 
-  // Grab active roster
+  // Grab active roster, each with their most recent real role. Standby duty
+  // is not participation (lib/roles.ts BACKUP_SPEAKER), the same rule the
+  // auto-assignment engine sorts by.
   const members = await db.user.findMany({
     where: { role: 'MEMBER' },
     include: {
         roleAssignments: {
+            where: { roleName: { not: BACKUP_SPEAKER } },
             orderBy: { assignedAt: 'desc' },
             take: 1
         }
     }
   })
+  const lastActive = (m: (typeof members)[number]) => m.roleAssignments[0]?.assignedAt.getTime() ?? 0
+  const byPriority = [...members].sort((a, b) => lastActive(a) - lastActive(b))
 
   return (
-    <div className="flex-1 p-8 bg-brand-cool-grey/10 min-h-screen">
-      <div className="max-w-6xl mx-auto space-y-8">
-        
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b pb-6 gap-4">
-          <div>
-            <h1 className="text-3xl font-extrabold text-brand-loyal-blue tracking-tight">Assign Major Roles</h1>
-            <p className="text-gray-600">Assign key roles (like Toastmaster) for any upcoming meetings.</p>
-          </div>
-        </div>
+    <PageShell width="6xl">
+        <PageHeader
+          title="Assign Major Roles"
+          description="Assign key roles (like Toastmaster) for any upcoming meetings."
+        />
 
         {upcomingMeetings.length === 0 ? (
-            <div className="bg-brand-happy-yellow/20 p-8 rounded-xl border border-brand-happy-yellow text-center space-y-4">
-                 <AlertCircle size={48} className="mx-auto text-yellow-700" opacity={0.5} />
-                 <h2 className="text-xl font-bold text-yellow-900">No Scheduled Meetings Found</h2>
-                 <p className="text-yellow-800 max-w-lg mx-auto">
-                     No upcoming meetings found. Please schedule a meeting in the <b>Master Calendar</b> first.
-                 </p>
-            </div>
+            <EmptyState
+              icon={CalendarIcon}
+              title="No Scheduled Meetings Found"
+              action={<Link href="/admin/calendar" className={buttonVariants({ variant: "outline" })}>Open the Calendar</Link>}
+            >
+              Please schedule a meeting in the Master Calendar first.
+            </EmptyState>
         ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-                {/* Meeting Selector Sidebar */}
-                <div className="lg:col-span-1 space-y-4">
-                    <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Upcoming Meetings</h3>
-                    <div className="space-y-2">
-                        {upcomingMeetings.map((meeting) => (
-                            <a 
-                                key={meeting.id}
-                                href={`?meetingId=${meeting.id}`}
-                                className={`block p-4 rounded-xl border transition-all ${meeting.id === currentMeeting?.id ? 'bg-brand-true-maroon text-white border-brand-true-maroon shadow-md' : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'}`}
-                            >
-                                <div className="flex justify-between items-center">
-                                    <div className="space-y-1">
-                                        <div className="font-black text-lg">
-                                            {formatMeetingDateShort(meeting.date)}
-                                        </div>
-                                        <div className={`text-xs ${meeting.id === currentMeeting?.id ? 'text-white/70' : 'text-gray-500'}`}>
-                                            {meeting.theme || "TBD Theme"}
-                                        </div>
-                                    </div>
-                                    <ChevronRight size={18} className={meeting.id === currentMeeting?.id ? 'text-white' : 'text-gray-300'} />
-                                </div>
-                            </a>
-                        ))}
-                    </div>
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
+                <div className="lg:col-span-1">
+                    <MeetingSelector
+                      meetings={upcomingMeetings}
+                      currentId={currentMeeting.id}
+                      hrefFor={(id) => `?meetingId=${id}`}
+                    />
                 </div>
 
-                <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:col-span-3">
                     <div className="space-y-6">
-                        <div className="bg-white border p-6 rounded-xl flex items-center justify-between shadow-sm">
+                        <Card className="flex items-center justify-between p-6">
                             <div>
-                                <span className="text-xs font-bold text-brand-true-maroon uppercase tracking-wide">Currently Editing</span>
-                                <h2 className="text-xl font-black text-gray-800">
+                                <SectionLabel as="p" className="text-brand-true-maroon">Currently Editing</SectionLabel>
+                                <h2 className="mt-1 text-xl font-black text-gray-800">
                                     {formatMeetingDateLong(currentMeeting.date)}
                                 </h2>
                             </div>
-                            <CalendarIcon size={24} className="text-gray-200" />
-                        </div>
+                            <IconDisc icon={CalendarIcon} tone="maroon" />
+                        </Card>
 
-                        <RolesForm 
+                        <RolesForm
                             meetingId={currentMeeting.id}
                             initialAssignments={currentMeeting.roleAssignments
                                 // Panel-owned roles only — minor roles belong to the Agenda
@@ -154,37 +147,31 @@ export default async function RolesPage({
                         />
                     </div>
 
-                    <div className="bg-white shadow-sm border rounded-xl p-6">
-                        <h3 className="font-bold text-lg mb-6 text-gray-800">Participation History</h3>
-                        <p className="text-sm text-gray-500 mb-6 border-b pb-4 leading-relaxed">
-                            Members who haven&apos;t had a role in a while are prioritized. Lower in the list = Higher availability.
-                        </p>
-                        
-                        <div className="space-y-2 overflow-y-auto max-h-[600px] pr-2">
-                            {members.sort((a, b) => {
-                                const dateA = a.roleAssignments[0]?.assignedAt ? new Date(a.roleAssignments[0].assignedAt).getTime() : 0;
-                                const dateB = b.roleAssignments[0]?.assignedAt ? new Date(b.roleAssignments[0].assignedAt).getTime() : 0;
-                                return dateA - dateB; 
-                            }).map((member) => (
-                                <div key={member.id} className="flex justify-between items-center text-sm p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-                                    <div>
+                    <Card>
+                        <CardHeader icon={History}>Participation History</CardHeader>
+                        <div className="p-6">
+                            <p className="mb-4 border-b border-gray-200 pb-4 text-sm leading-relaxed text-gray-600">
+                                Members who haven&apos;t had a role in a while are prioritized, so the top of the list is the most available.
+                            </p>
+                            <ul className="max-h-150 space-y-2 overflow-y-auto pr-2">
+                                {byPriority.map((member) => (
+                                    <li key={member.id} className="flex items-center justify-between rounded-xl border border-gray-200 p-3 text-sm transition-colors hover:bg-gray-50">
                                         <span className="font-semibold text-gray-800">{member.firstName} {member.lastName}</span>
-                                        {member.role === 'ADMIN' && <span className="ml-2 text-[10px] bg-red-100 text-red-800 px-2 rounded-full font-bold uppercase tracking-tighter">EXEC</span>}
-                                    </div>
-                                    <span className="text-gray-500 text-xs tabular-nums">
-                                        {member.roleAssignments[0] 
-                                            ? `${Math.floor((new Date().getTime() - new Date(member.roleAssignments[0].assignedAt).getTime()) / (1000 * 3600 * 24))}d ago` 
-                                            : `Priority`
-                                        }
-                                    </span>
-                                </div>
-                            ))}
+                                        {member.roleAssignments[0] ? (
+                                            <span className="text-xs text-gray-500 tabular-nums">
+                                                {daysSince(member.roleAssignments[0].assignedAt)}d ago
+                                            </span>
+                                        ) : (
+                                            <Badge tone="brand">Priority</Badge>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
-                    </div>
+                    </Card>
                 </div>
             </div>
         )}
-      </div>
-    </div>
+    </PageShell>
   )
 }

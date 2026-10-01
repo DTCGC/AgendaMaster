@@ -12,7 +12,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { approveAccount, rejectAccount, retryAccountEmail } from '@/app/actions/accounts'
-import { Check, X, MailWarning, Loader2, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Check, X, MailWarning, RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/common/confirm-dialog'
+import { Notice, Spinner } from '@/components/common/surfaces'
 
 interface AccountActionButtonsProps {
   userId: string
@@ -31,8 +34,7 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
     userId: string;
   } | null>(null);
 
-  const handleApprove = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleApprove = async () => {
     setApproveLoading(true);
     try {
       const result = await approveAccount(userId);
@@ -51,8 +53,7 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
     }
   };
 
-  const handleReject = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleReject = async () => {
     setRejectLoading(true);
     try {
       const result = await rejectAccount(userId);
@@ -87,7 +88,7 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
       } else {
         alert(result.error);
       }
-    } catch (e) {
+    } catch {
       alert("System error during retry.");
     } finally {
       setRetrying(false);
@@ -96,75 +97,36 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
 
   return (
     <>
-      <div className="flex gap-2 justify-end">
-        <form onSubmit={handleApprove}>
-            <button 
-                type="submit" 
-                disabled={approveLoading || rejectLoading}
-                className="bg-green-600 text-white px-4 py-2 rounded shadow-sm hover:bg-green-700 transition-colors text-xs font-bold flex items-center gap-1 disabled:opacity-50"
-            >
-                {approveLoading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} 
-                Approve
-            </button>
-        </form>
-        
-        <form onSubmit={handleReject}>
-            <button 
-                type="submit" 
-                disabled={approveLoading || rejectLoading}
-                className="border border-red-200 text-red-600 px-4 py-2 rounded hover:bg-red-50 transition-colors text-xs font-bold flex items-center gap-1 disabled:opacity-50"
-            >
-                {rejectLoading ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />} 
-                Deny
-            </button>
-        </form>
+      <div className="flex justify-end gap-2">
+        <Button variant="success" size="sm" onClick={handleApprove} disabled={approveLoading || rejectLoading}>
+          {approveLoading ? <Spinner size={14} /> : <Check />}
+          Approve
+        </Button>
+        <Button variant="destructive-outline" size="sm" onClick={handleReject} disabled={approveLoading || rejectLoading}>
+          {rejectLoading ? <Spinner size={14} /> : <X />}
+          Deny
+        </Button>
       </div>
 
       {/* Email Error Modal */}
-      {errorModal?.show && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <div 
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" 
-                onClick={handleSkip}
-            />
-            <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in fade-in zoom-in duration-200">
-                <div className={`bg-brand-true-maroon p-8 text-white text-center`}>
-                    <div className="mx-auto w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mb-4 border-2 border-white/30 animate-pulse">
-                        <MailWarning size={40} />
-                    </div>
-                    <h2 className="text-2xl font-black tracking-tight">Notification Failed</h2>
-                    <p className="text-xs opacity-90 mt-2 leading-relaxed">
-                        The {errorModal.type === 'approval' ? 'approval' : 'rejection'} was processed, but the automated email to <strong className="underline">{userName}</strong> could not be delivered.
-                    </p>
-                </div>
-                
-                <div className="p-8 space-y-4">
-                    <div className="flex items-start gap-3 bg-red-50 p-4 rounded-xl border border-red-100 italic text-[11px] text-red-700">
-                        <AlertTriangle size={24} className="shrink-0" />
-                        <p>This is usually due to a temporary SMTP timeout or an invalid recipient address. Please retry or contact the VP Education.</p>
-                    </div>
-
-                    <div className="pt-2 space-y-3">
-                        <button 
-                            onClick={handleRetry}
-                            disabled={retrying}
-                            className="w-full bg-brand-loyal-blue py-4 rounded-xl font-black text-white shadow-lg hover:bg-brand-loyal-blue/90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                        >
-                            {retrying ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
-                            Retry Notification
-                        </button>
-                        <button 
-                            onClick={handleSkip}
-                            disabled={retrying}
-                            className="w-full py-3 rounded-xl font-bold text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-all flex items-center justify-center gap-1 text-sm"
-                        >
-                            <X size={16} /> Acknowledge & Skip
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={!!errorModal?.show}
+        onOpenChange={(open) => { if (!open) handleSkip() }}
+        tone="maroon"
+        icon={MailWarning}
+        title="Notification Failed"
+        description={errorModal && (
+          <>The {errorModal.type === 'approval' ? 'approval' : 'rejection'} was processed, but the automated email to <strong className="text-white">{userName}</strong> could not be delivered.</>
+        )}
+        confirmLabel={<><RefreshCw /> Retry Notification</>}
+        cancelLabel="Acknowledge & Skip"
+        busy={retrying}
+        onConfirm={handleRetry}
+      >
+        <Notice tone="warning">
+          This is usually a temporary sending error or an invalid recipient address. Please retry, or contact the VP Education.
+        </Notice>
+      </ConfirmDialog>
     </>
   )
 }

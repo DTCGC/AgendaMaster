@@ -10,7 +10,11 @@
 import { useState } from 'react'
 import { saveAllMajorRoles, saveGuestSpeakerName } from '@/app/actions/roles'
 import { MAJOR_ROLES, BACKUP_SPEAKER } from '@/lib/roles'
-import { Save, CheckCircle2, Info } from 'lucide-react'
+import { Save, CheckCircle2, Info, Users } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input, NativeSelect } from '@/components/ui/input'
+import { Label, FieldHint } from '@/components/ui/label'
+import { Badge, Card, CardHeader, FormError, Notice, Spinner } from '@/components/common/surfaces'
 import { formatMeetingDate, formatMeetingDateShort } from '@/lib/meeting-time'
 
 type UserData = {
@@ -70,68 +74,79 @@ export default function RolesForm({
         setTimeout(() => setSaved(false), 3000)
     }
 
+    // A filled-in field reads as "assigned" at a glance.
+    const filled = (value: string) => value ? "border-brand-loyal-blue font-bold text-brand-loyal-blue" : undefined
+
     return (
-        <div className="space-y-6">
-            <div className="bg-white shadow-sm border rounded-xl overflow-hidden p-6">
-                <h3 className="font-bold text-lg mb-6 text-brand-true-maroon flex justify-between items-center">
-                    Target Allocations
-                    {saved && <span className="text-sm font-bold text-green-600 flex items-center gap-1"><CheckCircle2 size={16} /> Saved Successfully</span>}
-                </h3>
-                {error && <p role="alert" className="mb-4 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
+        <Card>
+            <CardHeader
+                icon={Users}
+                actions={saved && <span className="flex items-center gap-1 text-sm font-bold text-green-700"><CheckCircle2 size={16} /> Saved</span>}
+            >
+                Major Role Assignments
+            </CardHeader>
+            <div className="p-6">
+                {error && <FormError className="mb-4">{error}</FormError>}
 
                 <div className="space-y-4">
-                    {MAJOR_ROLES.map(role => (
-                        <div key={role} className="flex flex-col space-y-1 pb-4 border-b last:border-0 last:pb-0">
-                            <label className="text-sm font-semibold text-gray-600">{role}</label>
-                            <select 
+                    {MAJOR_ROLES.map(role => {
+                        const id = `role-${role.replace(/\s+/g, '-').toLowerCase()}`
+                        return (
+                        <div key={role} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+                            <Label htmlFor={id}>{role}</Label>
+                            <NativeSelect
+                                id={id}
                                 value={assignments[role] || ""}
                                 onChange={(e) => setAssignments({ ...assignments, [role]: e.target.value })}
-                                className={`w-full p-2 border rounded-lg text-sm bg-gray-50 focus:ring focus:ring-brand-loyal-blue/20 outline-none transition ${assignments[role] ? 'border-brand-loyal-blue text-brand-loyal-blue font-bold shadow-sm' : ''}`}
+                                className={filled(assignments[role])}
                             >
                                 <option value="">-- UNASSIGNED --</option>
                                 {members.map(u => (
                                     <option key={u.id} value={u.id}>
-                                        {u.firstName} {u.lastName} 
+                                        {u.firstName} {u.lastName}
                                         {u.roleAssignments[0] ? ` (Last Active: ${formatMeetingDate(new Date(u.roleAssignments[0].assignedAt))})` : ` (Never Active)`}
                                     </option>
                                 ))}
-                            </select>
+                            </NativeSelect>
                         </div>
-                    ))}
+                        )
+                    })}
 
                     {/* Guest speaker — free text, NOT a member dropdown. A guest
                         has no User row. Inert unless the Toastmaster also marks
                         the meeting a Guest Education Session in the wizard; only
                         then does it replace Speaker 3 on the agenda sheet. */}
-                    <div className="flex flex-col space-y-1 pb-4 border-b">
-                        <label className="text-sm font-semibold text-gray-600 flex items-center gap-2">
+                    <div className="border-b border-gray-100 pb-4">
+                        <Label htmlFor="guest-speaker" className="flex items-center gap-2">
                             Guest Speaker Name
-                            <span className="text-[10px] font-bold uppercase tracking-tight bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Education Session</span>
-                        </label>
-                        <input
+                            <Badge>Education Session</Badge>
+                        </Label>
+                        <Input
+                            id="guest-speaker"
                             type="text"
                             value={guestSpeakerName}
                             onChange={(e) => setGuestSpeakerName(e.target.value)}
                             placeholder="e.g., Dr. Jane Doe (external guest)"
-                            className={`w-full p-2 border rounded-lg text-sm bg-gray-50 focus:ring focus:ring-brand-loyal-blue/20 outline-none transition ${guestSpeakerName.trim() ? 'border-brand-loyal-blue text-brand-loyal-blue font-bold shadow-sm' : ''}`}
+                            className={filled(guestSpeakerName.trim())}
                         />
-                        <p className="text-[11px] text-gray-400 leading-snug pt-1">
+                        <FieldHint>
                             Only takes effect if the Toastmaster selects &quot;Guest Education Session&quot; in the wizard — it then replaces Speaker 3 on the sheet. Otherwise it is ignored and the Speaker 3 dropdown above applies as usual.
-                        </p>
+                        </FieldHint>
                     </div>
 
                     {/* Standby slot — deliberately separated from the major roles
                         above, because holding it leaves a member fully eligible
                         for a minor role in the Toastmaster's auto-assignment. */}
-                    <div className="flex flex-col space-y-1 pt-2">
-                        <label className="text-sm font-semibold text-gray-600 flex items-center gap-2">
+                    <div className="pt-2">
+                        <Label htmlFor="backup-speaker" className="flex items-center gap-2">
                             {BACKUP_SPEAKER}
-                            <span className="text-[10px] font-bold uppercase tracking-tight bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Standby</span>
-                        </label>
-                        <select
+                            <Badge>Standby</Badge>
+                        </Label>
+                        <NativeSelect
+                            id="backup-speaker"
                             value={assignments[BACKUP_SPEAKER] || ""}
                             onChange={(e) => setAssignments({ ...assignments, [BACKUP_SPEAKER]: e.target.value })}
-                            className={`w-full p-2 border rounded-lg text-sm bg-gray-50 focus:ring focus:ring-brand-loyal-blue/20 outline-none transition ${assignments[BACKUP_SPEAKER] ? 'border-brand-loyal-blue text-brand-loyal-blue font-bold shadow-sm' : ''}`}
+                            className={filled(assignments[BACKUP_SPEAKER])}
                         >
                             <option value="">-- UNASSIGNED --</option>
                             {members.map(u => (
@@ -139,35 +154,30 @@ export default function RolesForm({
                                     {u.firstName} {u.lastName}
                                 </option>
                             ))}
-                        </select>
-                        <p className="text-[11px] text-gray-400 leading-snug pt-1">
+                        </NativeSelect>
+                        <FieldHint>
                             Counts as roleless — they can still be given a minor role, and their participation history is unaffected.
-                        </p>
+                        </FieldHint>
 
                         {previousBackup && (
-                            <div className="mt-2 flex gap-2 items-start bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-3">
-                                <Info size={15} className="shrink-0 mt-0.5" />
-                                <p className="text-xs leading-relaxed">
+                            <Notice tone="warning" icon={Info} className="mt-3">
+                                <p>
                                     <strong>{previousBackup.name}</strong> was on standby for{' '}
                                     {formatMeetingDateShort(new Date(previousBackup.meetingDate))}.
                                     If all three speakers turned up, they never got to speak — consider giving them a speaking slot now.
                                 </p>
-                            </div>
+                            </Notice>
                         )}
                     </div>
                 </div>
 
-                <div className="mt-8 pt-4 border-t">
-                    <button 
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        className="w-full flex items-center justify-center gap-2 bg-brand-loyal-blue text-white font-bold py-3 rounded-lg hover:bg-opacity-90 transition-all disabled:opacity-50 shadow-md"
-                    >
-                        <Save size={18} />
-                        {isSaving ? 'Synchronizing DB...' : 'Finalize Major Roles'}
-                    </button>
+                <div className="mt-8 border-t border-gray-200 pt-6">
+                    <Button size="lg" onClick={handleSave} disabled={isSaving} className="w-full">
+                        {isSaving ? <Spinner size={18} /> : <Save />}
+                        {isSaving ? 'Saving…' : 'Save Major Roles'}
+                    </Button>
                 </div>
             </div>
-        </div>
+        </Card>
     )
 }

@@ -1,13 +1,16 @@
 /**
  * Remove (trash) button for the admin Accounts lists. Confirms first — the
  * delete is permanent — and reports a refusal or failure instead of failing
- * silently.
+ * silently. Always visible on touch screens; revealed on hover with a mouse.
  */
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Trash2 } from 'lucide-react'
+import { Trash2 } from 'lucide-react'
 import { removeUser, removeSubscriber } from '@/app/actions/accounts'
+import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/common/confirm-dialog'
+import { FormError } from '@/components/common/surfaces'
 
 export default function RemoveButton({ kind, id, label }: {
   kind: 'member' | 'subscriber'
@@ -15,29 +18,50 @@ export default function RemoveButton({ kind, id, label }: {
   /** Who is being removed, for the confirmation ("Sam Lee", "sam@example.com"). */
   label: string
 }) {
+  const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
-  async function handleClick() {
-    const what = kind === 'member' ? `Remove ${label} from the club roster?` : `Remove ${label} from the guest list?`
-    if (!window.confirm(`${what} This cannot be undone.`)) return
+  async function handleConfirm() {
     setBusy(true)
+    setError('')
     try {
       const result = kind === 'member' ? await removeUser(id) : await removeSubscriber(id)
-      if (!result.success) alert(result.error)
+      if (result.success) setOpen(false)
+      else setError(result.error)
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={busy}
-      aria-label={`Remove ${label}`}
-      className="p-2 text-gray-400 hover:text-red-600 transition-colors rounded-lg hover:bg-red-50 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
-    >
-      {busy ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-    </button>
+    <>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => { setError(''); setOpen(true) }}
+        aria-label={`Remove ${label}`}
+        className="shrink-0 text-gray-400 hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+      >
+        <Trash2 />
+      </Button>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        tone="danger"
+        icon={Trash2}
+        title={kind === 'member' ? 'Remove this member?' : 'Remove this guest?'}
+        description={
+          kind === 'member'
+            ? <><strong className="text-white">{label}</strong> will lose access to the portal. Their past roles stay on old agendas. This cannot be undone.</>
+            : <><strong className="text-white">{label}</strong> will stop receiving club emails. This cannot be undone.</>
+        }
+        confirmLabel="Remove"
+        busy={busy}
+        onConfirm={handleConfirm}
+      >
+        {error && <FormError>{error}</FormError>}
+      </ConfirmDialog>
+    </>
   )
 }

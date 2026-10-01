@@ -9,7 +9,10 @@
 
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
-import { AlertCircle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { FormError, Spinner } from '@/components/common/surfaces'
 
 export default function EmailLoginForm() {
     const [email, setEmail] = useState('')
@@ -46,20 +49,17 @@ export default function EmailLoginForm() {
     }
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-3 w-full">
-            <p className="text-[10px] text-gray-400 leading-relaxed italic text-center max-w-[240px] mx-auto mb-4">
+        <form onSubmit={handleSubmit} className="w-full space-y-3">
+            <p className="mb-4 text-center text-xs leading-relaxed text-gray-500">
                 For executives, and members who registered without a Google account.
             </p>
 
-            {error && (
-                <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-100 text-xs font-medium animate-in fade-in duration-200">
-                    <AlertCircle size={14} />
-                    {error}
-                </div>
-            )}
+            {error && <FormError>{error}</FormError>}
 
             <div>
-                <input
+                <Label htmlFor="login-email" className="sr-only">Email</Label>
+                <Input
+                    id="login-email"
                     name="email"
                     type="email"
                     placeholder="Email"
@@ -67,11 +67,12 @@ export default function EmailLoginForm() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-brand-loyal-blue/20 outline-none transition-all placeholder:text-gray-300"
                 />
             </div>
             <div>
-                <input
+                <Label htmlFor="login-password" className="sr-only">Password</Label>
+                <Input
+                    id="login-password"
                     name="password"
                     type="password"
                     placeholder="Password"
@@ -79,16 +80,12 @@ export default function EmailLoginForm() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-brand-loyal-blue/20 outline-none transition-all placeholder:text-gray-300"
                 />
             </div>
-            <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-brand-loyal-blue text-white font-bold rounded-xl p-3 hover:opacity-90 transition-opacity shadow-lg shadow-brand-loyal-blue/20 text-sm disabled:opacity-50"
-            >
-                {isLoading ? 'Signing in...' : 'Sign In'}
-            </button>
+            <Button type="submit" disabled={isLoading} className="w-full">
+                {isLoading && <Spinner />}
+                {isLoading ? 'Signing in…' : 'Sign In'}
+            </Button>
         </form>
     )
 }

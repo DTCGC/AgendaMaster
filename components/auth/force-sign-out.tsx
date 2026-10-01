@@ -11,6 +11,7 @@
 
 import { useEffect } from 'react'
 import { signOut } from 'next-auth/react'
+import { Spinner } from '@/components/common/surfaces'
 
 export default function ForceSignOut() {
   useEffect(() => {
@@ -18,8 +19,8 @@ export default function ForceSignOut() {
   }, [])
 
   return (
-    <div className="flex-1 flex items-center justify-center p-8 text-gray-400 text-sm">
-      Your session is no longer valid. Signing you out…
+    <div className="flex flex-1 items-center justify-center gap-2 bg-brand-cool-grey/10 p-8 text-sm text-gray-500">
+      <Spinner /> Your session is no longer valid. Signing you out…
     </div>
   )
 }

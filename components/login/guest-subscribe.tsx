@@ -10,6 +10,11 @@
 import { useState } from 'react'
 import { subscribeGuest } from '@/app/actions/accounts'
 import { CheckCircle2, Send } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { SectionLabel } from '@/components/common/page'
+import { Notice, Spinner } from '@/components/common/surfaces'
 
 export default function GuestSubscribe() {
     const [email, setEmail] = useState('')
@@ -29,39 +34,45 @@ export default function GuestSubscribe() {
             setMessage("You've been added to our guest list!")
         } else {
             setStatus('error')
-            setMessage(result.error || "Something went wrong.")
+            setMessage(result.error)
         }
     }
 
     if (status === 'success') {
         return (
-            <div className="flex items-center gap-2 text-green-600 bg-green-50 px-4 py-2 rounded-lg border border-green-100 animate-in fade-in zoom-in duration-300">
-                <CheckCircle2 size={16} />
-                <span className="text-sm font-medium">{message}</span>
-            </div>
+            <Notice tone="success" icon={CheckCircle2} className="animate-in fade-in duration-300">
+                {message}
+            </Notice>
         )
     }
 
     return (
         <div className="space-y-3">
-            <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest text-center">Guest Mailing List</p>
+            <SectionLabel as="p" className="text-center">Guest Mailing List</SectionLabel>
             <form onSubmit={handleSubmit} className="flex gap-2">
-                <input 
-                    type="email" 
-                    placeholder="Guest Email Address" 
+                <Label htmlFor="guest-email" className="sr-only">Guest email address</Label>
+                <Input
+                    id="guest-email"
+                    type="email"
+                    placeholder="Guest Email Address"
+                    autoComplete="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-loyal-blue/20 outline-none transition"
+                    className="flex-1"
                 />
-                <button 
+                <Button
+                    type="submit"
+                    variant="secondary"
+                    size="icon"
+                    className="size-11"
                     disabled={status === 'loading'}
-                    className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-lg transition-colors flex items-center justify-center"
+                    aria-label="Subscribe"
                 >
-                    <Send size={14} className={status === 'loading' ? 'animate-pulse' : ''} />
-                </button>
+                    {status === 'loading' ? <Spinner /> : <Send />}
+                </Button>
             </form>
-            {status === 'error' && <p className="text-[10px] text-red-500 font-bold text-center">{message}</p>}
+            {status === 'error' && <p role="alert" className="text-center text-xs font-semibold text-red-600">{message}</p>}
         </div>
     )
 }

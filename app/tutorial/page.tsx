@@ -95,7 +95,7 @@ export default async function TutorialPage() {
   return (
     <div className="flex-1 bg-brand-cool-grey/10 pb-20">
       {/* Header band */}
-      <header className="bg-brand-loyal-blue text-white border-b-[6px] border-brand-happy-yellow">
+      <header className="bg-brand-loyal-blue text-white border-b-6 border-brand-happy-yellow">
         <div className="max-w-3xl mx-auto px-6 py-14">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-happy-yellow mb-3">
             Downtown Coquitlam Gavel Club
@@ -111,7 +111,7 @@ export default async function TutorialPage() {
       <div className="max-w-3xl mx-auto px-6">
         {/* Table of contents */}
         <nav aria-label="Contents" className="-mt-6 bg-white rounded-2xl shadow-lg border border-gray-100 p-6 md:p-8">
-          <h2 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-5">In this tutorial</h2>
+          <h2 className="text-sm font-black uppercase tracking-widest text-gray-500 mb-5">In this tutorial</h2>
           <div className="grid gap-6 md:grid-cols-3">
             {CONTENTS.map((group, i) => (
               <div key={group.part}>
@@ -611,7 +611,9 @@ export default async function TutorialPage() {
                   </Bullets>
                   <p className="text-gray-700 leading-relaxed">
                     When it&apos;s done, you&apos;ll see an <strong>Open Agenda Sheet</strong>{" "}button. If something
-                    goes wrong instead, a red message explains what happened. Press <strong>Copy to
+                    goes wrong instead, a red message explains what happened. It&apos;s safe to press the button
+                    again: it never makes a second sheet, and only sends the email if it hasn&apos;t gone out yet. If it
+                    keeps failing, press <strong>Copy to
                     Clipboard</strong>{" "}(2) to save your email and the role list, and contact an executive.
                   </p>
                   <Figure
@@ -803,14 +805,15 @@ export default async function TutorialPage() {
           )}
         </article>
 
-        <footer className="mt-24 pt-8 border-t border-gray-200 text-xs text-gray-400 leading-relaxed space-y-2">
+        {/* Not a <footer>: the site footer follows directly below. */}
+        <aside className="mt-24 pt-8 border-t border-gray-200 text-xs text-gray-500 leading-relaxed space-y-2">
           <p>
             This tutorial is an independent resource made for Downtown Coquitlam Gavel Club members. It is not an
             official publication of Toastmasters International, and is not endorsed by them. Toastmasters
             International and its emblem are trademarks of Toastmasters International, Inc.
           </p>
           <p>Every name and screenshot in this tutorial uses made-up example members.</p>
-        </footer>
+        </aside>
       </div>
     </div>
   );

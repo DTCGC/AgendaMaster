@@ -2,14 +2,16 @@
  * Inline Editable Name Component
  *
  * Renders a member's name as clickable text that transforms into
- * a two-field editor (first + last name) on click. Supports
- * keyboard submission (Enter) and escape-to-cancel.
+ * a two-field editor (first + last name) on click. Enter saves and Escape
+ * cancels.
  */
 'use client'
 
 import { useState } from 'react'
 import { updateUserName } from '@/app/actions/accounts'
 import { Pencil, Check, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 /**
  * Inline name editor for the admin accounts panel.
@@ -51,59 +53,74 @@ export default function EditableName({ userId, firstName, lastName }: {
 
   if (!editing) {
     return (
-      <div className="flex items-center gap-2 group/name">
-        <span className="font-bold text-sm text-gray-800">
+      <div className="group/name flex items-center gap-1">
+        <span className="text-sm font-bold text-gray-800">
           {firstName} {lastName}
         </span>
-        <button
+        <Button
+          variant="ghost"
+          size="icon-sm"
           onClick={() => setEditing(true)}
-          className="opacity-0 group-hover/name:opacity-100 p-1 text-gray-300 hover:text-brand-loyal-blue transition-all rounded"
+          aria-label={`Edit ${firstName} ${lastName}'s name`}
           title="Edit name"
+          className="size-7 text-gray-400 hover:text-brand-loyal-blue focus-visible:opacity-100 md:opacity-0 md:group-hover/name:opacity-100"
         >
-          <Pencil size={12} />
-        </button>
+          <Pencil size={13} />
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="space-y-1">
-    <div className="flex items-center gap-1.5 animate-in fade-in duration-150">
-      <input
-        type="text"
-        value={fn}
-        onChange={(e) => setFn(e.target.value)}
-        className="border border-gray-300 rounded px-2 py-1 text-xs font-medium w-20 focus:border-brand-loyal-blue outline-none"
-        placeholder="First"
-        autoFocus
-        disabled={saving}
-      />
-      <input
-        type="text"
-        value={ln}
-        onChange={(e) => setLn(e.target.value)}
-        className="border border-gray-300 rounded px-2 py-1 text-xs font-medium w-24 focus:border-brand-loyal-blue outline-none"
-        placeholder="Last"
-        disabled={saving}
-      />
-      <button
-        onClick={handleSave}
-        disabled={saving || !fn.trim() || !ln.trim()}
-        className="p-1 text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors disabled:opacity-40"
-        title="Save"
+      <form
+        className="flex items-center gap-1.5 animate-in fade-in duration-150"
+        onSubmit={(e) => { e.preventDefault(); handleSave(); }}
+        onKeyDown={(e) => { if (e.key === 'Escape') handleCancel(); }}
       >
-        <Check size={14} />
-      </button>
-      <button
-        onClick={handleCancel}
-        disabled={saving}
-        className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-        title="Cancel"
-      >
-        <X size={14} />
-      </button>
-    </div>
-    {error && <p role="alert" className="text-xs font-medium text-red-600">{error}</p>}
+        <Input
+          size="sm"
+          type="text"
+          value={fn}
+          onChange={(e) => setFn(e.target.value)}
+          className="w-24"
+          placeholder="First"
+          aria-label="First name"
+          autoFocus
+          disabled={saving}
+        />
+        <Input
+          size="sm"
+          type="text"
+          value={ln}
+          onChange={(e) => setLn(e.target.value)}
+          className="w-28"
+          placeholder="Last"
+          aria-label="Last name"
+          disabled={saving}
+        />
+        <Button
+          type="submit"
+          variant="ghost"
+          size="icon-sm"
+          disabled={saving || !fn.trim() || !ln.trim()}
+          className="text-green-700 hover:bg-green-50 hover:text-green-800"
+          aria-label="Save name"
+        >
+          <Check />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={handleCancel}
+          disabled={saving}
+          className="text-gray-500 hover:bg-red-50 hover:text-red-600"
+          aria-label="Cancel"
+        >
+          <X />
+        </Button>
+      </form>
+      {error && <p role="alert" className="text-xs font-medium text-red-600">{error}</p>}
     </div>
   );
 }

@@ -13,7 +13,10 @@ import Link from 'next/link'
 import { connectClubGoogle } from '@/app/actions/accounts'
 import RemoveButton from '@/components/admin/remove-button'
 import { getClubGoogleStatus, CLUB_GOOGLE_EMAIL } from '@/lib/club-google'
-import { Check, Users, Mail, Trash2, ShieldCheck, KeyRound, Link2 } from 'lucide-react'
+import { Check, Users, Mail, ShieldCheck, KeyRound, Link2 } from 'lucide-react'
+import { PageShell, PageHeader, SectionLabel } from '@/components/common/page'
+import { Badge, Card, EmptyState, IconDisc } from '@/components/common/surfaces'
+import { Button } from '@/components/ui/button'
 import EditableName from '@/components/admin/editable-name'
 import AccountActionButtons from '@/components/admin/account-action-buttons'
 import { formatMeetingDate } from '@/lib/meeting-time'
@@ -48,55 +51,50 @@ export default async function AccountsPage() {
   // ADMIN credential also has a password but is not a member, so no badge.
   const emailLoginBadge = (user: { role: string; passwordHash: string | null }) =>
     user.role !== 'ADMIN' && user.passwordHash ? (
-      <span title="Registered with email and password (no Google account)" className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-        <KeyRound size={10} /> Email login
-      </span>
+      <Badge tone="warning" caps title="Registered with email and password (no Google account)">
+        <KeyRound size={12} /> Email login
+      </Badge>
     ) : null
 
   return (
-    <div className="flex-1 p-8 bg-brand-cool-grey/10 min-h-screen">
-      <div className="max-w-6xl mx-auto space-y-12">
-        
-        <div className="flex justify-between items-end border-b pb-4">
-          <div>
-            <h1 className="text-3xl font-extrabold text-brand-loyal-blue tracking-tight hover:scale-[1.01] transition-transform origin-left cursor-default">Member Management</h1>
-            <p className="text-gray-600">Review new sign-up requests and manage member accounts.</p>
-          </div>
-          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded shadow-sm border text-sm font-semibold text-brand-loyal-blue">
-            <Users size={18} />
-            {activeUsers.length} Active Accounts
-          </div>
-        </div>
+    <PageShell width="6xl" className="space-y-12">
+        <PageHeader
+          title="Member Management"
+          description="Review new sign-up requests and manage member accounts."
+          actions={
+            <Badge tone="brand" className="px-4 py-2 text-sm">
+              <Users size={16} /> {activeUsers.length} Active Accounts
+            </Badge>
+          }
+        />
 
         {/* Pending Approvals */}
-        <div className="space-y-4">
-            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">New Sign-up Requests</h2>
-            <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                {pendingUsers.length === 0 ? (
-                    <div className="p-12 text-center text-gray-400 flex flex-col items-center">
-                        <Check size={40} className="mb-4 text-green-200" />
-                        <p className="font-medium text-gray-500 text-lg">No pending requests</p>
-                        <p className="text-sm mt-1">New members can sign up at <Link href="/login" className="text-brand-loyal-blue font-semibold hover:underline decoration-brand-true-maroon">/login</Link>.</p>
-                    </div>
-                ) : (
+        <section className="space-y-4">
+            <SectionLabel className="px-1">New Sign-up Requests</SectionLabel>
+            {pendingUsers.length === 0 ? (
+                <EmptyState icon={Check} title="No pending requests">
+                    New members can sign up at <Link href="/login" className="font-semibold text-brand-loyal-blue hover:underline">/login</Link>.
+                </EmptyState>
+            ) : (
+                <Card>
                     <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full border-collapse text-left">
                         <thead>
-                        <tr className="bg-gray-50 text-gray-500 text-[10px] uppercase font-bold tracking-widest">
-                            <th className="p-4 border-b">Requested</th>
-                            <th className="p-4 border-b">Full Name</th>
-                            <th className="p-4 border-b">Email</th>
-                            <th className="p-4 border-b text-right">Actions</th>
+                        <tr className="bg-gray-50">
+                            <TableHead>Requested</TableHead>
+                            <TableHead>Full Name</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
                         </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                         {pendingUsers.map((user) => (
-                            <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
+                            <tr key={user.id} className="transition-colors hover:bg-gray-50">
                             <td className="p-4 text-sm text-gray-500">{formatMeetingDate(user.createdAt)}</td>
                             <td className="p-4 font-bold text-brand-loyal-blue">
                                 <div className="flex items-center gap-2">{user.firstName} {user.lastName} {emailLoginBadge(user)}</div>
                             </td>
-                            <td className="p-4 text-sm text-gray-600 italic font-mono">{user.email}</td>
+                            <td className="p-4 text-sm text-gray-600">{user.email}</td>
                             <td className="p-4">
                                 <AccountActionButtons userId={user.id} userName={`${user.firstName} ${user.lastName}`} />
                             </td>
@@ -105,105 +103,109 @@ export default async function AccountsPage() {
                         </tbody>
                     </table>
                     </div>
-                )}
-            </div>
-        </div>
+                </Card>
+            )}
+        </section>
 
         {/* Directory Layers */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-            
+        <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
+
             {/* Active Members Directory */}
-            <div className="space-y-4">
-                <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Active Member List</h2>
-                <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                    <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
+            <section className="space-y-4">
+                <SectionLabel className="px-1">Active Member List</SectionLabel>
+                <Card>
+                    <ul className="max-h-125 divide-y divide-gray-100 overflow-y-auto">
                         {activeUsers.map((user) => (
-                            <div key={user.id} className="p-4 flex items-center justify-between group hover:bg-gray-50 transition-colors">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${user.role === 'ADMIN' ? 'bg-brand-true-maroon text-white' : 'bg-brand-loyal-blue/10 text-brand-loyal-blue'}`}>
+                            <li key={user.id} className="group flex items-center justify-between gap-3 p-4 transition-colors hover:bg-gray-50">
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <div className={`flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${user.role === 'ADMIN' ? 'bg-brand-true-maroon text-white' : 'bg-brand-loyal-blue/10 text-brand-loyal-blue'}`}>
                                         {user.firstName[0]}{user.lastName[0]}
                                     </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
                                             <EditableName userId={user.id} firstName={user.firstName} lastName={user.lastName} />
-                                            {user.role === 'ADMIN' && <ShieldCheck size={14} className="text-brand-true-maroon" />}
+                                            {user.role === 'ADMIN' && <ShieldCheck size={14} className="text-brand-true-maroon" aria-label="Administrator" />}
                                             {emailLoginBadge(user)}
                                         </div>
-                                        <div className="text-[10px] text-gray-500 font-mono italic">{user.email}</div>
+                                        <div className="truncate text-xs text-gray-500">{user.email}</div>
                                     </div>
                                 </div>
-                                
-                                {user.id !== session.user.id && (
+
+                                {user.role !== 'ADMIN' && user.id !== session.user.dbId && (
                                     <RemoveButton kind="member" id={user.id} label={`${user.firstName} ${user.lastName}`} />
                                 )}
-                            </div>
+                            </li>
                         ))}
-                    </div>
-                </div>
-            </div>
+                    </ul>
+                </Card>
+            </section>
 
             {/* Guest Subscriber Directory */}
-            <div className="space-y-4">
-                <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Guest List</h2>
-                <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                    {guestSubscribers.length === 0 ? (
-                        <div className="p-12 text-center text-gray-400 text-sm italic">
-                            No public guests have subscribed yet.
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
+            <section className="space-y-4">
+                <SectionLabel className="px-1">Guest List</SectionLabel>
+                {guestSubscribers.length === 0 ? (
+                    <EmptyState icon={Mail} title="No guests yet">
+                        No public guests have subscribed yet.
+                    </EmptyState>
+                ) : (
+                    <Card>
+                        <ul className="max-h-125 divide-y divide-gray-100 overflow-y-auto">
                             {guestSubscribers.map((sub) => (
-                                <div key={sub.id} className="p-4 flex items-center justify-between group hover:bg-gray-50 transition-colors">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-gray-400">
-                                            <Mail size={14} />
-                                        </div>
-                                        <div>
-                                            <div className="font-semibold text-sm text-gray-700">{sub.email}</div>
-                                            <div className="text-[10px] text-gray-400">Enrolled: {formatMeetingDate(sub.subscribedAt)}</div>
+                                <li key={sub.id} className="group flex items-center justify-between gap-3 p-4 transition-colors hover:bg-gray-50">
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <IconDisc icon={Mail} tone="neutral" size="sm" />
+                                        <div className="min-w-0">
+                                            <div className="truncate text-sm font-semibold text-gray-700">{sub.email}</div>
+                                            <div className="text-xs text-gray-500">Enrolled: {formatMeetingDate(sub.subscribedAt)}</div>
                                         </div>
                                     </div>
                                     <RemoveButton kind="subscriber" id={sub.id} label={sub.email} />
-                                </div>
+                                </li>
                             ))}
-                        </div>
-                    )}
-                </div>
-            </div>
+                        </ul>
+                    </Card>
+                )}
+            </section>
 
         </div>
 
         {/* Club Google account — used only for members without Google */}
-        <div className="space-y-4">
-            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-2">Club Google Account</h2>
-            <div className="bg-white rounded-xl shadow-sm border p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div className="space-y-2 max-w-2xl">
-                    <div className="flex items-center gap-2">
-                        <span className={`w-2.5 h-2.5 rounded-full ${clubGoogle.connected ? 'bg-green-500' : 'bg-gray-300'}`} />
+        <section className="space-y-4">
+            <SectionLabel className="px-1">Club Google Account</SectionLabel>
+            <Card className="flex flex-col justify-between gap-6 p-6 md:flex-row md:items-center">
+                <div className="max-w-2xl space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className={`size-2.5 rounded-full ${clubGoogle.connected ? 'bg-green-500' : 'bg-gray-300'}`} />
                         <span className="font-bold text-gray-800">
                             {clubGoogle.connected ? 'Connected' : 'Not connected'}
                         </span>
                         {clubGoogle.connectedAt && (
-                            <span className="text-xs text-gray-400">since {formatMeetingDate(clubGoogle.connectedAt)}</span>
+                            <span className="text-xs text-gray-500">since {formatMeetingDate(clubGoogle.connectedAt)}</span>
                         )}
                     </div>
-                    <p className="text-sm text-gray-600">
-                        Members marked <strong>Email login</strong> have no Google account, so when they are Toastmaster the agenda sheet is created in — and the agenda email sent from — <span className="font-mono">{CLUB_GOOGLE_EMAIL}</span>. Google members are not affected.
+                    <p className="text-sm leading-relaxed text-gray-600">
+                        Members marked <strong>Email login</strong> have no Google account, so when they are Toastmaster the agenda sheet is created in — and the agenda email sent from — <strong>{CLUB_GOOGLE_EMAIL}</strong>. Google members are not affected.
                     </p>
-                    <p className="text-xs text-amber-700">
-                        Choose <span className="font-mono">{CLUB_GOOGLE_EMAIL}</span> on the Google screen. Picking any other Google account signs you in as that account instead and connects nothing.
+                    <p className="text-xs leading-relaxed text-amber-800">
+                        Choose <strong>{CLUB_GOOGLE_EMAIL}</strong> on the Google screen. Picking any other Google account signs you in as that account instead and connects nothing.
                     </p>
                 </div>
                 <form action={connectClubGoogle}>
-                    <button type="submit" className="flex items-center gap-2 whitespace-nowrap bg-white border-2 border-brand-loyal-blue text-brand-loyal-blue font-bold rounded-xl px-4 py-2.5 hover:bg-brand-loyal-blue hover:text-white transition-all text-sm">
-                        <Link2 size={16} />
+                    <Button type="submit" variant="outline">
+                        <Link2 />
                         {clubGoogle.connected ? 'Reconnect' : 'Connect'} with Google
-                    </button>
+                    </Button>
                 </form>
-            </div>
-        </div>
+            </Card>
+        </section>
+    </PageShell>
+  )
+}
 
-      </div>
-    </div>
+function TableHead({ className, children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <th className={`border-b border-gray-200 p-4 text-xs font-bold uppercase tracking-widest text-gray-500 ${className ?? ''}`}>
+      {children}
+    </th>
   )
 }

@@ -17,7 +17,14 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { AlertCircle, CheckCircle2, ExternalLink, Copy, Loader2, RefreshCw } from 'lucide-react'
+import { CircleHelp, ExternalLink, Copy, RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
+import { Input, NativeSelect } from '@/components/ui/input'
+import { Label, FieldHint } from '@/components/ui/label'
+import { SectionLabel } from '@/components/common/page'
+import { Badge, Notice, Spinner } from '@/components/common/surfaces'
+import { cn } from '@/lib/utils'
 import TiptapEditor from './tiptap-editor'
 import { fetchRoleAssignments, fetchMeetingSettings, formatDraft, saveFinalAgenda, regenerateRoster } from '@/app/actions/agenda'
 import { executeAgendaPipeline, type PipelineResult } from '@/app/actions/execute-agenda'
@@ -300,6 +307,10 @@ function WizardContent({ meetingId }: { meetingId: string }) {
     }
   }, [emailSubject])
 
+  const nextDisabled =
+    (step === 1 && !emailSubject.trim()) ||
+    (step === 2 && (!meetingTheme.trim() || !meetingQotd.trim()))
+
   /** Advances the wizard by one step. Cleans the email draft on step 1 exit. */
   const handleNextStep = async () => {
       if (step === 1) {
@@ -527,70 +538,69 @@ function WizardContent({ meetingId }: { meetingId: string }) {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border p-8">
+    <div data-shot="wizard" className="rounded-2xl border border-gray-200 bg-white p-6 shadow-md md:p-8">
       {/* Progress Indicator */}
-      <div className="relative mb-12 mt-4">
-        <div className="absolute top-5 left-[12%] right-[12%] border-t-2 border-dashed border-gray-300 z-0"></div>
-        <div className="flex justify-between relative z-10 px-4">
-          {[1, 2, 3, 4].map(s => (
-            <div key={s} className="flex flex-col items-center w-16 bg-white">
-               <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-colors duration-300 ${step >= s ? 'bg-brand-loyal-blue text-white shadow-md' : 'bg-gray-200 text-gray-500 border border-transparent'}`}>
-                  {s}
-               </div>
-               <span className={`text-xs mt-2 font-medium ${step >= s ? 'text-brand-loyal-blue font-bold tracking-tight' : 'text-gray-400'}`}>
-                   {s === 1 && 'Draft'}
-                   {s === 2 && 'Settings'}
-                   {s === 3 && 'Roles'}
-                   {s === 4 && 'Finalize'}
-               </span>
-            </div>
-          ))}
-        </div>
+      <div className="relative mt-4 mb-12">
+        <div aria-hidden className="absolute top-5 right-[12%] left-[12%] z-0 border-t-2 border-dashed border-gray-300" />
+        <ol aria-label="Progress" className="relative z-10 flex justify-between px-4">
+          {STEP_LABELS.map((label, i) => {
+            const n = i + 1
+            const reached = step >= n
+            return (
+              <li key={label} className="flex w-16 flex-col items-center bg-white" aria-current={step === n ? 'step' : undefined}>
+                <span className={cn(
+                  "flex size-10 items-center justify-center rounded-full font-bold transition-colors duration-300",
+                  reached ? "bg-brand-loyal-blue text-white shadow-md" : "bg-gray-200 text-gray-500"
+                )}>
+                  {n}
+                </span>
+                <span className={cn("mt-2 text-xs", reached ? "font-bold tracking-tight text-brand-loyal-blue" : "font-medium text-gray-400")}>
+                  {label}
+                </span>
+              </li>
+            )
+          })}
+        </ol>
       </div>
 
-      <div className="min-h-[400px]">
+      <div className="min-h-100">
         {/* Step 3 Update Mode Info */}
         {initialStepParam === 3 && step === 3 && (
-            <div className="mb-6 p-4 bg-brand-loyal-blue/5 border border-brand-loyal-blue/20 rounded-xl animate-in fade-in slide-in-from-top-2 duration-500">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h3 className="text-brand-loyal-blue font-bold text-sm">Roster-Only Update Mode</h3>
-                        <p className="text-xs text-gray-500 max-w-md">Email and Settings will be bypassed. Changes you make here will instantly update the club dashboard.</p>
-                    </div>
-                    <button 
-                        onClick={handleFinish}
-                        disabled={isSaving}
-                        className="bg-brand-loyal-blue text-white text-xs font-bold px-5 py-2 rounded-lg hover:bg-opacity-90 shadow-sm transition-all disabled:opacity-50"
-                    >
-                        {isSaving ? 'Saving...' : 'Save & Close'}
-                    </button>
+            <div className="mb-6 flex flex-col gap-3 rounded-xl border border-brand-loyal-blue/20 bg-brand-loyal-blue/5 p-4 animate-in fade-in slide-in-from-top-2 duration-500 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h3 className="text-sm font-bold text-brand-loyal-blue">Roster-Only Update Mode</h3>
+                    <p className="max-w-md text-xs leading-relaxed text-gray-600">Email and Settings will be bypassed. Changes you make here will instantly update the club dashboard.</p>
                 </div>
+                <Button size="sm" onClick={handleFinish} disabled={isSaving}>
+                    {isSaving && <Spinner />}
+                    {isSaving ? 'Saving…' : 'Save & Close'}
+                </Button>
             </div>
         )}
 
         {/* Step 1: WYSIWYG Editor */}
         {step === 1 && (
-          <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
-            <h2 className="text-xl font-bold border-l-4 pl-3 border-brand-loyal-blue">Email Draft</h2>
-            <div className="flex justify-between items-center text-sm">
+          <div className="space-y-5 animate-in fade-in zoom-in-95 duration-300">
+            <StepHeading>Email Draft</StepHeading>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
               <p className="text-gray-600">Draft the email body here. Progress is auto-saved locally.</p>
-              <a href="/tutorial#write-the-email" target="_blank" className="text-brand-loyal-blue font-bold flex items-center gap-1 hover:underline">
-                <AlertCircle size={14} /> How do I write the email?
+              <a href="/tutorial#write-the-email" target="_blank" className="flex items-center gap-1 font-bold text-brand-loyal-blue hover:underline">
+                <CircleHelp size={14} /> How do I write the email?
               </a>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
                 <div>
-                    <label className="text-sm font-semibold text-gray-600 block mb-1">Subject Line</label>
-                    <input 
-                        type="text" 
-                        className="w-full border p-3 rounded-lg outline-none focus:ring-2 focus:ring-brand-loyal-blue transition text-sm" 
+                    <Label htmlFor="email-subject">Subject Line</Label>
+                    <Input
+                        id="email-subject"
+                        type="text"
                         placeholder="Gavel Club MM/DD - Theme"
                         value={emailSubject}
                         onChange={(e) => setEmailSubject(e.target.value)}
                     />
                 </div>
                 <div>
-                    <label className="text-sm font-semibold text-gray-600 block mb-1">Email Body</label>
+                    <Label>Email Body</Label>
                     <TiptapEditor content={emailDraft} onChange={setEmailDraft} />
                 </div>
             </div>
@@ -599,33 +609,33 @@ function WizardContent({ meetingId }: { meetingId: string }) {
 
         {/* Step 2: Settings */}
         {step === 2 && (
-          <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300 max-w-lg">
-             <h2 className="text-xl font-bold border-l-4 pl-3 border-brand-loyal-blue">Meeting Details</h2>
-             <div className="space-y-2">
-                 <label className="font-semibold text-sm">Meeting Type</label>
-                 <select className="w-full border p-3 rounded" value={meetingType || 'Regular'} onChange={(e) => setMeetingType(e.target.value)}>
+          <div className="max-w-lg space-y-6 animate-in fade-in zoom-in-95 duration-300">
+             <StepHeading>Meeting Details</StepHeading>
+             <div>
+                 <Label htmlFor="meeting-type">Meeting Type</Label>
+                 <NativeSelect id="meeting-type" value={meetingType || 'Regular'} onChange={(e) => setMeetingType(e.target.value)}>
                      <option value="Regular">Regular Meeting</option>
                      <option value="Education">Guest Education Session</option>
                      <option value="Contest" disabled>Contest</option>
-                 </select>
+                 </NativeSelect>
                  {guestEducationActive && (
-                     <p className="text-xs text-brand-true-maroon font-medium pt-1">
+                     <FieldHint className="font-medium text-brand-true-maroon">
                          Guest speaker &quot;{guestSpeakerName}&quot; (set by the executive team) will replace Speaker 3 on the agenda sheet.
-                     </p>
+                     </FieldHint>
                  )}
                  {meetingType === 'Education' && !guestSpeakerName.trim() && (
-                     <p className="text-xs text-gray-500 pt-1">
+                     <FieldHint>
                          No guest speaker has been entered by the executive team yet — the agenda will keep the regular Speaker 3 slot until one is set.
-                     </p>
+                     </FieldHint>
                  )}
              </div>
-             <div className="space-y-2">
-                 <label className="font-semibold text-sm">Meeting Theme (Required)</label>
-                 <input type="text" placeholder="e.g., Spring Forward" className="w-full border p-3 rounded" value={meetingTheme} onChange={(e) => setMeetingTheme(e.target.value)} />
+             <div>
+                 <Label htmlFor="meeting-theme">Meeting Theme (Required)</Label>
+                 <Input id="meeting-theme" type="text" placeholder="e.g., Spring Forward" value={meetingTheme} onChange={(e) => setMeetingTheme(e.target.value)} />
              </div>
-             <div className="space-y-2">
-                 <label className="font-semibold text-sm">Question of The Day (Required)</label>
-                 <input type="text" placeholder="e.g., What is your favorite season?" className="w-full border p-3 rounded" value={meetingQotd} onChange={(e) => setMeetingQotd(e.target.value)} />
+             <div>
+                 <Label htmlFor="meeting-qotd">Question of The Day (Required)</Label>
+                 <Input id="meeting-qotd" type="text" placeholder="e.g., What is your favorite season?" value={meetingQotd} onChange={(e) => setMeetingQotd(e.target.value)} />
              </div>
           </div>
         )}
@@ -633,80 +643,64 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         {/* Step 3: Roles */}
         {step === 3 && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
-             <div className="flex flex-wrap justify-between items-center gap-3">
-                 <h2 className="text-xl font-bold border-l-4 pl-3 border-brand-loyal-blue">Role Assignments</h2>
-                 <div className="flex items-center gap-2">
-                     <div className="flex items-center text-sm bg-gray-100 p-2 rounded cursor-pointer border border-gray-200" onClick={() => setAllowDoubleRoles(!allowDoubleRoles)}>
-                         <span className={allowDoubleRoles ? 'text-brand-true-maroon font-bold mr-2' : 'text-gray-600 font-medium mr-2'}>Allow Multiple Roles</span>
-                         <input type="checkbox" className="accent-brand-true-maroon w-4 h-4 cursor-pointer" checked={allowDoubleRoles} readOnly />
-                     </div>
-                     <div className="flex items-center text-sm bg-gray-100 p-2 rounded cursor-pointer border border-gray-200" onClick={() => setAllowMajorRoleEdit(!allowMajorRoleEdit)}>
-                         <span className={allowMajorRoleEdit ? 'text-brand-true-maroon font-bold mr-2' : 'text-gray-600 font-medium mr-2'}>Edit Major Roles</span>
-                         <input type="checkbox" className="accent-brand-true-maroon w-4 h-4 cursor-pointer" checked={allowMajorRoleEdit} readOnly />
-                     </div>
+             <div className="flex flex-wrap items-center justify-between gap-3">
+                 <StepHeading>Role Assignments</StepHeading>
+                 <div className="flex flex-wrap items-center gap-2">
+                     <ToggleChip checked={allowDoubleRoles} onChange={setAllowDoubleRoles}>Allow Multiple Roles</ToggleChip>
+                     <ToggleChip checked={allowMajorRoleEdit} onChange={setAllowMajorRoleEdit}>Edit Major Roles</ToggleChip>
                  </div>
              </div>
 
              {allowDoubleRoles && (
-                 <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm border border-red-200 shadow-sm font-medium">
-                     <strong>Warning:</strong> Double roles are enabled. Automatic role shuffle is paused. You must manually assign attendees to resolve conflicts.
-                 </div>
+                 <Notice tone="danger" title="Double roles are enabled">
+                     Automatic role shuffle is paused. You must manually assign attendees to resolve conflicts.
+                 </Notice>
              )}
 
              {allowMajorRoleEdit && (
-                 <div className="bg-amber-50 text-amber-800 p-4 rounded-lg text-sm border border-amber-200 shadow-sm font-medium">
-                     <strong>Heads up:</strong> Major roles are unlocked. Your changes overwrite what the executive team assigned — switch this back off to discard them.
-                 </div>
+                 <Notice tone="warning" title="Major roles are unlocked">
+                     Your changes overwrite what the executive team assigned — switch this back off to discard them.
+                 </Notice>
              )}
 
              {conflictError && (
-                 <div className="bg-red-100 text-red-800 p-4 rounded-lg text-sm border-l-4 border-red-500 shadow-sm font-medium flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                     <AlertCircle size={20} />
-                     <span>{conflictError}</span>
-                 </div>
+                 <Notice tone="danger" className="animate-in fade-in slide-in-from-top-2 duration-300">
+                     {conflictError}
+                 </Notice>
              )}
 
              {loadingRoles ? (
-                  <div className="py-12 text-center text-gray-400">Loading Role History...</div>
+                  <div className="flex items-center justify-center gap-2 py-12 text-gray-500"><Spinner /> Loading Role History...</div>
              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
                     <div>
-                        <h3 className="font-bold text-gray-700 mb-4 bg-gray-100 p-2 rounded text-sm flex justify-between items-center gap-2">
+                        <h3 className="mb-4 flex items-center justify-between gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm font-bold text-gray-700">
                             <span>Minor Roles</span>
-                            <button
+                            <Button
+                                variant="outline"
+                                size="sm"
                                 onClick={() => setConfirmingRegen(true)}
                                 disabled={isRegenerating || confirmingRegen}
                                 title="Discard this roster and reshuffle by participation history"
-                                className="flex items-center gap-1.5 text-[11px] font-bold text-brand-loyal-blue bg-white border border-gray-200 px-2 py-1 rounded hover:bg-brand-loyal-blue/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                             >
-                                <RefreshCw size={12} className={isRegenerating ? 'animate-spin' : ''} />
+                                <RefreshCw className={isRegenerating ? 'animate-spin' : ''} />
                                 {isRegenerating ? 'Shuffling...' : 'Regenerate'}
-                            </button>
+                            </Button>
                         </h3>
 
                         {confirmingRegen && (
-                            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg animate-in fade-in slide-in-from-top-1 duration-200">
-                                <p className="text-xs text-amber-900 leading-relaxed mb-3">
+                            <Notice tone="warning" icon={false} className="mb-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                                <p>
                                     Reshuffle all minor roles from participation history? <strong>The current minor-role assignments will be discarded.</strong> Major roles, the Toastmaster and the Backup Speaker are left alone, and nothing is saved until you finish.
                                 </p>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={handleRegenerate}
-                                        className="text-[11px] font-bold bg-brand-true-maroon text-white px-3 py-1.5 rounded hover:bg-opacity-90 transition-colors"
-                                    >
-                                        Yes, reshuffle
-                                    </button>
-                                    <button
-                                        onClick={() => setConfirmingRegen(false)}
-                                        className="text-[11px] font-bold bg-white text-gray-600 border border-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
+                                <div className="flex gap-2 pt-2">
+                                    <Button variant="maroon" size="sm" onClick={handleRegenerate}>Yes, reshuffle</Button>
+                                    <Button variant="secondary" size="sm" onClick={() => setConfirmingRegen(false)}>Cancel</Button>
                                 </div>
-                            </div>
+                            </Notice>
                         )}
 
-                        <div className="space-y-2">
+                        <div>
                              {Object.entries(roleSlots)
                                  .filter(([role]) => !MAJOR_ROLES.includes(role))
                                  .map(([role, user]) => {
@@ -717,30 +711,20 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                      : [...unassigned, ...(user ? [user] : [])].sort((a, b) => a.displayName.localeCompare(b.displayName));
 
                                  return (
-                                 <div key={role} className="flex justify-between items-center text-sm border-b border-gray-100 pb-2">
-                                     <span className="font-medium text-gray-600">{role}</span>
-                                     <select 
-                                        className={`px-2 py-1 rounded text-xs border bg-white focus:ring-2 focus:ring-brand-loyal-blue outline-none transition-shadow ${user ? 'bg-brand-happy-yellow/10 border-brand-happy-yellow/50' : 'bg-red-50 border-red-200 border-dashed'}`} 
-                                        value={user?.id || ""} 
-                                        onChange={(e) => handleRoleChange(role, e.target.value)}
-                                     >
-                                         <option value="">-- UNASSIGNED --</option>
-                                         {options.map((u) => (
-                                             <option key={u.id} value={u.id}>{u.displayName}</option>
-                                         ))}
-                                     </select>
-                                 </div>
+                                 <RoleRow key={role} label={role}>
+                                     <RoleSelect value={user?.id || ""} filled={!!user} onChange={(id) => handleRoleChange(role, id)} options={options} />
+                                 </RoleRow>
                                  )
                              })}
                         </div>
                     </div>
                     <div className="space-y-6">
                         <div>
-                            <h3 className="font-bold text-gray-700 mb-4 bg-brand-true-maroon text-white p-2 rounded text-sm flex justify-between">
+                            <h3 className="mb-4 flex items-center justify-between rounded-xl bg-brand-true-maroon px-3 py-2 text-sm font-bold text-white">
                                 <span>Major Roles</span>
-                                <span className="text-[10px] font-normal opacity-75">{allowMajorRoleEdit ? 'Unlocked' : 'Admin Entry'}</span>
+                                <span className="text-xs font-medium text-white/80">{allowMajorRoleEdit ? 'Unlocked' : 'Admin Entry'}</span>
                             </h3>
-                            <div className="space-y-3 text-sm">
+                            <div>
                                 {Object.entries(roleSlots)
                                     .filter(([role]) => MAJOR_ROLES.includes(role))
                                     .map(([role, user]) => {
@@ -750,15 +734,11 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                     // otherwise, even with "Edit Major Roles" on.
                                     if (role === 'Speaker 3' && guestEducationActive) {
                                         return (
-                                        <div key={role} className="flex justify-between items-center border-b pb-2 last:border-0">
-                                            <span className="font-semibold text-gray-600 flex items-center gap-2">
-                                                Guest Speaker
-                                                <span className="text-[10px] font-bold uppercase tracking-tight bg-brand-true-maroon/10 text-brand-true-maroon px-2 py-0.5 rounded-full">Education</span>
-                                            </span>
-                                            <span className="text-brand-true-maroon font-black bg-brand-true-maroon/5 px-2 py-0.5 rounded">
+                                        <RoleRow key={role} label={<>Guest Speaker <Badge tone="maroon" caps>Education</Badge></>}>
+                                            <span className="rounded-lg bg-brand-true-maroon/5 px-2 py-0.5 font-black text-brand-true-maroon">
                                                 {guestSpeakerName}
                                             </span>
-                                        </div>
+                                        </RoleRow>
                                         )
                                     }
 
@@ -767,12 +747,9 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                     // much bigger deal than one on a minor role.
                                     if (!allowMajorRoleEdit) {
                                         return (
-                                        <div key={role} className="flex justify-between items-center border-b pb-2 last:border-0">
-                                            <span className="font-semibold text-gray-600">{role}</span>
-                                            <span className={`font-black px-2 py-0.5 rounded ${user ? 'text-brand-loyal-blue bg-brand-loyal-blue/5' : 'text-gray-400 bg-gray-50'}`}>
-                                                {user ? user.displayName : 'TBD'}
-                                            </span>
-                                        </div>
+                                        <RoleRow key={role} label={role}>
+                                            <HolderChip name={user?.displayName} />
+                                        </RoleRow>
                                         )
                                     }
 
@@ -781,69 +758,52 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                         : [...unassigned, ...(user ? [user] : [])].sort((a, b) => a.displayName.localeCompare(b.displayName));
 
                                     return (
-                                    <div key={role} className="flex justify-between items-center border-b pb-2 last:border-0">
-                                        <span className="font-semibold text-gray-600">{role}</span>
-                                        <select
-                                           className={`px-2 py-1 rounded text-xs border bg-white focus:ring-2 focus:ring-brand-true-maroon outline-none transition-shadow ${user ? 'bg-brand-happy-yellow/10 border-brand-happy-yellow/50' : 'bg-red-50 border-red-200 border-dashed'}`}
-                                           value={user?.id || ""}
-                                           onChange={(e) => handleRoleChange(role, e.target.value)}
-                                        >
-                                            <option value="">-- UNASSIGNED --</option>
-                                            {options.map((u) => (
-                                                <option key={u.id} value={u.id}>{u.displayName}</option>
-                                            ))}
-                                        </select>
-                                    </div>
+                                    <RoleRow key={role} label={role}>
+                                        <RoleSelect value={user?.id || ""} filled={!!user} onChange={(id) => handleRoleChange(role, id)} options={options} />
+                                    </RoleRow>
                                     )
                                 })}
 
                                 {preAssigned.map((a) => (
-                                    <div key={a.id} className="flex justify-between items-center border-b pb-2 last:border-0">
-                                        <span className="font-semibold text-gray-600">{a.roleName}</span>
-                                        <span className="text-brand-loyal-blue font-black bg-brand-loyal-blue/5 px-2 py-0.5 rounded">{a.user ? `${a.user.firstName} ${a.user.lastName}` : "TBD"}</span>
-                                    </div>
+                                    <RoleRow key={a.id} label={a.roleName}>
+                                        <HolderChip name={a.user?.displayName} />
+                                    </RoleRow>
                                 ))}
                             </div>
 
                             {/* Standby slot. Any member is selectable regardless of the
                                 double-role setting, because holding it is not holding a role. */}
-                            <div className="mt-4 pt-3 border-t border-dashed border-gray-200">
-                                <div className="flex justify-between items-center">
-                                    <span className="font-semibold text-gray-600 text-sm">{BACKUP_SPEAKER}</span>
+                            <div className="mt-4 border-t border-dashed border-gray-200 pt-3">
+                                <RoleRow label={BACKUP_SPEAKER} bare>
                                     {allowMajorRoleEdit ? (
-                                        <select
-                                            className={`px-2 py-1 rounded text-xs border bg-white focus:ring-2 focus:ring-brand-true-maroon outline-none transition-shadow ${backupSpeaker ? 'bg-brand-happy-yellow/10 border-brand-happy-yellow/50' : 'bg-gray-50 border-gray-200 border-dashed'}`}
+                                        <RoleSelect
                                             value={backupSpeaker?.id || ""}
-                                            onChange={(e) => setBackupSpeaker(roster.find(u => u.id === e.target.value) || null)}
-                                        >
-                                            <option value="">-- UNASSIGNED --</option>
-                                            {roster.map((u) => (
-                                                <option key={u.id} value={u.id}>{u.displayName}</option>
-                                            ))}
-                                        </select>
+                                            filled={!!backupSpeaker}
+                                            optional
+                                            onChange={(id) => setBackupSpeaker(roster.find(u => u.id === id) || null)}
+                                            options={roster}
+                                        />
                                     ) : (
-                                        <span className={`font-black px-2 py-0.5 rounded text-sm ${backupSpeaker ? 'text-brand-loyal-blue bg-brand-loyal-blue/5' : 'text-gray-400 bg-gray-50'}`}>
-                                            {backupSpeaker ? backupSpeaker.displayName : 'TBD'}
-                                        </span>
+                                        <HolderChip name={backupSpeaker?.displayName} />
                                     )}
-                                </div>
-                                <p className="text-[11px] text-gray-400 mt-1.5 leading-snug">
+                                </RoleRow>
+                                <FieldHint>
                                     Standby only — still counts as roleless, so they remain eligible for a minor role and stay on the attendance list.
-                                </p>
+                                </FieldHint>
                             </div>
                         </div>
 
-                        <div className="pt-6 border-t border-gray-100">
-                            <h3 className="font-bold text-gray-700 mb-2 border-b border-gray-100 pb-2 flex justify-between items-center text-sm">
+                        <div className="border-t border-gray-200 pt-6">
+                            <h3 className="mb-2 flex items-center justify-between border-b border-gray-100 pb-2 text-sm font-bold text-gray-700">
                                 <span>Attendance List</span>
-                                <span className="bg-gray-100 text-gray-400 text-[10px] px-2 py-0.5 rounded-full font-normal">{unassigned.length} Available</span>
+                                <Badge>{unassigned.length} Available</Badge>
                             </h3>
-                            <p className="text-xs text-gray-400 mb-3">Members attending without a formal designated role.</p>
+                            <p className="mb-3 text-xs text-gray-500">Members attending without a formal designated role.</p>
                             <div className="flex flex-wrap gap-1.5 text-xs">
                                 {unassigned.length > 0 ? unassigned.map(u => (
-                                    <span key={u.id} className="bg-gray-50 border border-gray-200 px-2.5 py-1 text-gray-500 rounded-lg shadow-sm">{u.displayName}</span>
+                                    <span key={u.id} className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1 font-medium text-gray-600">{u.displayName}</span>
                                 )) : (
-                                    <span className="text-gray-400 italic">Everyone is currently participating!</span>
+                                    <span className="text-gray-500 italic">Everyone is currently participating!</span>
                                 )}
                             </div>
                         </div>
@@ -856,124 +816,85 @@ function WizardContent({ meetingId }: { meetingId: string }) {
         {/* Step 4: Execution */}
         {step === 4 && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
-             <div className="bg-brand-loyal-blue/10 border-l-4 border-brand-loyal-blue p-6 rounded-r">
-                 <h2 className="text-lg font-bold text-brand-loyal-blue mb-1">Final Review & Finish</h2>
-                 <p className="text-sm text-gray-600">Review the summary below, then create the agenda and send the meeting email.</p>
+             <div>
+                 <StepHeading>Final Review &amp; Finish</StepHeading>
+                 <p className="mt-2 text-sm text-gray-600">Review the summary below, then create the agenda and send the meeting email.</p>
              </div>
-             
+
              {/* Summary Preview */}
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-gray-50 p-4 rounded-lg border flex-1">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Email Subject</h3>
-                    <p className="text-sm font-semibold text-gray-800">{emailSubject || `Gavel Club MM/DD - Theme`}</p>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-lg border flex-1">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Meeting Theme</h3>
-                    <p className="text-sm font-semibold text-gray-800">{meetingTheme || 'Not set'}</p>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-lg border flex-1">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Question Of The Day</h3>
-                    <p className="text-sm font-semibold text-gray-800">{meetingQotd || 'Not set'}</p>
-                </div>
+             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                {[
+                  ['Email Subject', emailSubject],
+                  ['Meeting Theme', meetingTheme],
+                  ['Question Of The Day', meetingQotd],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                      <SectionLabel as="h3" className="mb-2">{label}</SectionLabel>
+                      <p className={cn("text-sm font-semibold", value ? "text-gray-800" : "text-gray-400 italic")}>{value || 'Not set'}</p>
+                  </div>
+                ))}
              </div>
 
              {/* Execution Result */}
-             {executionResult && (
-                <div className={`p-6 rounded-xl border-2 animate-in fade-in zoom-in-95 duration-300 ${executionResult.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                    {executionResult.success ? (
-                        <div className="space-y-4">
-                            <div className="flex items-center gap-3">
-                                <CheckCircle2 size={28} className="text-green-600" />
-                                <div>
-                                    <h3 className="font-bold text-green-800 text-lg">
-                                        {executionResult.isUpdate ? 'Agenda Sheet Updated' : 'Pipeline Executed Successfully'}
-                                    </h3>
-                                    <p className="text-sm text-green-700">
-                                        {executionResult.isUpdate 
-                                            ? 'The existing Google Sheet has been updated with the latest role assignments.'
-                                            : 'Google Sheet created and email dispatched to all club members.'}
-                                    </p>
-                                </div>
-                            </div>
-                            {executionResult.warning && (
-                                <p className="text-sm font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">{executionResult.warning}</p>
-                            )}
-                            {executionResult.sheetUrl && (
-                                <a 
-                                    href={executionResult.sheetUrl} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-2 bg-white px-4 py-3 rounded-lg border border-green-200 text-brand-loyal-blue font-bold text-sm hover:bg-green-50 transition-colors w-fit"
-                                >
-                                    <ExternalLink size={16} />
-                                    Open Agenda Sheet
-                                </a>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-3">
-                            <AlertCircle size={28} className="text-red-600" />
-                            <div>
-                                <h3 className="font-bold text-red-800">Execution Failed</h3>
-                                <p className="text-sm text-red-700">{executionResult.error}</p>
-                            </div>
-                        </div>
+             {executionResult && (executionResult.success ? (
+                <Notice tone="success" title={executionResult.isUpdate ? 'Agenda Sheet Updated' : 'Agenda Created and Sent'} className="animate-in fade-in zoom-in-95 duration-300">
+                    <p>
+                        {executionResult.isUpdate
+                            ? 'The existing Google Sheet has been updated with the latest role assignments.'
+                            : 'Google Sheet created and email dispatched to all club members.'}
+                    </p>
+                    {executionResult.warning && (
+                        <Notice tone="warning" className="mt-3">{executionResult.warning}</Notice>
                     )}
-                </div>
-             )}
+                    <a
+                        href={executionResult.sheetUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), "mt-3")}
+                    >
+                        <ExternalLink /> Open Agenda Sheet
+                    </a>
+                </Notice>
+             ) : (
+                <Notice tone="danger" title="Something went wrong" className="animate-in fade-in zoom-in-95 duration-300">
+                    {executionResult.error}
+                </Notice>
+             ))}
 
              {/* Action Buttons */}
              {!executionResult?.success && (
-                <div className="space-y-3">
-                    <button 
-                        onClick={handleExecute}
-                        disabled={isExecuting}
-                        className="w-full flex items-center justify-center gap-2 bg-brand-loyal-blue text-white font-bold py-4 rounded-xl shadow-lg hover:bg-opacity-90 transition-all disabled:opacity-50 text-lg"
-                    >
+                <div className="space-y-4">
+                    <Button size="lg" onClick={handleExecute} disabled={isExecuting} className="h-14 w-full text-lg shadow-md">
                         {isExecuting ? (
                             <>
-                                <Loader2 size={22} className="animate-spin" />
+                                <Spinner size={22} />
                                 {initialStepParam === 3 ? 'Updating Sheet...' : 'Generating Sheet & Sending Email...'}
                             </>
                         ) : (
                             initialStepParam === 3 ? 'Update Agenda Sheet' : 'Create Agenda & Send Email'
                         )}
-                    </button>
+                    </Button>
 
-                    <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-gray-200"></div>
-                        </div>
-                        <div className="relative flex justify-center text-xs">
-                            <span className="bg-white px-4 text-gray-400 font-bold uppercase tracking-widest">Manual Copy</span>
-                        </div>
+                    <div className="flex items-center gap-4">
+                        <span className="flex-1 border-t border-gray-200" />
+                        <SectionLabel as="span">Manual Copy</SectionLabel>
+                        <span className="flex-1 border-t border-gray-200" />
                     </div>
 
-                    <button 
-                        onClick={handleCopy} 
-                        className="w-full flex items-center justify-center gap-2 bg-gray-100 text-gray-600 font-bold py-3 rounded-xl border border-gray-200 hover:bg-gray-200 transition-all text-sm"
-                    >
-                        <Copy size={16} />
-                        {clipboardStatus}
-                    </button>
+                    <Button variant="secondary" onClick={handleCopy} className="w-full">
+                        <Copy /> {clipboardStatus}
+                    </Button>
                 </div>
              )}
 
              {executionResult?.success && (
                 <div className="flex gap-3">
-                    <button 
-                        onClick={() => router.push('/agenda')}
-                        className="flex-1 bg-brand-loyal-blue text-white font-bold py-3 rounded-xl shadow hover:bg-opacity-90 transition-all"
-                    >
+                    <Button onClick={() => router.push('/agenda')} className="flex-1">
                         Return to Dashboard
-                    </button>
-                    <button 
-                        onClick={handleCopy} 
-                        className="flex items-center justify-center gap-2 bg-gray-100 text-gray-600 font-bold py-3 px-6 rounded-xl border border-gray-200 hover:bg-gray-200 transition-all text-sm"
-                    >
-                        <Copy size={16} />
-                        {clipboardStatus}
-                    </button>
+                    </Button>
+                    <Button variant="secondary" onClick={handleCopy}>
+                        <Copy /> {clipboardStatus}
+                    </Button>
                 </div>
              )}
           </div>
@@ -981,17 +902,15 @@ function WizardContent({ meetingId }: { meetingId: string }) {
       </div>
 
       {initialStepParam !== 3 && (
-      <div className="mt-8 flex justify-between border-t pt-4">
-          <button onClick={() => setStep(prev => prev - 1)} disabled={step === 1} className={`px-6 py-2 rounded font-medium ${step === 1 ? 'opacity-0 cursor-default' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Back</button>
-          
+      <div className="mt-8 flex justify-between border-t border-gray-200 pt-6">
+          <Button variant="secondary" onClick={() => setStep(prev => prev - 1)} disabled={step === 1} className={step === 1 ? 'invisible' : undefined}>
+              Back
+          </Button>
+
           {step < 4 ? (
-              <button 
-                  onClick={handleNextStep}
-                  disabled={(step === 2 && (!meetingTheme || !meetingQotd))}
-                  className={`px-6 py-2 rounded font-bold transition-all ${step === 2 && (!meetingTheme || !meetingQotd) ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-brand-loyal-blue text-white shadow hover:opacity-90 active:scale-95'}`}
-              >
+              <Button onClick={handleNextStep} disabled={nextDisabled}>
                   Next Step
-              </button>
+              </Button>
           ) : null}
       </div>
       )}
@@ -999,9 +918,78 @@ function WizardContent({ meetingId }: { meetingId: string }) {
   )
 }
 
+const STEP_LABELS = ['Draft', 'Settings', 'Roles', 'Finalize']
+
+function StepHeading({ children }: { children: React.ReactNode }) {
+  return <h2 className="border-l-4 border-brand-loyal-blue pl-3 text-xl font-bold text-gray-800">{children}</h2>
+}
+
+/** A labelled checkbox styled as a chip (the Step 3 overrides). */
+function ToggleChip({ checked, onChange, children }: { checked: boolean; onChange: (next: boolean) => void; children: React.ReactNode }) {
+  return (
+    <label className={cn(
+      "flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors select-none",
+      checked
+        ? "border-brand-true-maroon/30 bg-brand-true-maroon/5 font-bold text-brand-true-maroon"
+        : "border-gray-200 bg-gray-50 font-medium text-gray-600 hover:bg-gray-100"
+    )}>
+      <span>{children}</span>
+      <input type="checkbox" className="size-4 cursor-pointer accent-brand-true-maroon" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    </label>
+  )
+}
+
+/** One role line in Step 3: name on the left, holder or picker on the right. */
+function RoleRow({ label, bare = false, children }: { label: React.ReactNode; bare?: boolean; children: React.ReactNode }) {
+  return (
+    <div className={cn("flex items-center justify-between gap-3 text-sm", !bare && "border-b border-gray-100 py-2 last:border-0")}>
+      <span className="flex items-center gap-2 font-semibold text-gray-700">{label}</span>
+      {children}
+    </div>
+  )
+}
+
+/** Member picker. Yellow when filled; dashed red when an assignable slot is empty. */
+function RoleSelect({ value, filled, optional = false, onChange, options }: {
+  value: string
+  filled: boolean
+  /** Empty is fine (the Backup Speaker), so don't flag it red. */
+  optional?: boolean
+  onChange: (id: string) => void
+  options: UserWithDisplayName[]
+}) {
+  return (
+    <NativeSelect
+      size="sm"
+      className={cn(
+        "w-44",
+        filled
+          ? "border-brand-happy-yellow bg-brand-happy-yellow/10"
+          : optional ? "border-dashed" : "border-dashed border-red-300 bg-red-50"
+      )}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">-- UNASSIGNED --</option>
+      {options.map((u) => (
+        <option key={u.id} value={u.id}>{u.displayName}</option>
+      ))}
+    </NativeSelect>
+  )
+}
+
+/** A locked holder's name, or TBD. */
+function HolderChip({ name }: { name?: string }) {
+  return (
+    <span className={cn("rounded-lg px-2 py-0.5 font-black", name ? "bg-brand-loyal-blue/5 text-brand-loyal-blue" : "bg-gray-50 text-gray-400")}>
+      {name || 'TBD'}
+    </span>
+  )
+}
+
 export default function AgendaWizard({ meetingId }: { meetingId: string }) {
   return (
-    <Suspense fallback={<div className="p-20 text-center text-gray-400">Loading Wizard Environment...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center gap-2 p-20 text-gray-500"><Spinner /> Loading the wizard…</div>}>
       <WizardContent meetingId={meetingId} />
     </Suspense>
   )
