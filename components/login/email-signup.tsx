@@ -37,7 +37,7 @@ export default function EmailSignup() {
   if (!showForm) {
     return (
       <div className="w-full space-y-5">
-        <Notice tone="danger" icon={AlertTriangle} title="Please read before continuing" className="[&_li]:leading-relaxed">
+        <Notice tone="danger" icon={AlertTriangle} title="Please read before continuing" className="text-xs">
           <p>
             Signing up with an email and password is <strong>not recommended</strong>, and it is <strong>not how this portal is meant to be used</strong>. It is only here for the very few members who have no way to use a Google account.
           </p>
@@ -49,9 +49,9 @@ export default function EmailSignup() {
           </ul>
         </Notice>
 
-        <Notice tone="brand" icon={false}>
+        <Notice tone="brand" icon={false} className="text-xs">
           <p>
-            <strong className="text-gray-800">You don&apos;t need a Gmail address to use Google sign-in.</strong> A parent&apos;s or family member&apos;s Google account works fine — you will still enter your own name afterwards. You can also make a free Google account in a few minutes.
+            <strong className="text-gray-800">You don&apos;t need a Gmail address to use Google sign-in.</strong>{' '}A parent&apos;s or family member&apos;s Google account works fine — you will still enter your own name afterwards. You can also make a free Google account in a few minutes.
           </p>
         </Notice>
 

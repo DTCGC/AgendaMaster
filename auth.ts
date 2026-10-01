@@ -60,7 +60,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   callbacks: {
     ...authConfig.callbacks,
     /** Handle new Google sign-ins: create INCOMPLETE user record if first visit. */
-    async signIn({ user, account, profile: _profile }) {
+    async signIn({ user, account }) {
         if (account?.provider === 'google') {
             try {
                 const existingUser = await db.user.findUnique({

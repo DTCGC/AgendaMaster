@@ -68,6 +68,7 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
    GOOGLE_CLIENT_SECRET="your-client-secret"
    RESEND_API_KEY="re_your_api_key"          # optional in dev — omit to mock-log emails
    RESEND_FROM_EMAIL="AgendaMaster <info@coquitlamgavel.com>"
+   RESEND_WEBHOOK_SECRET=""                  # signing secret of the inbound-email webhook (whsec_...)
    GOOGLE_SERVICE_ACCOUNT_KEY=""             # optional — service-account JSON (or base64), enables admin sheet edits
    SEED_ADMIN_PASSWORD="choose-a-dev-admin-password"
    ```
@@ -113,17 +114,43 @@ What is covered (all of it invisible-when-broken behaviour, which is why it is p
 
 | File | Guards |
 |---|---|
-| `tests/roles-recency.test.ts` | The admin panel only writes roles it owns, and preserves `assignedAt` for unchanged holders — both silently corrupt the fairness rotation when broken. |
+| `tests/roles-recency.test.ts` | The admin panel and the agenda wizard only write roles they own, never accept non-members, and preserve `assignedAt` for unchanged holders — each silently corrupts the fairness rotation when broken. |
 | `tests/backup-speaker.test.ts` | The Backup Speaker stays roleless: still eligible for a minor role, still on the attendance list, never counted as recent participation. |
 | `tests/roster-regeneration.test.ts` | A normal load preserves the saved roster; `ignoreSavedMinorRoles` reshuffles without persisting or disturbing other roles. |
 | `tests/guest-education.test.ts` | The Guest Education override relabels only the `Speaker 3` row (to `Guest Speaker`) and stays byte-identical to Regular output everywhere else — and is fully inert when inactive. |
 | `tests/password-accounts.test.ts` | Email/password accounts: a Google-only account can never be signed into with a password, emails can't be duplicated by capitalization, and each caller's agenda runs under the right Google credential (admins always the service account; members without Google create through the club account). |
 | `tests/service-account.test.ts` | `GOOGLE_SERVICE_ACCOUNT_KEY` parses as raw or base64 JSON, and anything broken degrades to `null` instead of throwing — a bad env var must never break the Toastmaster's sheet creation. |
+| `tests/meeting-access.test.ts` | Only the meeting's own Toastmaster (or an admin) may save its roster or run its agenda pipeline, and only while the meeting is scheduled and still editable. Server actions are public endpoints, so this is the real security boundary. |
+| `tests/request-auth.test.ts` | The inbound-email webhook accepts only correctly signed, fresh Resend deliveries, and the cron endpoints only the exact `CRON_SECRET`. |
+| `tests/email-delivery.test.ts` | No member's address appears in the agenda email's visible `To:` header, and mass email is split into batches within Resend's recipient limit. |
+| `tests/meeting-schedule.test.ts` | The calendar offers only Fridays at 6:45 PM outside July and August, never in the past. |
 
 **Do not deploy test files.** The artifact list in `.github/workflows/deploy.yml` copies only
 `.next`, `public`, `node_modules`, `package.json`, `ecosystem.config.js` and `prisma`, so
 `tests/` is excluded by omission. Keep it that way — and if you ever add a test framework as a
 devDependency, prune it before the rsync step.
+
+---
+
+## 🎨 UI Conventions
+
+The `/tutorial` page set the visual standard; every page now follows it. Before writing new class
+strings, reach for the shared pieces:
+
+- **`components/ui/`** — `Button` (and `buttonVariants` in `button-variants.ts` for links styled as
+  buttons, usable from server components), `Input` / `NativeSelect`, `Label` / `FieldHint`, `Dialog`.
+- **`components/common/`** — `PageShell` + `PageHeader` + `SectionLabel` for page structure;
+  `Card`, `Notice`, `Badge` / `StatusPill`, `EmptyState`, `IconDisc`, `FormError`, `Spinner`;
+  `AuthCard` for the sign-in flow; `ConfirmDialog` for anything irreversible; `MeetingSelector`,
+  `StatusPage`, `LegalPage`.
+
+The colour, text-shade, label and shape rules are written out at the top of `app/globals.css`.
+In short: one grey per text role (`gray-800` values, `700` body, `600` lead, `500` captions,
+`400` meta), nothing smaller than `text-xs`, no opacity on text, brand colours via the
+`brand-*` tokens (never hex), and raw red/amber/green only for danger/warning/success.
+
+Elements the tutorial screenshots point at carry `data-shot="…"` attributes, which
+`scripts/tutorial-screenshots/capture.mjs` targets — keep them when restyling.
 
 ---
 

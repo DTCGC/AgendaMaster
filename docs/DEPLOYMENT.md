@@ -104,6 +104,11 @@ pm2 save
 pm2 startup
 ```
 
+The ecosystem file pins `TZ=America/Vancouver`. Meeting dates are built in server-local time
+(Fridays at 6:45 PM) and the crontab entries below are written in Pacific time, so the process
+must run on Pacific time whatever the Droplet's own timezone is. The deploy reloads PM2 with
+`--update-env` so changes to that `env` block take effect.
+
 ---
 
 ## 5. Nginx Reverse Proxy (optional, for IP-only access)
@@ -167,6 +172,22 @@ Add a second crontab entry (same `CRON_SECRET` as archival):
 
 Check it with `curl -X POST http://localhost:3000/api/cron/refresh-agenda -H "Authorization: Bearer YOUR_SECRET"`.
 The response lists each meeting's result; a `500` means at least one sheet failed.
+
+---
+
+## 8. Inbound Email Webhook
+
+Mail sent to `info@coquitlamgavel.com` arrives through a Resend inbound webhook
+(`POST /api/webhooks/email`) and is forwarded to the club's Gmail. Every delivery must carry a
+valid Svix signature, made with the endpoint's signing secret:
+
+1. In the Resend dashboard open **Webhooks**, select the endpoint, and copy its **Signing secret**
+   (it starts with `whsec_`).
+2. Add it to `/var/www/agendamaster/.env` on the Droplet as `RESEND_WEBHOOK_SECRET`, then
+   `pm2 reload ecosystem.config.js --update-env`.
+
+While the variable is missing the endpoint answers `503` and forwards nothing (Resend retries
+failed deliveries for a while, so mail sent in the gap is not lost immediately).
 
 ---
 
