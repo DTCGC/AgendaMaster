@@ -4,8 +4,7 @@
  * Gate-checks admin authorization, then renders the CommsClient component.
  * The actual email composition logic lives in comms-client.tsx.
  */
-import { auth } from '@/auth'
-import { redirect } from 'next/navigation'
+import { pageRequireAdmin } from '@/lib/auth-guard'
 import CommsClient from './comms-client'
 
 export const metadata = {
@@ -13,11 +12,7 @@ export const metadata = {
 }
 
 export default async function CommsPage() {
-  const session = await auth()
-  
-  if (session?.user?.role !== 'ADMIN') {
-    redirect('/agenda')
-  }
+  await pageRequireAdmin()
 
   return (
     <div className="flex-1 p-8 bg-brand-cool-grey/10 min-h-screen">

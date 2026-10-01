@@ -44,7 +44,11 @@ model Meeting {
   status          String           @default("SCHEDULED")
   googleSheetId   String?
   googleSheetUrl  String?
-  template        MeetingTemplate  @relation(fields: [typeId], references: [id])
+  // True between creating the agenda sheet and successfully sending the agenda
+  // email. A failed send leaves it set, so the Toastmaster's retry sends the
+  // email instead of only updating the (already created) sheet.
+  agendaEmailPending Boolean @default(false)
+  template       MeetingTemplate  @relation(fields: [typeId], references: [id])
   roleAssignments RoleAssignment[]
 }
 

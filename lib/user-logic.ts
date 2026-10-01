@@ -25,8 +25,6 @@ export type NameableUser = {
  * @returns A display string like "John" or "John S." (with disambiguating initial).
  */
 export function getDisplayName(user: NameableUser, roster: NameableUser[]): string {
-    if (!user) return "TBD";
-    
     // Count how many roster members share this first name
     const sameFirstNameCount = roster.filter(u => u.firstName === user.firstName).length;
     

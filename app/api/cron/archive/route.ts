@@ -6,6 +6,7 @@
  * CRON_SECRET to prevent unauthorized invocations.
  */
 import { NextResponse } from 'next/server'
+import { hasCronSecret } from '@/lib/request-auth'
 import { archivePassedMeetings } from '@/lib/archival'
 
 /**
@@ -13,10 +14,7 @@ import { archivePassedMeetings } from '@/lib/archival'
  * Triggered via internal cron, secured by CRON_SECRET.
  */
 export async function POST(request: Request) {
-  const authHeader = request.headers.get('Authorization')
-  const secret = process.env.CRON_SECRET
-
-  if (!secret || authHeader !== `Bearer ${secret}`) {
+  if (!hasCronSecret(request)) {
     return new Response('Unauthorized', { status: 401 })
   }
 

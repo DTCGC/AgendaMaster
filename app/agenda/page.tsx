@@ -14,7 +14,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Calendar, FileText, UserCheck } from "lucide-react";
 import { getDisplayName } from '@/lib/user-logic';
-import { MINOR_ROLES } from '@/lib/agenda-logic';
+import { MINOR_ROLES, FIXED_ROLES, ROSTER_ORDER } from '@/lib/roles';
+import { visibleMeetingsSince } from '@/lib/archival';
+import { formatMeetingDate, formatMeetingDateLong } from '@/lib/meeting-time';
 import ForceSignOut from '@/components/auth/force-sign-out';
 
 export default async function AgendaPage(props: { searchParams?: Promise<{ archivedId?: string }> }) {
@@ -31,11 +33,9 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
       include: { roleAssignments: { include: { user: true } } }
     });
   } else {
-    // To allow the Friday meeting to remain visible until 9:00 PM, 
-    // we use a buffer of 2 hours and 15 mins (8100000ms) since the DB date is 6:45 PM.
-    const archivalThreshold = new Date(Date.now() - 8100000);
+    // The meeting stays visible until its 9:00 PM archival (lib/archival.ts).
     nextMeeting = await db.meeting.findFirst({
-      where: { date: { gte: archivalThreshold }, status: 'SCHEDULED' },
+      where: { date: { gte: visibleMeetingsSince() }, status: 'SCHEDULED' },
       include: { roleAssignments: { include: { user: true } } },
       orderBy: { date: 'asc' }
     });
@@ -74,25 +74,13 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
       );
   }
 
-  const isToastmaster = nextMeeting.roleAssignments.find((a) => a.roleName === 'Toastmaster')?.userId === session.user.id;
+  const isToastmaster = nextMeeting.roleAssignments.find((a) => a.roleName === 'Toastmaster')?.userId === currentUser.id;
 
-  // Compute final roster in correct order
-  const roleSequence = [
-    "Sergeant at Arms", "Toastmaster", "Timer", "Grammarian", "Filler Word Counter", "Quizmaster",
-    "Speaker 1", "Speaker 2", "Speaker 3", "Evaluator 1", "Evaluator 2", "Evaluator 3",
-    "Roles For Next Meeting", "Business Meeting", "Table Topics Master", "Table Topics Evaluator 1", "Table Topics Evaluator 2"
-  ];
-
-  // Rows that always show the same people. They are labels, not assignments,
-  // so they never count as the viewer's role — even if the viewer is "John".
-  const fixedRows: Record<string, string> = {
-    "Roles For Next Meeting": "John",
-    "Business Meeting": "Andrew",
-  };
-
-  // Computed display names for all members earlier
-  const agendaItems = roleSequence.map(role => {
-      if (role in fixedRows) return { role, name: fixedRows[role], isViewer: false };
+  // Roster in meeting order. Fixed rows always show the same people; they are
+  // labels, not assignments, so they never count as the viewer's role — even
+  // if the viewer is "John".
+  const agendaItems = ROSTER_ORDER.map(role => {
+      if (role in FIXED_ROLES) return { role, name: FIXED_ROLES[role], isViewer: false };
 
       const user = nextMeeting.roleAssignments.find((a) => a.roleName === role)?.user;
       return {
@@ -103,6 +91,10 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
   });
 
   const hasFinalized = nextMeeting.roleAssignments.some((a) => MINOR_ROLES.includes(a.roleName));
+  // Update mode (?step=3) only syncs an existing sheet. Until the sheet exists
+  // — e.g. Step 4 saved the roles but the sheet or email failed — the
+  // Toastmaster goes back through the full wizard, which creates and sends it.
+  const hasSheet = !!nextMeeting.googleSheetId;
 
   // The viewer's own roles, in roster order. The Toastmaster box already
   // announces the Toastmaster role, so the banner only lists any others.
@@ -111,7 +103,7 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
   const showRoleBanner = hasFinalized && !archivedId;
 
   const meetingDetails = [
-    { label: 'Date', value: nextMeeting.date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) },
+    { label: 'Date', value: formatMeetingDateLong(nextMeeting.date) },
     { label: 'Theme', value: nextMeeting.theme?.trim() },
     { label: 'Question of the Day', value: nextMeeting.qotd?.trim() },
   ].filter((detail) => detail.value);
@@ -138,12 +130,12 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
                     </div>
                     <div>
                         <h2 className="text-xl font-bold text-gray-800 mb-1 tracking-tight">Your Role: Toastmaster</h2>
-                        <p className="text-sm text-gray-600 mb-6 max-w-md">You are the lead for the meeting on <strong className="text-brand-true-maroon">{nextMeeting.date.toLocaleDateString()}</strong>. Start the workflow below to prepare the agenda.</p>
+                        <p className="text-sm text-gray-600 mb-6 max-w-md">You are the lead for the meeting on <strong className="text-brand-true-maroon">{formatMeetingDate(nextMeeting.date)}</strong>. Start the workflow below to prepare the agenda.</p>
                         <Link 
-                            href={`/agenda/create${hasFinalized ? '?step=3' : ''}`} 
+                            href={`/agenda/create${hasSheet ? '?step=3' : ''}`} 
                             className="bg-brand-loyal-blue text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:bg-brand-loyal-blue/90 transition-all inline-block hover:-translate-y-0.5 transform"
                         >
-                            {hasFinalized ? 'Update Agenda' : 'Begin Meeting Prep'}
+                            {hasSheet ? 'Update Agenda' : hasFinalized ? 'Finish Meeting Prep' : 'Begin Meeting Prep'}
                         </Link>
                         <p className="text-xs text-gray-500 mt-4">
                             First time as Toastmaster?{' '}

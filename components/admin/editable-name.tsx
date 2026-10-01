@@ -24,19 +24,19 @@ export default function EditableName({ userId, firstName, lastName }: {
   const [fn, setFn] = useState(firstName);
   const [ln, setLn] = useState(lastName);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleSave() {
     if (!fn.trim() || !ln.trim()) return;
     setSaving(true);
+    setError('');
     try {
-      const formData = new FormData();
-      formData.set('userId', userId);
-      formData.set('firstName', fn.trim());
-      formData.set('lastName', ln.trim());
-      await updateUserName(formData);
-      setEditing(false);
+      const result = await updateUserName(userId, fn, ln);
+      if (result.success) setEditing(false);
+      else setError(result.error);
     } catch (err) {
       console.error('Name update failed:', err);
+      setError('The name could not be saved.');
     } finally {
       setSaving(false);
     }
@@ -45,6 +45,7 @@ export default function EditableName({ userId, firstName, lastName }: {
   function handleCancel() {
     setFn(firstName);
     setLn(lastName);
+    setError('');
     setEditing(false);
   }
 
@@ -66,6 +67,7 @@ export default function EditableName({ userId, firstName, lastName }: {
   }
 
   return (
+    <div className="space-y-1">
     <div className="flex items-center gap-1.5 animate-in fade-in duration-150">
       <input
         type="text"
@@ -100,6 +102,8 @@ export default function EditableName({ userId, firstName, lastName }: {
       >
         <X size={14} />
       </button>
+    </div>
+    {error && <p role="alert" className="text-xs font-medium text-red-600">{error}</p>}
     </div>
   );
 }

@@ -34,13 +34,13 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
   const handleApprove = async (e: React.FormEvent) => {
     e.preventDefault();
     setApproveLoading(true);
-    const formData = new FormData();
-    formData.append('userId', userId);
-    
     try {
-      const result = await approveAccount(null, formData);
-      if (result?.emailError) {
+      const result = await approveAccount(userId);
+      if (result.emailError) {
         setErrorModal({ show: true, type: 'approval', userId });
+      } else if (!result.success) {
+        alert(result.error);
+        router.refresh();
       } else {
         router.refresh();
       }
@@ -54,13 +54,13 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
   const handleReject = async (e: React.FormEvent) => {
     e.preventDefault();
     setRejectLoading(true);
-    const formData = new FormData();
-    formData.append('userId', userId);
-    
     try {
-      const result = await rejectAccount(null, formData);
-      if (result?.emailError) {
+      const result = await rejectAccount(userId);
+      if (result.emailError) {
         setErrorModal({ show: true, type: 'rejection', userId });
+      } else if (!result.success) {
+        alert(result.error);
+        router.refresh();
       } else {
         router.refresh();
       }
@@ -85,7 +85,7 @@ export default function AccountActionButtons({ userId, userName }: AccountAction
         setErrorModal(null);
         router.refresh();
       } else {
-        alert(result.error || "Retry failed.");
+        alert(result.error);
       }
     } catch (e) {
       alert("System error during retry.");

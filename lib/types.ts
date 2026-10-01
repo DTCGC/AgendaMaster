@@ -6,8 +6,7 @@
  * compile-time safety and editor autocompletion.
  *
  * Base model types (User, Meeting, etc.) are re-exported directly from
- * @prisma/client. Composite types with relations or computed fields are
- * defined here as intersections or standalone interfaces.
+ * @prisma/client; composite types with computed fields are defined here.
  */
 
 import type {
@@ -25,24 +24,6 @@ export type Meeting = PrismaMeeting
 export type RoleAssignment = PrismaRoleAssignment
 export type MeetingTemplate = PrismaMeetingTemplate
 export type Subscriber = PrismaSubscriber
-
-// ─── Query-Specific "Fat" Types (with relations) ───────────────────────────
-
-/** User with their role assignment history included. */
-export type UserWithRoleAssignments = PrismaUser & {
-  roleAssignments: PrismaRoleAssignment[]
-}
-
-/** Meeting with all role assignments (including linked users) and template. */
-export type MeetingWithDetails = PrismaMeeting & {
-  roleAssignments: RoleAssignmentWithUser[]
-  template: PrismaMeetingTemplate
-}
-
-/** A single role assignment row with its linked user resolved. */
-export type RoleAssignmentWithUser = PrismaRoleAssignment & {
-  user: PrismaUser | null
-}
 
 // ─── Application-Specific Composite Types ──────────────────────────────────
 

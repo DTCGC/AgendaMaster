@@ -34,7 +34,7 @@ export default function CommsClient() {
             if (result.success) {
                 setResultMsg(`Transmission successful. Reached ${result.recipientCount} inboxes.`);
             } else {
-                setResultMsg(result.message || "Failed to dispatch.");
+                setResultMsg(result.error);
             }
         } catch (e) {
             setResultMsg("Network error occurred during transmission.");

@@ -9,8 +9,9 @@
 
 import { useState } from 'react'
 import { saveAllMajorRoles, saveGuestSpeakerName } from '@/app/actions/roles'
-import { MAJOR_ROLES, BACKUP_SPEAKER } from '@/lib/agenda-logic'
+import { MAJOR_ROLES, BACKUP_SPEAKER } from '@/lib/roles'
 import { Save, CheckCircle2, Info } from 'lucide-react'
+import { formatMeetingDate, formatMeetingDateShort } from '@/lib/meeting-time'
 
 type UserData = {
     id: string
@@ -38,10 +39,12 @@ export default function RolesForm({
     const [guestSpeakerName, setGuestSpeakerName] = useState(initialGuestSpeakerName)
     const [isSaving, setIsSaving] = useState(false)
     const [saved, setSaved] = useState(false)
+    const [error, setError] = useState('')
 
     const handleSave = async () => {
         setIsSaving(true)
         setSaved(false)
+        setError('')
         
         // Post only the roles this form renders. Anything else in state would be
         // deleted and recreated by the server action, re-stamping its assignedAt.
@@ -52,12 +55,17 @@ export default function RolesForm({
             userId: assignments[roleName] || ""
         }))
 
-        await Promise.all([
+        const results = await Promise.all([
             saveAllMajorRoles(meetingId, payload),
             saveGuestSpeakerName(meetingId, guestSpeakerName)
         ])
-        
+        const failure = results.find((r) => !r.success)
+
         setIsSaving(false)
+        if (failure && !failure.success) {
+            setError(failure.error)
+            return
+        }
         setSaved(true)
         setTimeout(() => setSaved(false), 3000)
     }
@@ -69,7 +77,8 @@ export default function RolesForm({
                     Target Allocations
                     {saved && <span className="text-sm font-bold text-green-600 flex items-center gap-1"><CheckCircle2 size={16} /> Saved Successfully</span>}
                 </h3>
-                
+                {error && <p role="alert" className="mb-4 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{error}</p>}
+
                 <div className="space-y-4">
                     {MAJOR_ROLES.map(role => (
                         <div key={role} className="flex flex-col space-y-1 pb-4 border-b last:border-0 last:pb-0">
@@ -83,7 +92,7 @@ export default function RolesForm({
                                 {members.map(u => (
                                     <option key={u.id} value={u.id}>
                                         {u.firstName} {u.lastName} 
-                                        {u.roleAssignments[0] ? ` (Last Active: ${new Date(u.roleAssignments[0].assignedAt).toLocaleDateString()})` : ` (Never Active)`}
+                                        {u.roleAssignments[0] ? ` (Last Active: ${formatMeetingDate(new Date(u.roleAssignments[0].assignedAt))})` : ` (Never Active)`}
                                     </option>
                                 ))}
                             </select>
@@ -140,7 +149,7 @@ export default function RolesForm({
                                 <Info size={15} className="shrink-0 mt-0.5" />
                                 <p className="text-xs leading-relaxed">
                                     <strong>{previousBackup.name}</strong> was on standby for{' '}
-                                    {new Date(previousBackup.meetingDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.
+                                    {formatMeetingDateShort(new Date(previousBackup.meetingDate))}.
                                     If all three speakers turned up, they never got to speak — consider giving them a speaking slot now.
                                 </p>
                             </div>

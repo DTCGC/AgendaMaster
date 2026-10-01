@@ -16,7 +16,7 @@ import { test, describe, before, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { db, resetDb, createMeeting, createMembers, assignRole } from './helpers/db'
-import { persistMajorRoles, filterToPanelRoles } from '@/lib/roles-logic'
+import { persistMajorRoles, persistRoles, wizardRoles, filterToPanelRoles, UnknownMemberError } from '@/lib/roles-logic'
 import { MAJOR_ROLES, MINOR_ROLES, BACKUP_SPEAKER } from '@/lib/agenda-logic'
 
 const LONG_AGO = new Date('2026-01-10T00:00:00.000Z')
@@ -152,5 +152,59 @@ describe('the panel whitelist', () => {
 
   test('major and minor role lists do not overlap', () => {
     assert.deepEqual(MAJOR_ROLES.filter((r) => MINOR_ROLES.includes(r)), [])
+  })
+})
+
+describe('the wizard write path', () => {
+  const wizardPayload = (overrides: Record<string, string> = {}) =>
+    MINOR_ROLES.map((roleName) => ({
+      roleName,
+      userId:
+        overrides[roleName] ??
+        ({ Timer: members.Ada.id, Grammarian: members.Brian.id, 'Evaluator 1': members.Cleo.id }[roleName] ?? '')
+    }))
+
+  test('re-saving an unchanged roster keeps every timestamp (Update Agenda)', async () => {
+    await persistRoles(meetingId, wizardPayload(), wizardRoles(false))
+
+    for (const roleName of ['Timer', 'Grammarian', 'Evaluator 1']) {
+      const row = await rowFor(roleName)
+      assert.equal(row?.assignedAt.getTime(), LONG_AGO.getTime(), `${roleName} was re-dated by a no-op save`)
+    }
+  })
+
+  test('only a changed minor role is re-stamped', async () => {
+    await persistRoles(meetingId, wizardPayload({ Timer: members.Eve.id }), wizardRoles(false))
+
+    assert.ok((await rowFor('Timer'))!.assignedAt.getTime() > LONG_AGO.getTime())
+    assert.equal((await rowFor('Grammarian'))?.assignedAt.getTime(), LONG_AGO.getTime())
+  })
+
+  test('never writes the Toastmaster, and major roles only when unlocked', async () => {
+    const payload = [
+      ...wizardPayload(),
+      { roleName: 'Toastmaster', userId: members.Eve.id },
+      { roleName: 'Speaker 1', userId: members.Eve.id },
+    ]
+
+    await persistRoles(meetingId, payload, wizardRoles(false))
+    assert.equal((await rowFor('Toastmaster'))?.userId, members.Ada.id)
+    assert.equal((await rowFor('Speaker 1'))?.userId, members.Brian.id, 'locked major role was written')
+
+    await persistRoles(meetingId, payload, wizardRoles(true))
+    assert.equal((await rowFor('Toastmaster'))?.userId, members.Ada.id, 'the wizard must never write the Toastmaster')
+    assert.equal((await rowFor('Speaker 1'))?.userId, members.Eve.id, 'unlocked major role was not written')
+  })
+
+  test('rejects a payload naming someone who is not an approved member', async () => {
+    const pending = await db.user.create({
+      data: { firstName: 'Pat', lastName: 'Pending', email: 'pat@example.com', role: 'PENDING' }
+    })
+
+    await assert.rejects(
+      persistRoles(meetingId, wizardPayload({ Timer: pending.id }), wizardRoles(false)),
+      UnknownMemberError
+    )
+    assert.equal((await rowFor('Timer'))?.userId, members.Ada.id, 'a rejected save must change nothing')
   })
 })

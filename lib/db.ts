@@ -17,13 +17,13 @@ import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
 const dbUrl = process.env.DATABASE_URL?.replace('file:', '') || './dev.db'
 
 // The adapter bridges Prisma's query engine to better-sqlite3's synchronous API.
-// Guard against browser environments where Node.js-only modules are unavailable.
-const adapter = typeof window === 'undefined' ? new PrismaBetterSqlite3({ url: dbUrl }) : undefined
+// Server-only: client components import role names from lib/roles.ts instead.
+const adapter = new PrismaBetterSqlite3({ url: dbUrl })
 
 // Attach the client to globalThis so it persists across dev hot-reloads.
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined }
 
-export const db = globalForPrisma.prisma || new PrismaClient(adapter ? { adapter } : undefined)
+export const db = globalForPrisma.prisma || new PrismaClient({ adapter })
 
 // Only cache the singleton in development; production creates a fresh client per cold start.
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db

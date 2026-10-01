@@ -5,11 +5,13 @@
  * archive of past meetings. Admins can toggle meetings between
  * SCHEDULED / CANCELLED states and view archived meeting records.
  */
-import { auth } from '@/auth'
+import { pageRequireAdmin } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
-import { redirect } from 'next/navigation'
-import { getFutureFridays, toggleMeeting } from '@/app/actions/calendar'
-import { Clock, CheckCircle, XCircle, AlertCircle, FileText } from 'lucide-react'
+import { upcomingMeetingStarts, toYmd } from '@/lib/meeting-schedule'
+import { visibleMeetingsSince } from '@/lib/archival'
+import { formatMeetingDateLong } from '@/lib/meeting-time'
+import MeetingToggle from '@/components/admin/meeting-toggle'
+import { Clock, AlertCircle, FileText } from 'lucide-react'
 import Link from 'next/link'
 
 export const metadata = {
@@ -17,27 +19,18 @@ export const metadata = {
 }
 
 export default async function CalendarPage() {
-  const session = await auth()
-  
-  if (session?.user?.role !== 'ADMIN') {
-    redirect('/agenda')
-  }
+  await pageRequireAdmin()
 
-  // Fetch all existing meetings
-  const existingMeetings = await db.meeting.findMany({
-    include: { template: true, roleAssignments: true }
-  })
+  const existingMeetings = await db.meeting.findMany()
 
-  // Generate potential Fridays
-  const potentialFridays = await getFutureFridays()
+  // The Fridays an admin can schedule (lib/meeting-schedule.ts)
+  const potentialFridays = upcomingMeetingStarts()
 
-  // Archival threshold: 9:00 PM on the meeting date.
-  // We use 2 hours and 15 mins (8100000ms) past the 6:45 PM start time.
-  const archivalThreshold = new Date(Date.now() - 8100000);
-  
+  // Past = archived, or past its 9:00 PM archival time (lib/archival.ts)
+  const archivalThreshold = visibleMeetingsSince();
   const pastMeetings = existingMeetings
-    .filter((m) => m.status === 'ARCHIVED' || (m.status === 'COMPLETED') || new Date(m.date) < archivalThreshold)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .filter((m) => m.status === 'ARCHIVED' || m.date < archivalThreshold)
+    .sort((a, b) => b.date.getTime() - a.date.getTime());
 
   return (
     <div className="flex-1 p-8 bg-brand-cool-grey/10 min-h-screen">
@@ -69,7 +62,7 @@ export default async function CalendarPage() {
                             <tr key={date.toISOString()} className={`hover:bg-gray-50/50 transition-colors ${existing?.status === 'CANCELLED' ? 'opacity-50' : ''}`}>
                                 <td className="p-4">
                                     <div className="font-bold text-brand-loyal-blue">
-                                        {date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                                        {formatMeetingDateLong(date)}
                                     </div>
                                     <div className="text-xs text-gray-500 flex items-center gap-1">
                                         <Clock size={12} /> Standard 6:45 PM Start
@@ -92,17 +85,12 @@ export default async function CalendarPage() {
                                 </td>
                                 <td className="p-4">
                                     <div className="flex justify-end gap-2">
-                                        <form action={toggleMeeting.bind(null, date.toISOString(), existing?.id)}>
-                                            <button 
-                                                className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-all border ${existing?.status === 'SCHEDULED' ? 'bg-white text-red-600 border-red-200 hover:bg-red-50' : 'bg-brand-loyal-blue text-white hover:bg-opacity-90'}`}
-                                            >
-                                                {existing?.status === 'SCHEDULED' ? (
-                                                    <><XCircle size={16} /> Disable</>
-                                                ) : (
-                                                    <><CheckCircle size={16} /> Schedule</>
-                                                )}
-                                            </button>
-                                        </form>
+                                        <MeetingToggle
+                                            ymd={toYmd(date)}
+                                            meetingId={existing?.id}
+                                            scheduled={existing?.status === 'SCHEDULED'}
+                                            label={formatMeetingDateLong(date)}
+                                        />
                                     </div>
                                 </td>
                             </tr>
@@ -138,14 +126,13 @@ export default async function CalendarPage() {
                             <tr key={m.id} className="hover:bg-gray-50/50 transition-colors">
                                 <td className="p-4">
                                     <div className="font-bold text-gray-700">
-                                        {new Date(m.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                                        {formatMeetingDateLong(m.date)}
                                     </div>
                                     <div className="text-xs text-gray-500">Scheduled Time: 6:45 PM</div>
                                 </td>
                                 <td className="p-4 text-center">
                                     <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
                                         m.status === 'ARCHIVED' ? 'bg-brand-loyal-blue/10 text-brand-loyal-blue border-brand-loyal-blue/20' : 
-                                        m.status === 'COMPLETED' ? 'bg-purple-50 text-purple-700 border-purple-200' : 
                                         m.status === 'CANCELLED' ? 'bg-red-50 text-red-700 border-red-200' : 
                                         'bg-gray-100 text-gray-600 border-gray-200'
                                     }`}>

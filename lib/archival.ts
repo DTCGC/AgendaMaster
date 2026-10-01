@@ -21,34 +21,29 @@ export function editableMeetingsSince(): Date {
 }
 
 /**
- * Archives all meetings whose scheduled time has passed the 9:00 PM threshold.
- *
- * Meetings are stored with a start time of 6:45 PM (18:45). The archival
- * threshold is 2 hours and 15 minutes later (21:00 / 9:00 PM), allowing
- * the dashboard to keep the meeting visible for the duration of the evening.
- *
- * Per spec, BC is on permanent PDT (UTC-7) and meetings are always on Fridays.
+ * Meetings stay on the dashboard for 2h15m after their 6:45 PM start — until
+ * 9:00 PM, when the cron archives them. Both are offsets from the stored
+ * start instant, so neither depends on the server's timezone.
+ */
+export const ARCHIVE_BUFFER_MS = (2 * 60 + 15) * 60 * 1000
+
+/** Earliest meeting date still shown as "upcoming" right now (see ARCHIVE_BUFFER_MS). */
+export function visibleMeetingsSince(): Date {
+  return new Date(Date.now() - ARCHIVE_BUFFER_MS)
+}
+
+/**
+ * Archives all meetings whose 9:00 PM archival threshold has passed.
  *
  * @returns Object with `count` — the number of meetings archived in this run.
  */
 export async function archivePassedMeetings() {
-  const now = new Date()
-  
-  // 2h15m = 135 minutes = 8,100,000 ms — the gap between 6:45 PM start and 9:00 PM archival
-  const archivalBufferMs = (2 * 60 + 15) * 60 * 1000
-  const thresholdDate = new Date(now.getTime() - archivalBufferMs)
-
-  // Bulk-update all SCHEDULED meetings whose date is before the threshold
   const result = await db.meeting.updateMany({
     where: {
       status: 'SCHEDULED',
-      date: {
-        lt: thresholdDate,
-      },
+      date: { lt: visibleMeetingsSince() },
     },
-    data: {
-      status: 'ARCHIVED',
-    },
+    data: { status: 'ARCHIVED' },
   })
 
   return { count: result.count }

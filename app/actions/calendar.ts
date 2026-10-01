@@ -1,148 +1,84 @@
 /**
  * Calendar Server Actions
  *
- * Manages the meeting schedule from the admin Master Calendar panel.
- * Handles scheduling new meetings, toggling SCHEDULED ↔ CANCELLED, and deletion.
- * All meetings are pinned to Fridays at 6:45 PM, with July and August excluded.
+ * Manages the meeting schedule from the admin Master Calendar panel:
+ * scheduling a meeting on an open Friday, and toggling SCHEDULED ↔ CANCELLED.
+ * The schedule rules (Fridays at 6:45 PM, no July/August) live in
+ * lib/meeting-schedule.ts.
  */
 'use server'
 
 import { db } from '@/lib/db'
-import { revalidatePath } from 'next/cache'
-import { MINOR_ROLES } from '@/lib/agenda-logic'
-import { requireAdmin } from '@/lib/auth-guard'
-
-/** Standard meeting start: 6:45 PM local (deployment server runs on Pacific time). */
-const MEETING_START_HOUR = 18
-const MEETING_START_MINUTE = 45
+import { MINOR_ROLES } from '@/lib/roles'
+import { checkAdmin } from '@/lib/auth-guard'
+import { isMeetingDay, meetingStartFor } from '@/lib/meeting-schedule'
+import { revalidateMeetingViews } from '@/lib/revalidate'
+import { fail, type ActionResult } from '@/lib/action-result'
 
 /**
- * Generates a list of upcoming Fridays for the calendar view.
- * Excludes July and August per club standing rules (summer break).
- * Caps at 20 Fridays (~5-6 months lookahead).
- */
-export async function getFutureFridays() {
-    const today = new Date();
-    const fridays = [];
-    
-    // Generate Fridays for the next 12 months, filtering by spec rules
-    for (let i = 0; i < 365; i++) {
-        const d = new Date(today);
-        d.setDate(today.getDate() + i);
-        
-        // 5 = Friday
-        if (d.getDay() === 5) {
-            const month = d.getMonth(); // 0-indexed
-            // Spec: Globally disable Jul (6) and Aug (7)
-            if (month !== 6 && month !== 7) {
-                // Don't offer a Friday whose 6:45 PM start has already elapsed.
-                // (Server runs on Pacific time, so local hours map to the
-                // real meeting time — see toggleMeeting.)
-                const start = new Date(d);
-                start.setHours(MEETING_START_HOUR, MEETING_START_MINUTE, 0, 0);
-                if (start.getTime() > Date.now()) {
-                    fridays.push(new Date(d));
-                }
-            }
-        }
-        
-        if (fridays.length >= 20) break; // Show roughly 6 months out
-    }
-    
-    return fridays;
-}
-
-/**
- * Toggles a meeting date between SCHEDULED ↔ CANCELLED, or creates a new meeting.
- * When cancelling, clears the theme, Google Sheet link, and minor role assignments.
- * When creating, pins the time to 6:45 PM and links to the Regular template.
+ * Toggles a meeting between SCHEDULED ↔ CANCELLED, or schedules a new one.
  *
- * @param dateIso    - ISO date string for the target Friday.
- * @param existingId - If provided, toggles the existing meeting's status.
+ * Cancelling clears everything the Toastmaster prepared (theme, question,
+ * meeting type, sheet link, minor roles) so a re-enabled meeting starts fresh;
+ * admin-set major roles and the guest speaker name are kept.
+ *
+ * @param ymd        - The Friday, as "YYYY-MM-DD".
+ * @param existingId - If provided, toggles that meeting's status.
  */
-export async function toggleMeeting(dateIso: string, existingId?: string) {
-    await requireAdmin();
+export async function toggleMeeting(ymd: string, existingId?: string): Promise<ActionResult> {
+    const denied = await checkAdmin();
+    if (denied) return denied;
+
+    const start = meetingStartFor(ymd);
+    if (!start || !isMeetingDay(start)) return fail('Meetings can only be scheduled on Fridays outside July and August.');
+    if (start.getTime() <= Date.now()) return fail('That meeting has already started, so it can no longer be changed.');
 
     if (existingId) {
-        const meeting = await db.meeting.findUnique({
-            where: { id: existingId }
-        });
+        const meeting = await db.meeting.findUnique({ where: { id: existingId } });
+        if (!meeting) return fail('That meeting no longer exists. Reload the page.');
+        if (meeting.status === 'ARCHIVED') return fail('Archived meetings cannot be changed.');
 
-        if (!meeting) return;
-
-        if (meeting.status === 'ARCHIVED') return;
-        const newStatus = meeting.status === 'SCHEDULED' ? 'CANCELLED' : 'SCHEDULED';
-        
-        await db.meeting.update({
-            where: { id: existingId },
-            data: { 
-                status: newStatus,
-                ...(newStatus === 'CANCELLED' ? { theme: null, googleSheetId: null, googleSheetUrl: null } : {})
-            }
-        });
-
-        // Clear agenda data when cancelling (theme, sheet link, minor roles)
-        if (newStatus === 'CANCELLED') {
-            await db.roleAssignment.deleteMany({
-                where: {
-                    meetingId: existingId,
-                    roleName: { in: MINOR_ROLES }
-                }
-            });
-        }
+        const cancelling = meeting.status === 'SCHEDULED';
+        await db.$transaction([
+            db.meeting.update({
+                where: { id: existingId },
+                data: cancelling
+                    ? {
+                        status: 'CANCELLED',
+                        theme: null,
+                        qotd: null,
+                        isGuestEducationSession: false,
+                        googleSheetId: null,
+                        googleSheetUrl: null,
+                        agendaEmailPending: false,
+                    }
+                    : { status: 'SCHEDULED' },
+            }),
+            ...(cancelling
+                ? [db.roleAssignment.deleteMany({ where: { meetingId: existingId, roleName: { in: MINOR_ROLES } } })]
+                : []),
+        ]);
     } else {
-        // Schedule a new meeting: link to the Regular template, set 6:45 PM start
-        let regularTemplate = await db.meetingTemplate.findFirst({
-            where: { type: 'Regular' }
+        // One meeting per Friday: a double-submit must not create a second one.
+        const dayStart = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+        const dayEnd = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1);
+        const clash = await db.meeting.findFirst({
+            where: { date: { gte: dayStart, lt: dayEnd }, status: { not: 'ARCHIVED' } },
         });
-
-        if (!regularTemplate) {
-            regularTemplate = await db.meetingTemplate.create({
-                data: { id: 'regular-template', type: 'Regular', schemaStructure: 'TIME,ROLE,,NAME,,\n' }
-            });
+        if (clash) {
+            revalidateMeetingViews();
+            return { success: true };
         }
 
-        const date = new Date(dateIso);
-        date.setHours(MEETING_START_HOUR, MEETING_START_MINUTE, 0, 0);
-
-        // Reject meetings whose start time has already passed. Without this,
-        // an admin could schedule a meeting in the past (e.g. today's Friday
-        // after 6:45 PM has elapsed).
-        if (date.getTime() <= Date.now()) {
-            return;
-        }
+        // The seed (prisma/seed.ts) guarantees this template on every deploy.
+        const regularTemplate = await db.meetingTemplate.findFirst({ where: { type: 'Regular' } });
+        if (!regularTemplate) return fail('The Regular agenda template is missing. Re-run the database seed.');
 
         await db.meeting.create({
-            data: {
-                date: date,
-                typeId: regularTemplate.id,
-                status: 'SCHEDULED'
-            }
+            data: { date: start, typeId: regularTemplate.id, status: 'SCHEDULED' },
         });
     }
 
-    revalidatePath('/admin/calendar');
-    revalidatePath('/agenda');
-}
-
-/**
- * Permanently deletes a meeting and all its role assignments.
- * Used for cleanup of erroneously created meetings.
- *
- * @param meetingId - The meeting to delete.
- */
-export async function deleteMeeting(meetingId: string) {
-    await requireAdmin();
-
-    // Cascade: delete dependent role assignments before the meeting itself
-    await db.roleAssignment.deleteMany({
-        where: { meetingId }
-    });
-
-    await db.meeting.delete({
-        where: { id: meetingId }
-    });
-    
-    revalidatePath('/admin/calendar');
-    revalidatePath('/agenda');
+    revalidateMeetingViews();
+    return { success: true };
 }

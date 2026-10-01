@@ -8,7 +8,7 @@
  */
 import { db } from '@/lib/db'
 import { getDisplayName, type NameableUser } from '@/lib/user-logic'
-import { BACKUP_SPEAKER } from '@/lib/agenda-logic'
+import { BACKUP_SPEAKER, FIXED_ROLES } from '@/lib/roles'
 import { updateAgendaSheet } from '@/lib/google-api'
 
 /**
@@ -23,9 +23,8 @@ export function buildRoleMap(
 ): Record<string, string> {
   const map: Record<string, string> = {};
 
-  // 1. Fixed roles (hardcoded people per spec)
-  map['Roles For Next Meeting'] = 'John';
-  map['Business Meeting'] = 'Andrew';
+  // 1. Fixed roles (held by the same people every meeting — lib/roles.ts)
+  Object.assign(map, FIXED_ROLES);
   // Dismissal is permanently Franklin's — it no longer follows the Sergeant at
   // Arms. Listed here as well as in the CSV so computeChangelog() diffs it
   // against a matching entry and never reports it as a swap.
@@ -150,10 +149,7 @@ export async function buildSheetPayload(
     : meeting.isGuestEducationSession
 
   const roleMap = buildRoleMap(
-    meeting.roleAssignments.map((a: { roleName: string; user: NameableUser | null }) => ({
-      roleName: a.roleName,
-      user: a.user as NameableUser | null
-    })),
+    meeting.roleAssignments,
     allMembers,
     { isGuestEducationSession: effectiveIsGuestEd, guestSpeakerName: meeting.guestSpeakerName }
   )
@@ -175,14 +171,14 @@ export async function buildSheetPayload(
   // BACKUP SPEAKER line, once here — which is the accurate description.
   const assignedUserIds = new Set(
     meeting.roleAssignments
-      .filter((a: { roleName: string }) => a.roleName !== BACKUP_SPEAKER)
-      .map((a: { userId: string | null }) => a.userId)
+      .filter((a) => a.roleName !== BACKUP_SPEAKER)
+      .map((a) => a.userId)
       .filter(Boolean)
   )
   const unassignedNames = allMembers
-    .filter((m: { role: string }) => m.role === 'MEMBER')
-    .filter((m: { id: string }) => !assignedUserIds.has(m.id))
-    .map((m: NameableUser) => getDisplayName(m, allMembers))
+    .filter((m) => m.role === 'MEMBER')
+    .filter((m) => !assignedUserIds.has(m.id))
+    .map((m) => getDisplayName(m, allMembers))
 
   // The theme and QOTD live in Step 2 of the wizard, which update-mode entries
   // and silent re-runs never render — so the caller can legitimately arrive

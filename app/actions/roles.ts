@@ -6,9 +6,10 @@
  */
 'use server'
 
-import { revalidatePath } from 'next/cache'
-import { requireAdmin } from '@/lib/auth-guard'
-import { persistMajorRoles } from '@/lib/roles-logic'
+import { checkAdmin } from '@/lib/auth-guard'
+import { persistMajorRoles, UnknownMemberError } from '@/lib/roles-logic'
+import { revalidateMeetingViews } from '@/lib/revalidate'
+import { fail, type ActionResult } from '@/lib/action-result'
 import { db } from '@/lib/db'
 
 /**
@@ -21,13 +22,22 @@ import { db } from '@/lib/db'
  * @param meetingId   - Target meeting ID.
  * @param assignments - Array of { roleName, userId } pairs.
  */
-export async function saveAllMajorRoles(meetingId: string, assignments: { roleName: string, userId: string }[]) {
-    await requireAdmin();
+export async function saveAllMajorRoles(
+    meetingId: string,
+    assignments: { roleName: string, userId: string }[]
+): Promise<ActionResult> {
+    const denied = await checkAdmin();
+    if (denied) return denied;
 
-    await persistMajorRoles(meetingId, assignments);
+    try {
+        await persistMajorRoles(meetingId, assignments);
+    } catch (error) {
+        if (error instanceof UnknownMemberError) return fail(error.message);
+        throw error;
+    }
 
-    revalidatePath('/admin/roles');
-    revalidatePath('/agenda');
+    revalidateMeetingViews();
+    return { success: true };
 }
 
 /**
@@ -39,14 +49,15 @@ export async function saveAllMajorRoles(meetingId: string, assignments: { roleNa
  * only then does buildRoleMap() surface it over Speaker 3 — so the admin can
  * set it at any point during planning without side effects.
  */
-export async function saveGuestSpeakerName(meetingId: string, name: string) {
-    await requireAdmin();
+export async function saveGuestSpeakerName(meetingId: string, name: string): Promise<ActionResult> {
+    const denied = await checkAdmin();
+    if (denied) return denied;
 
     await db.meeting.update({
         where: { id: meetingId },
         data: { guestSpeakerName: name.trim() || null }
     });
 
-    revalidatePath('/admin/roles');
-    revalidatePath('/agenda');
+    revalidateMeetingViews();
+    return { success: true };
 }

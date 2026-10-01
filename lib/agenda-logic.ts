@@ -21,50 +21,10 @@ import { db } from './db';
 import { getDisplayName } from './user-logic';
 import type { UserWithDisplayName, AutoAssignmentResult } from './types';
 
-/** Roles automatically assigned by the heuristic engine (round-robin by recency). */
-export const MINOR_ROLES = [
-  "Sergeant at Arms",
-  "Timer",
-  "Grammarian",
-  "Filler Word Counter",
-  "Evaluator 1",
-  "Evaluator 2",
-  "Evaluator 3",
-  "Table Topics Evaluator 1",
-  "Table Topics Evaluator 2"
-];
-
-/** Roles manually assigned by admins via the Role Management panel. */
-export const MAJOR_ROLES = [
-  "Toastmaster",
-  "Speaker 1",
-  "Speaker 2",
-  "Speaker 3",
-  "Table Topics Master",
-  "Quizmaster"
-];
-
-/**
- * The standby speaker slot.
- *
- * Deliberately absent from both MAJOR_ROLES and MINOR_ROLES, because it is a
- * *title*, not a job: the backup speaker only ever speaks if one of the three
- * booked speakers drops out. If all three show up, they do not perform at all
- * and are instead given a real speaking slot at a later meeting.
- *
- * Everything downstream must therefore treat the holder as roleless — they stay
- * eligible for a minor role, stay on the attendance list, and (critically) are
- * NOT counted as recently active. Counting it would let a member sit backup
- * twice and be pushed to the back of the priority queue without ever having
- * spoken.
- */
-export const BACKUP_SPEAKER = 'Backup Speaker';
-
-/** Roles permanently assigned to specific people per club standing rules. */
-export const FIXED_ROLES = {
-  "Business Meeting": "Andrew",
-  "Roles for Next Meeting": "John"
-};
+// Role definitions live in lib/roles.ts (no database import, so client
+// components can use them); re-exported here for existing server callers.
+import { MINOR_ROLES, MAJOR_ROLES, BACKUP_SPEAKER } from './roles';
+export { MINOR_ROLES, MAJOR_ROLES, BACKUP_SPEAKER };
 
 /**
  * Runs the heuristic auto-assignment algorithm for a given meeting.

@@ -20,8 +20,8 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { AlertCircle, CheckCircle2, ExternalLink, Copy, Loader2, RefreshCw } from 'lucide-react'
 import TiptapEditor from './tiptap-editor'
 import { fetchRoleAssignments, fetchMeetingSettings, formatDraft, saveFinalAgenda, regenerateRoster } from '@/app/actions/agenda'
-import { executeAgendaPipeline } from '@/app/actions/execute-agenda'
-import { MAJOR_ROLES, BACKUP_SPEAKER } from '@/lib/agenda-logic'
+import { executeAgendaPipeline, type PipelineResult } from '@/app/actions/execute-agenda'
+import { MAJOR_ROLES, BACKUP_SPEAKER, FIXED_ROLES, ROSTER_ORDER } from '@/lib/roles'
 import type { UserWithDisplayName, PreAssignedMajorRole } from '@/lib/types'
 
 // Empty default — most Toastmasters write the email from scratch each week
@@ -99,12 +99,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
 
   // Step 4 execution state
   const [isExecuting, setIsExecuting] = useState(false)
-  const [executionResult, setExecutionResult] = useState<{
-    success: boolean;
-    sheetUrl?: string;
-    error?: string;
-    isUpdate?: boolean;
-  } | null>(null)
+  const [executionResult, setExecutionResult] = useState<PipelineResult | null>(null)
 
   // Load Initial Setup on Mount
   useEffect(() => {
@@ -377,11 +372,16 @@ function WizardContent({ meetingId }: { meetingId: string }) {
   const handleFinish = async () => {
     setIsSaving(true);
     try {
-        await saveFinalAgenda(
+        const saved = await saveFinalAgenda(
             meetingId,
             { ...roleSlots, [BACKUP_SPEAKER]: backupSpeaker },
             { includeMajorRoles: allowMajorRoleEdit }
         );
+        if (!saved.success) {
+          alert(`Your changes were NOT saved:\n\n${saved.error}`);
+          setIsSaving(false);
+          return;
+        }
         // If a sheet already exists, update it with the new roles. A REPORTED
         // failure blocks the quiet exit: the pipeline's error strings carry
         // instructions the caller must actually read — most importantly the
@@ -393,14 +393,14 @@ function WizardContent({ meetingId }: { meetingId: string }) {
           // placeholders here is what used to stamp 'TBD' over a real question:
           // this path runs in update mode, where Step 2 was never shown. The
           // server resolves empties against the stored values instead.
-          const result = await executeAgendaPipeline(
-            meetingId,
-            emailSubject || `Gavel Club MM/DD - Theme`,
-            emailDraft,
+          // 'update' mode can never create a sheet or send the email.
+          const result = await executeAgendaPipeline(meetingId, 'update', {
+            emailSubject,
+            emailHtmlBody: emailDraft,
             meetingTheme,
-            meetingQotd,
+            qotd: meetingQotd,
             meetingType
-          );
+          });
           // 'NO_SHEET' is the benign case: an admin edited a meeting that was
           // never finalized, so there is simply nothing to sync — the roles
           // saved fine and blocking the exit would only cry wolf.
@@ -428,11 +428,15 @@ function WizardContent({ meetingId }: { meetingId: string }) {
 
     try {
       // Save the roles first
-      await saveFinalAgenda(
+      const saved = await saveFinalAgenda(
         meetingId,
         { ...roleSlots, [BACKUP_SPEAKER]: backupSpeaker },
         { includeMajorRoles: allowMajorRoleEdit }
       )
+      if (!saved.success) {
+        setExecutionResult(saved)
+        return
+      }
 
       // Those major roles are now the server's truth, so re-baseline them.
       // Otherwise switching the override off after a save would "revert" the
@@ -447,14 +451,13 @@ function WizardContent({ meetingId }: { meetingId: string }) {
       }
 
       // Execute the pipeline
-      const result = await executeAgendaPipeline(
-        meetingId,
-        emailSubject || `Gavel Club MM/DD - Theme`,
-        emailDraft,
+      const result = await executeAgendaPipeline(meetingId, 'create', {
+        emailSubject,
+        emailHtmlBody: emailDraft,
         meetingTheme,
-        meetingQotd,
+        qotd: meetingQotd,
         meetingType
-      )
+      })
 
       setExecutionResult(result)
 
@@ -491,13 +494,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
       textData += `\n\n---\nTheme: ${meetingTheme}\nType: ${meetingType === 'Education' ? 'Guest Education Session' : 'Regular'}\n`;
       textData += `\n[MEETING ROLES - CHRONOLOGICAL]\n`;
       
-      const roleSequence = [
-          "Sergeant at Arms", "Toastmaster", "Timer", "Grammarian", "Filler Word Counter", "Quizmaster",
-          "Speaker 1", "Speaker 2", "Speaker 3", "Evaluator 1", "Evaluator 2", "Evaluator 3",
-          "Roles For Next Meeting", "Business Meeting", "Table Topics Master", "Table Topics Evaluator 1", "Table Topics Evaluator 2"
-      ];
-
-      roleSequence.forEach(roleName => {
+      ROSTER_ORDER.forEach(roleName => {
           // Keep the copy fallback consistent with the sheet: an active guest
           // override prints the guest under the swapped label, not Speaker 3.
           if (roleName === "Speaker 3" && guestEducationActive) {
@@ -505,8 +502,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
               return;
           }
           let holder = "TBD";
-          if (roleName === "Roles For Next Meeting") holder = "John";
-          else if (roleName === "Business Meeting") holder = "Andrew";
+          if (roleName in FIXED_ROLES) holder = FIXED_ROLES[roleName];
           else {
               const major = preAssigned.find((a) => a.roleName === roleName);
               if (major) {
@@ -520,7 +516,7 @@ function WizardContent({ meetingId }: { meetingId: string }) {
           textData += `${roleName}: ${holder}\n`;
       });
 
-      if (executionResult?.sheetUrl) {
+      if (executionResult?.success) {
         textData += `\n📋 Agenda Sheet: ${executionResult.sheetUrl}\n`;
       }
 
@@ -899,6 +895,9 @@ function WizardContent({ meetingId }: { meetingId: string }) {
                                     </p>
                                 </div>
                             </div>
+                            {executionResult.warning && (
+                                <p className="text-sm font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">{executionResult.warning}</p>
+                            )}
                             {executionResult.sheetUrl && (
                                 <a 
                                     href={executionResult.sheetUrl} 

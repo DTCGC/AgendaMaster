@@ -7,26 +7,23 @@
  *   3. Guest subscriber list
  * Plus the club Google account connection used by members without Google.
  */
-import { auth } from '@/auth'
+import { pageRequireAdmin } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { removeUser, removeSubscriber, connectClubGoogle } from '@/app/actions/accounts'
+import { connectClubGoogle } from '@/app/actions/accounts'
+import RemoveButton from '@/components/admin/remove-button'
 import { getClubGoogleStatus, CLUB_GOOGLE_EMAIL } from '@/lib/club-google'
 import { Check, Users, Mail, Trash2, ShieldCheck, KeyRound, Link2 } from 'lucide-react'
 import EditableName from '@/components/admin/editable-name'
 import AccountActionButtons from '@/components/admin/account-action-buttons'
+import { formatMeetingDate } from '@/lib/meeting-time'
 
 export const metadata = {
   title: 'Admin Approvals - DTCGC',
 }
 
 export default async function AccountsPage() {
-  const session = await auth()
-  
-  if (session?.user?.role !== 'ADMIN') {
-    redirect('/agenda')
-  }
+  const session = await pageRequireAdmin()
 
   // Fetch pending registrations
   const pendingUsers = await db.user.findMany({
@@ -95,7 +92,7 @@ export default async function AccountsPage() {
                         <tbody className="divide-y divide-gray-100">
                         {pendingUsers.map((user) => (
                             <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
-                            <td className="p-4 text-sm text-gray-500">{new Date(user.createdAt).toLocaleDateString()}</td>
+                            <td className="p-4 text-sm text-gray-500">{formatMeetingDate(user.createdAt)}</td>
                             <td className="p-4 font-bold text-brand-loyal-blue">
                                 <div className="flex items-center gap-2">{user.firstName} {user.lastName} {emailLoginBadge(user)}</div>
                             </td>
@@ -137,12 +134,7 @@ export default async function AccountsPage() {
                                 </div>
                                 
                                 {user.id !== session.user.id && (
-                                    <form action={removeUser}>
-                                        <input type="hidden" name="userId" value={user.id} />
-                                        <button type="submit" className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50">
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </form>
+                                    <RemoveButton kind="member" id={user.id} label={`${user.firstName} ${user.lastName}`} />
                                 )}
                             </div>
                         ))}
@@ -168,15 +160,10 @@ export default async function AccountsPage() {
                                         </div>
                                         <div>
                                             <div className="font-semibold text-sm text-gray-700">{sub.email}</div>
-                                            <div className="text-[10px] text-gray-400">Enrolled: {new Date(sub.subscribedAt).toLocaleDateString()}</div>
+                                            <div className="text-[10px] text-gray-400">Enrolled: {formatMeetingDate(sub.subscribedAt)}</div>
                                         </div>
                                     </div>
-                                    <form action={removeSubscriber}>
-                                        <input type="hidden" name="subscriberId" value={sub.id} />
-                                        <button type="submit" className="opacity-0 group-hover:opacity-100 p-2 text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50">
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </form>
+                                    <RemoveButton kind="subscriber" id={sub.id} label={sub.email} />
                                 </div>
                             ))}
                         </div>
@@ -197,7 +184,7 @@ export default async function AccountsPage() {
                             {clubGoogle.connected ? 'Connected' : 'Not connected'}
                         </span>
                         {clubGoogle.connectedAt && (
-                            <span className="text-xs text-gray-400">since {clubGoogle.connectedAt.toLocaleDateString()}</span>
+                            <span className="text-xs text-gray-400">since {formatMeetingDate(clubGoogle.connectedAt)}</span>
                         )}
                     </div>
                     <p className="text-sm text-gray-600">

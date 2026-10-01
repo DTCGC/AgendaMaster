@@ -6,10 +6,16 @@
  * Resend Receiving API, wraps it in branded HTML, and forwards it to
  * the club's Gmail account (coquitlamgavel@gmail.com) with the original
  * sender set as Reply-To for seamless correspondence.
+ *
+ * Every delivery must carry a valid Svix signature made with
+ * RESEND_WEBHOOK_SECRET (Resend dashboard → Webhooks → signing secret).
+ * Without that check anyone could POST here and make the server send mail.
  */
 import { NextResponse } from 'next/server';
-import { quietlySendEmail, FROM_EMAIL } from '@/lib/email';
+import { sendEmail, FROM_EMAIL, FROM_ADDRESS } from '@/lib/email';
 import { CLUB_GOOGLE_EMAIL } from '@/lib/club-google';
+import { escapeHtml } from '@/lib/html';
+import { verifySvixSignature } from '@/lib/request-auth';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
@@ -24,7 +30,7 @@ const CLUB_INBOX = CLUB_GOOGLE_EMAIL;
  * Any bounce, vacation auto-reply, or reply sent back to info@ would re-enter
  * this webhook and be forwarded again, indefinitely.
  */
-const LOOP_GUARD_ADDRESSES = [CLUB_INBOX, 'info@coquitlamgavel.com'];
+const LOOP_GUARD_ADDRESSES = [CLUB_INBOX, 'info@coquitlamgavel.com', FROM_ADDRESS.toLowerCase()];
 
 /** Extracts the bare address from a "Display Name <addr@host>" header value. */
 function extractAddress(from: string): string {
@@ -97,18 +103,21 @@ async function fetchRawFallback(rawUrl: string): Promise<string> {
   }
 }
 
-/** Escapes text destined for an HTML context. */
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 export async function POST(req: Request) {
+  const secret = process.env.RESEND_WEBHOOK_SECRET;
+  if (!secret) {
+    console.error('[Webhook] RESEND_WEBHOOK_SECRET is not set; refusing unverifiable delivery.');
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 503 });
+  }
+
+  const rawBody = await req.text();
+  if (!verifySvixSignature(rawBody, req.headers, secret)) {
+    console.warn('[Webhook] Rejected a delivery with a missing or invalid signature.');
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+  }
+
   try {
-    const payload = await req.json();
+    const payload = JSON.parse(rawBody);
 
     // The payload shape for Resend Inbound Webhooks
     if (payload.type !== 'email.received' || !payload.data) {
@@ -177,7 +186,7 @@ export async function POST(req: Request) {
     `;
 
     // Forward to the club's Gmail account, preserving the original sender as Reply-To.
-    await quietlySendEmail(
+    await sendEmail(
       CLUB_INBOX,
       formattedSubject,
       formattedHtml,

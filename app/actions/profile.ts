@@ -3,6 +3,7 @@
 import { auth, unstable_update } from '@/auth'
 import { db } from '@/lib/db'
 import { createPasswordAccount } from '@/lib/password-auth'
+import { validatePersonName } from '@/lib/name-rules';
 
 /**
  * Completes a new member's profile by saving their self-reported name.
@@ -35,15 +36,9 @@ export async function completeProfile(formData: FormData): Promise<{ success: bo
   const firstName = (formData.get('firstName') as string)?.trim();
   const lastName = (formData.get('lastName') as string)?.trim();
 
-  // Server-side validation
-  if (!firstName || !lastName) {
-    return { success: false, error: 'First name and last name are required.' };
-  }
-
-  // Only allow letters, spaces, hyphens, and apostrophes
-  const namePattern = /^[a-zA-Z\s\-']+$/;
-  if (!namePattern.test(firstName) || !namePattern.test(lastName)) {
-    return { success: false, error: 'Names may only contain letters, spaces, hyphens, and apostrophes.' };
+  const nameError = validatePersonName(firstName ?? '', lastName ?? '');
+  if (nameError) {
+    return { success: false, error: nameError };
   }
 
   // Commit the user's real name and advance to PENDING

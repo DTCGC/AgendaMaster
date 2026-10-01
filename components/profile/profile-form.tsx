@@ -10,6 +10,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { completeProfile } from '@/app/actions/profile'
+import { validatePersonName } from '@/lib/name-rules'
 import { ArrowRight, AlertCircle } from 'lucide-react'
 
 /**
@@ -24,29 +25,10 @@ export default function ProfileForm() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const namePattern = /^[a-zA-Z\s\-']+$/;
-
   function validate(): boolean {
-    const fn = firstName.trim();
-    const ln = lastName.trim();
-    
-    if (!fn || !ln) {
-      setError('Both first and last name are required.');
-      return false;
-    }
-
-    if (!namePattern.test(fn) || !namePattern.test(ln)) {
-      setError('Names may only contain letters, spaces, hyphens, and apostrophes.');
-      return false;
-    }
-
-    if (fn.length < 2 || ln.length < 2) {
-      setError('Names must be at least 2 characters.');
-      return false;
-    }
-
-    setError('');
-    return true;
+    const problem = validatePersonName(firstName, lastName);
+    setError(problem ?? '');
+    return !problem;
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {

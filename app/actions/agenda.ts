@@ -6,10 +6,14 @@
  */
 'use server'
 
-import { getAutoAssignments, cleanDraftText, MAJOR_ROLES, BACKUP_SPEAKER } from '@/lib/agenda-logic'
+import { getAutoAssignments, cleanDraftText } from '@/lib/agenda-logic'
 import { db } from '@/lib/db'
-import { revalidatePath } from 'next/cache'
 import { requireMember } from '@/lib/auth-guard'
+import { auth } from '@/auth'
+import { meetingEditDenial } from '@/lib/meeting-access'
+import { persistRoles, wizardRoles, UnknownMemberError } from '@/lib/roles-logic'
+import { revalidateMeetingViews } from '@/lib/revalidate'
+import { fail, type ActionResult } from '@/lib/action-result'
 
 /**
  * Fetches auto-generated role assignments for a meeting via the heuristic engine.
@@ -67,19 +71,21 @@ export async function formatDraft(text: string) {
 }
 
 /**
- * Persists finalized role assignments to the database.
- * Uses a transactional delete-then-create pattern to avoid stale role conflicts.
+ * Persists the wizard's role assignments.
  *
- * Two roles are protected from this write path:
+ * Only the meeting's Toastmaster or an admin may call this (lib/meeting-access.ts),
+ * and only for the roles the wizard owns (lib/roles-logic.ts `wizardRoles`):
  *   - Toastmaster is NEVER writable here. It is set by an admin, and the person
  *     running the wizard is usually the Toastmaster themselves.
- *   - The other major roles (and the Backup Speaker, which is admin-set even
- *     though it is not a major role) are only written when the caller explicitly
- *     unlocked them via the wizard's "Edit Major Roles" override.
+ *   - The other major roles (and the Backup Speaker) are only written when the
+ *     caller explicitly unlocked them via the wizard's "Edit Major Roles" override.
  *
  * That second rule is not merely cosmetic. The wizard holds a snapshot of the
  * major roles taken when it loaded; blind-writing it would delete-then-recreate
  * those rows and silently revert any change an admin made in the meantime.
+ *
+ * Holders who did not change keep their `assignedAt`, so re-saving a roster
+ * never pushes its members back in the fairness rotation.
  *
  * @param meetingId   - Target meeting ID.
  * @param assignments - Map of roleName → user object (null = unassigned).
@@ -89,35 +95,22 @@ export async function saveFinalAgenda(
     meetingId: string,
     assignments: Record<string, { id: string } | null>,
     options?: { includeMajorRoles?: boolean }
-) {
-    await requireMember();
+): Promise<ActionResult> {
+    const session = await auth();
+    const denial = await meetingEditDenial(session?.user, meetingId);
+    if (denial) return fail(denial);
 
-    const rolesToUpdate = Object.keys(assignments).filter(r => {
-        if (r === 'Toastmaster') return false;
-        if (MAJOR_ROLES.includes(r) || r === BACKUP_SPEAKER) return options?.includeMajorRoles === true;
-        return true;
-    });
+    try {
+        await persistRoles(
+            meetingId,
+            Object.entries(assignments).map(([roleName, user]) => ({ roleName, userId: user?.id ?? '' })),
+            wizardRoles(options?.includeMajorRoles === true)
+        );
+    } catch (error) {
+        if (error instanceof UnknownMemberError) return fail(error.message);
+        throw error;
+    }
 
-    await db.$transaction([
-        db.roleAssignment.deleteMany({
-            where: {
-                meetingId,
-                roleName: { in: rolesToUpdate }
-            }
-        }),
-        db.roleAssignment.createMany({
-            data: rolesToUpdate
-                .filter(role => assignments[role] !== null)
-                .map(role => ({
-                    meetingId,
-                    userId: assignments[role]!.id,
-                    roleName: role,
-                    assignedAt: new Date()
-                }))
-        })
-    ]);
-
-    revalidatePath('/agenda');
-    revalidatePath('/admin/calendar');
+    revalidateMeetingViews();
     return { success: true };
 }

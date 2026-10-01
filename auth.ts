@@ -122,10 +122,13 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
             token.role = dbUser ? dbUser.role : 'DELETED'; // account removed/rejected
         }
         
-        // Persist Google OAuth tokens for Sheets/Drive/Gmail API calls
+        // Persist Google OAuth tokens for Sheets/Drive/Gmail API calls. They
+        // stay in the encrypted cookie only — lib/google-user-token.ts reads
+        // and refreshes them server-side.
         if (account?.provider === 'google') {
             token.accessToken = account.access_token;
             token.refreshToken = account.refresh_token;
+            token.accessTokenExpires = account.expires_at ? account.expires_at * 1000 : undefined;
 
             // An admin signing in with Google as the club account (the
             // "Connect" button on Member Management) stores that account's
@@ -145,13 +148,15 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
         }
         return token;
     },
-    /** Expose role, DB ID, and access token from JWT into the client-visible session. */
+    /**
+     * Expose role, DB ID and sign-in method to the session. The Google tokens
+     * are deliberately left out: this object is also served to the browser.
+     */
     session({ session, token }) {
         if (session.user && token) {
-            session.user.role = token.role as string;
-            session.user.id = token.sub as string;
-            session.user.dbId = token.dbId as string;
-            session.user.accessToken = token.accessToken as string | undefined;
+            session.user.role = token.role;
+            session.user.id = token.dbId ?? token.sub ?? '';
+            session.user.dbId = token.dbId;
             session.user.authMethod = token.authMethod;
         }
         return session;

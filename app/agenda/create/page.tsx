@@ -15,6 +15,7 @@
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { editableMeetingsSince } from "@/lib/archival";
+import { formatMeetingDate, formatMeetingDateShort } from "@/lib/meeting-time";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import AgendaWizard from "@/components/agenda/wizard";
@@ -80,7 +81,7 @@ export default async function CreateAgendaPage({
               <h1 className="text-4xl font-extrabold text-brand-loyal-blue tracking-tight">Agenda Engine</h1>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-2 text-brand-true-maroon font-bold text-sm bg-brand-true-maroon/5 w-fit px-3 py-1 rounded-full border border-brand-true-maroon/20">
-                      <Calendar size={14} /> Editing meeting on: {currentMeeting.date.toLocaleDateString()}
+                      <Calendar size={14} /> Editing meeting on: {formatMeetingDate(currentMeeting.date)}
                   </div>
                   <div className="flex items-center gap-2 text-gray-500 font-bold text-xs bg-gray-100 w-fit px-3 py-1 rounded-full border border-gray-200 uppercase tracking-tight">
                       Admin Update Mode
@@ -102,7 +103,7 @@ export default async function CreateAgendaPage({
                               <div className="flex justify-between items-center">
                                   <div className="space-y-1">
                                       <div className="font-black text-lg">
-                                          {new Date(meeting.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                          {formatMeetingDateShort(meeting.date)}
                                       </div>
                                       <div className={`text-xs ${meeting.id === currentMeeting.id ? 'text-white/70' : 'text-gray-500'}`}>
                                           {meeting.theme || "TBD Theme"}
@@ -155,7 +156,7 @@ export default async function CreateAgendaPage({
 
   // Authorization: STRICTLY enforced Toastmaster-only access (admins were
   // routed to their own selector view above).
-  const isToastmaster = nextMeeting.roleAssignments[0]?.userId === session.user.id;
+  const isToastmaster = nextMeeting.roleAssignments[0]?.userId === session.user.dbId;
 
   if (!isToastmaster) {
     return (
@@ -163,7 +164,7 @@ export default async function CreateAgendaPage({
             <div className="max-w-md bg-white p-8 rounded-xl shadow-lg border border-red-100 text-center space-y-4">
                 <AlertCircle size={48} className="mx-auto text-red-500" />
                 <h2 className="text-2xl font-bold text-gray-800">Toastmaster Access Only</h2>
-                <p className="text-gray-600 font-medium">You aren&apos;t listed as the Toastmaster for the meeting on <strong>{nextMeeting.date.toLocaleDateString()}</strong>.</p>
+                <p className="text-gray-600 font-medium">You aren&apos;t listed as the Toastmaster for the meeting on <strong>{formatMeetingDate(nextMeeting.date)}</strong>.</p>
                 <p className="text-xs text-gray-400">Only the assigned Toastmaster — or an administrator, through the admin login — can edit this agenda.</p>
                 <div className="pt-4 px-8">
                     <Link href="/agenda" className="block w-full bg-brand-loyal-blue text-white py-3 rounded-xl font-bold hover:bg-opacity-90 transition-all shadow-md">
@@ -181,7 +182,7 @@ export default async function CreateAgendaPage({
         <div className="mb-8 border-b pb-6">
             <h1 className="text-4xl font-extrabold text-brand-loyal-blue tracking-tight">Agenda Engine</h1>
             <div className="mt-2 flex items-center gap-2 text-brand-true-maroon font-bold text-sm bg-brand-true-maroon/5 w-fit px-3 py-1 rounded-full border border-brand-true-maroon/20">
-                <Calendar size={14} /> Preparing for meeting on: {nextMeeting.date.toLocaleDateString()}
+                <Calendar size={14} /> Preparing for meeting on: {formatMeetingDate(nextMeeting.date)}
             </div>
         </div>
 

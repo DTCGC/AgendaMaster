@@ -5,13 +5,13 @@
  * to upcoming meetings. Left sidebar shows a meeting selector; right panel
  * shows the role form and a participation history tracker (sorted by recency).
  */
-import { auth } from '@/auth'
+import { pageRequireAdmin } from '@/lib/auth-guard'
 import { db } from '@/lib/db'
 import { editableMeetingsSince } from '@/lib/archival'
-import { redirect } from 'next/navigation'
 import RolesForm from './roles-form'
-import { MAJOR_ROLES, BACKUP_SPEAKER } from '@/lib/agenda-logic'
+import { MAJOR_ROLES, BACKUP_SPEAKER } from '@/lib/roles'
 import { AlertCircle, Calendar as CalendarIcon, ChevronRight } from 'lucide-react'
+import { formatMeetingDateShort, formatMeetingDateLong } from '@/lib/meeting-time'
 
 type RoleAssignment = {
     userId: string | null;
@@ -27,12 +27,8 @@ export default async function RolesPage({
 }: {
     searchParams: Promise<{ meetingId?: string }>
 }) {
-  const session = await auth()
+  await pageRequireAdmin()
   const params = await searchParams;
-  
-  if (session?.user?.role !== 'ADMIN') {
-    redirect('/agenda')
-  }
 
   // Fetch upcoming scheduled meetings (next 10)
   const upcomingMeetings = await db.meeting.findMany({
@@ -106,7 +102,7 @@ export default async function RolesPage({
                                 <div className="flex justify-between items-center">
                                     <div className="space-y-1">
                                         <div className="font-black text-lg">
-                                            {new Date(meeting.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                            {formatMeetingDateShort(meeting.date)}
                                         </div>
                                         <div className={`text-xs ${meeting.id === currentMeeting?.id ? 'text-white/70' : 'text-gray-500'}`}>
                                             {meeting.theme || "TBD Theme"}
@@ -125,7 +121,7 @@ export default async function RolesPage({
                             <div>
                                 <span className="text-xs font-bold text-brand-true-maroon uppercase tracking-wide">Currently Editing</span>
                                 <h2 className="text-xl font-black text-gray-800">
-                                    {new Date(currentMeeting.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                                    {formatMeetingDateLong(currentMeeting.date)}
                                 </h2>
                             </div>
                             <CalendarIcon size={24} className="text-gray-200" />

@@ -22,12 +22,19 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 // Sender identity shown in recipient inboxes. Falls back to Resend's sandbox domain.
 export const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'DTCGC Portal <onboarding@resend.dev>';
 
+/** The bare address inside FROM_EMAIL ("Name <addr@host>" or just "addr@host"). */
+export const FROM_ADDRESS = (FROM_EMAIL.match(/<([^>]+)>/)?.[1] ?? FROM_EMAIL).trim();
+
+/** Resend accepts at most 50 recipients per email, counting to + cc + bcc. */
+const MAX_RECIPIENTS_PER_EMAIL = 50;
+
 /**
- * Production HTTP API bridge for all app-initiated emails.
- * Avoids DO droplet SMTP port blocks and streamlines mass announcements.
- * Falls back to mock logging in development if credentials aren't set.
+ * Sends one email to one recipient through the Resend HTTP API (avoids the
+ * Droplet's SMTP port blocks). Falls back to mock logging in development.
+ *
+ * @throws When Resend rejects the send — callers decide how to recover.
  */
-export async function quietlySendEmail(to: string, subject: string, html: string, options?: { replyTo?: string }) {
+export async function sendEmail(to: string, subject: string, html: string, options?: { replyTo?: string }) {
   if (!resend) {
     // Development fallback: write a human-readable mock to console and a log file
     const logHeader = `\n================== [MOCK EMAIL BRIDGE: ${new Date().toLocaleString()}] ==================\n`;
@@ -68,7 +75,20 @@ export async function quietlySendEmail(to: string, subject: string, html: string
 }
 
 /**
- * Sends a single email to multiple recipients via BCC using the Resend API.
+ * Splits recipients into BCC batches. The club's own address is each email's
+ * nominal "to" (Resend requires one), so a batch holds one fewer than the limit.
+ */
+export function bccBatches(recipients: string[]): string[][] {
+  const size = MAX_RECIPIENTS_PER_EMAIL - 1;
+  const batches: string[][] = [];
+  for (let i = 0; i < recipients.length; i += size) batches.push(recipients.slice(i, i + size));
+  return batches;
+}
+
+/**
+ * Sends one email to many recipients via BCC, in batches that fit Resend's
+ * per-email recipient limit. Never throws: a failed batch is counted, so the
+ * caller can tell a partial send from a total failure.
  */
 export async function sendBccEmail(recipients: string[], subject: string, html: string, options?: { replyTo?: string }) {
   const unique = Array.from(new Set(recipients));
@@ -79,26 +99,26 @@ export async function sendBccEmail(recipients: string[], subject: string, html: 
     return { succeeded: unique.length, failed: 0, total: unique.length };
   }
 
-  try {
-    // POST /emails via Resend HTTP API — BCC pattern for mass delivery.
-    // Resend requires a non-empty "to" field even when using BCC,
-    // so we use the club's own address as the nominal recipient.
-    const { data: _data, error } = await resend.emails.send({
-      from: FROM_EMAIL,
-      to: FROM_EMAIL.split('<')[1]?.replace('>', '') || 'onboarding@resend.dev',
-      bcc: unique,
-      subject,
-      html,
-      ...(options?.replyTo ? { replyTo: options.replyTo } : {}),
-    });
-    
-    if (error) throw new Error(error.message);
-    
-    console.log(`✓ BCC Email dispatched to ${unique.length} recipients via Resend`);
-    return { succeeded: unique.length, failed: 0, total: unique.length };
-  } catch (error) {
-    console.error("BCC Email API transmission failure:", error);
-    return { succeeded: 0, failed: unique.length, total: unique.length };
+  let succeeded = 0;
+  let failed = 0;
+  for (const batch of bccBatches(unique)) {
+    try {
+      const { error } = await resend.emails.send({
+        from: FROM_EMAIL,
+        to: FROM_ADDRESS,
+        bcc: batch,
+        subject,
+        html,
+        ...(options?.replyTo ? { replyTo: options.replyTo } : {}),
+      });
+      if (error) throw new Error(error.message);
+      succeeded += batch.length;
+    } catch (error) {
+      console.error(`BCC batch of ${batch.length} failed:`, error);
+      failed += batch.length;
+    }
   }
-}
 
+  console.log(`✓ BCC email: ${succeeded} of ${unique.length} recipients dispatched via Resend`);
+  return { succeeded, failed, total: unique.length };
+}

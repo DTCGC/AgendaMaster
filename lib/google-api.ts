@@ -13,6 +13,7 @@
  *                            (a Toastmaster, or the club account on a member's behalf)
  */
 import { google, sheets_v4 } from 'googleapis';
+import { formatMeetingMonthDay } from './meeting-time';
 
 // ---------- Template Population (pure logic, no API calls) ----------
 
@@ -240,10 +241,8 @@ export async function createAgendaSheet(
   csvTemplate: string,
   unassignedNames: string[],
   guestEducationActive: boolean = false
-): Promise<{ sheetUrl: string; sheetId: string }> {
-  const month = String(meetingDate.getMonth() + 1).padStart(2, '0');
-  const day = String(meetingDate.getDate()).padStart(2, '0');
-  const title = `Gavel Club ${month}/${day} - ${theme}`;
+): Promise<{ sheetUrl: string; sheetId: string; shareWarning?: string }> {
+  const title = `Gavel Club ${formatMeetingMonthDay(meetingDate)} - ${theme}`;
 
   const populatedRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames, [], guestEducationActive);
   const auth = getGoogleAuth(accessToken);
@@ -273,7 +272,10 @@ export async function createAgendaSheet(
   await writeSheetData(sheets, sheetId, populatedRows);
 
   // Step 3: Make shareable (anyone with link can view)
+  // Not fatal — the sheet exists and is saved — but members can't open the
+  // emailed link until it is shared, so the caller must be told.
   console.log('[GoogleAPI] Setting share permissions');
+  let shareWarning: string | undefined;
   try {
     await drive.permissions.create({
       fileId: sheetId,
@@ -284,6 +286,7 @@ export async function createAgendaSheet(
     });
   } catch (err) {
     console.error('[GoogleAPI] Permission error (non-fatal):', err);
+    shareWarning = 'The agenda sheet could not be made viewable by link, so members may not be able to open it. Open the sheet, click Share, and set General access to "Anyone with the link".';
   }
 
   // Step 4: Grant the app's service account writer access, so an ADMIN (who
@@ -309,7 +312,7 @@ export async function createAgendaSheet(
     }
   }
 
-  return { sheetUrl, sheetId };
+  return { sheetUrl, sheetId, shareWarning };
 }
 
 /**
@@ -325,8 +328,8 @@ function computeChangelog(existingRows: string[][], newRoleMap: Record<string, s
   // by design; the Backup Speaker is a standby title that routinely changes
   // hands without anyone's actual duties changing, so diffing it is pure noise.
   const isExempt = (roleLabel: string) => {
-    const l = roleLabel.toLowerCase();
-    return l.includes('general') || l.includes('backup speaker');
+    const l = roleLabel.toLowerCase().replace(/:$/, '').trim();
+    return l.startsWith('general fe') || l === 'backup speaker';
   };
 
   const oldRoleMap: Record<string, string> = {};
@@ -403,7 +406,9 @@ export async function updateAgendaSheet(
   const changelog = computeChangelog(existingRows, roleMap);
   const populatedRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames, changelog, guestEducationActive);
   
-  await writeSheetData(sheets, existingSheetId, populatedRows);
+  // Pad to the sheet's previous height: a shorter write would leave the old
+  // tail (e.g. extra changelog lines from an earlier update) in place.
+  await writeSheetData(sheets, existingSheetId, populatedRows, existingRows.length);
 }
 
 /**
@@ -412,15 +417,17 @@ export async function updateAgendaSheet(
 async function writeSheetData(
   sheets: sheets_v4.Sheets,
   spreadsheetId: string,
-  rows: string[][]
+  rows: string[][],
+  minRows: number = 0
 ) {
-  // Normalize row widths
+  // Normalize row widths, and blank out any rows below the new data
   const maxCols = Math.max(...rows.map(r => r.length));
   const normalized = rows.map(row => {
     const padded = [...row];
     while (padded.length < maxCols) padded.push('');
     return padded;
   });
+  while (normalized.length < minRows) normalized.push(new Array(maxCols).fill(''));
 
   const endCol = String.fromCharCode(64 + Math.min(maxCols, 26));
   const range = `Sheet1!A1:${endCol}${normalized.length}`;
@@ -447,7 +454,8 @@ function sanitizeHeaderValue(value: string): string {
 
 /**
  * Builds the RFC 2822 message the Gmail API expects (before base64url encoding).
- * We use BCC for multiple recipients to protect member email privacy.
+ * Every recipient goes in Bcc to protect member email privacy; the visible To
+ * is the empty "undisclosed-recipients" group, so no member's address shows.
  */
 export function buildRawGmailMessage(
   recipients: string[],
@@ -459,8 +467,8 @@ export function buildRawGmailMessage(
   const headers = [
     `Content-Type: text/html; charset="UTF-8"`,
     `MIME-Version: 1.0`,
-    `To: ${sanitizeHeaderValue(recipients[0])}`, // Standard 'To' field
-    `Bcc: ${sanitizeHeaderValue(recipients.join(', '))}`, // Send all others as BCC
+    `To: undisclosed-recipients:;`,
+    `Bcc: ${sanitizeHeaderValue(recipients.join(', '))}`,
     `Subject: ${utf8Subject}`,
   ];
   // Set when the club account sends on a member's behalf, so replies reach

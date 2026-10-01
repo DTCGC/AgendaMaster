@@ -12,65 +12,54 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { quietlySendEmail } from '@/lib/email'
+import { sendEmail } from '@/lib/email'
+import { accountEmail, type AccountEmailKind } from '@/lib/email-templates'
 import { revalidatePath } from 'next/cache'
-import { requireAdmin } from '@/lib/auth-guard'
-import { auth, signIn } from '@/auth'
+import { requireAdmin, checkAdmin } from '@/lib/auth-guard'
+import { signIn } from '@/auth'
 import { CLUB_GOOGLE_EMAIL } from '@/lib/club-google'
+import { normalizeEmail, isValidEmail } from '@/lib/password-rules'
+import { validatePersonName } from '@/lib/name-rules'
+import { revalidateMeetingViews } from '@/lib/revalidate'
+import { fail, type ActionResult, type ActionFailure } from '@/lib/action-result'
+
+/** `emailError` means the account change went through but its notification didn't. */
+export type AccountDecisionResult =
+  | { success: true; emailError?: boolean }
+  | (ActionFailure & { emailError?: boolean })
 
 /**
  * Approves a pending user registration.
  * Transitions PENDING → MEMBER and sends a welcome email.
  *
  * If the email fails, returns `emailError: true` so the UI can show
- * a retry modal (the DB update is NOT rolled back — approval persists).
+ * a retry modal (the approval itself is NOT rolled back).
  */
-export async function approveAccount(prevState: { success: boolean; emailError?: boolean; error?: string; type?: string; userId?: string; errorId?: number } | null, formData: FormData) {
-  const session = await auth();
-  if (session?.user?.role !== 'ADMIN') {
-    return { success: false, error: 'Unauthorized: administrator access required.' };
-  }
+export async function approveAccount(userId: string): Promise<AccountDecisionResult> {
+  const denied = await checkAdmin();
+  if (denied) return denied;
 
-  const userId = formData.get('userId') as string;
-  let user;
-  
-  try {
-    user = await db.user.update({
-      where: { id: userId },
-      data: { role: 'MEMBER' }
-    });
-  } catch (error) {
-    console.error("Database update failed:", error);
-    return { success: false, error: "Database error. Could not approve user." };
-  }
+  // Only a PENDING account can be approved — a crafted request must not be
+  // able to promote an INCOMPLETE account or touch the admin.
+  const { count } = await db.user.updateMany({
+    where: { id: userId, role: 'PENDING' },
+    data: { role: 'MEMBER' }
+  });
+  if (count === 0) return fail('That account is no longer waiting for approval.');
 
-  const subject = "Welcome to the Downtown Coquitlam Gavel Club Portal";
-  const html = `
-    <div style="font-family: 'Montserrat', sans-serif; max-width: 600px; margin: 0 auto;">
-      <div style="background: #004165; color: white; padding: 24px; border-radius: 12px 12px 0 0;">
-        <h2 style="margin: 0;">Account Approved ✓</h2>
-      </div>
-      <div style="padding: 24px; background: #f8f9fa; border-radius: 0 0 12px 12px; border: 1px solid #eee;">
-        <p>Hi ${user.firstName},</p>
-        <p>Your portal account has been verified and fully approved by the club administrative team.</p>
-        <p>You can now log in at any time to view upcoming agendas and your assigned operations.</p>
-        <p><a href="https://agendas.coquitlamgavel.com" style="display: inline-block; background-color: #004165; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 10px;">Access Portal</a></p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-        <p style="font-size: 12px; color: #666;">This is an automated message from the DTCGC Agenda Workflow Engine.</p>
-      </div>
-    </div>
-  `;
-  
+  const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  const { subject, html } = accountEmail('approval', user.firstName);
+
   try {
-    await quietlySendEmail(user.email, subject, html);
-    // Email succeeded — safe to refresh the page
-    revalidatePath('/admin/accounts');
-    return { success: true, emailError: false };
+    await sendEmail(user.email, subject, html);
   } catch (error) {
     console.error("Approval email failed:", error);
     // Keep page mounted (no revalidate) so the retry modal can render
-    return { success: true, emailError: true, type: 'approval', userId: user.id, errorId: Date.now() };
+    return { success: true, emailError: true };
   }
+
+  revalidatePath('/admin/accounts');
+  return { success: true };
 }
 
 /**
@@ -80,46 +69,39 @@ export async function approveAccount(prevState: { success: boolean; emailError?:
  * If the email fails, the user is NOT deleted yet — the retry
  * mechanism will complete both the email and deletion.
  */
-export async function rejectAccount(prevState: { success: boolean; error?: string; type?: string; userId?: string; errorId?: number } | null, formData: FormData) {
-  const session = await auth();
-  if (session?.user?.role !== 'ADMIN') {
-    return { success: false, error: 'Unauthorized: administrator access required.' };
-  }
+export async function rejectAccount(userId: string): Promise<AccountDecisionResult> {
+  const denied = await checkAdmin();
+  if (denied) return denied;
 
-  const userId = formData.get('userId') as string;
-  const user = await db.user.findUnique({
-    where: { id: userId }
-  });
+  const user = await db.user.findFirst({ where: { id: userId, role: 'PENDING' } });
+  if (!user) return fail('That account is no longer waiting for approval.');
 
-  if (!user) return { success: false, error: "User not found." };
-
-  const subject = "DTCGC Account Application Update";
-  const html = `
-    <div style="font-family: 'Montserrat', sans-serif; max-width: 600px; margin: 0 auto;">
-      <div style="background: #772432; color: white; padding: 24px; border-radius: 12px 12px 0 0;">
-        <h2 style="margin: 0;">Application Update</h2>
-      </div>
-      <div style="padding: 24px; background: #f8f9fa; border-radius: 0 0 12px 12px; border: 1px solid #eee;">
-        <p>Hi ${user.firstName},</p>
-        <p>Unfortunately, your portal access request has been declined at this time.</p>
-        <p>If you believe this was in error, please contact the VP of Education directly.</p>
-        <p>Return to <a href="https://agendas.coquitlamgavel.com" style="color: #772432; font-weight: bold;">agendas.coquitlamgavel.com</a></p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-        <p style="font-size: 12px; color: #666;">This is an automated message from the DTCGC Agenda Workflow Engine.</p>
-      </div>
-    </div>
-  `;
-
+  const { subject, html } = accountEmail('rejection', user.firstName);
   try {
-    await quietlySendEmail(user.email, subject, html);
-    // Email sent — now safe to delete the rejected user record
-    await db.user.delete({ where: { id: userId } });
-    revalidatePath('/admin/accounts');
-    return { success: true, emailError: false };
+    await sendEmail(user.email, subject, html);
   } catch (error) {
     console.error("Rejection email failed:", error);
     // DO NOT delete user yet and DO NOT revalidate — retry modal will handle it
-    return { success: false, emailError: true, type: 'rejection', userId: user.id, errorId: Date.now() };
+    return { ...fail('The rejection email could not be sent.'), emailError: true };
+  }
+
+  // Separate from the send: a failed delete must not make a retry send the
+  // email a second time.
+  const deleted = await deletePendingUser(userId);
+  if (!deleted.success) return deleted;
+
+  revalidatePath('/admin/accounts');
+  return { success: true };
+}
+
+/** Deletes a still-PENDING account. Pending accounts hold no roles. */
+async function deletePendingUser(userId: string): Promise<ActionResult> {
+  try {
+    await db.user.deleteMany({ where: { id: userId, role: 'PENDING' } });
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to delete rejected account:', error);
+    return fail('The email was sent, but the account could not be removed. Remove it from the member list instead.');
   }
 }
 
@@ -127,68 +109,46 @@ export async function rejectAccount(prevState: { success: boolean; error?: strin
  * Retries sending an email for a user whose notification failed.
  * If it was a rejection, it also finishes the deletion.
  */
-export async function retryAccountEmail(userId: string, type: 'approval' | 'rejection') {
-  const session = await auth();
-  if (session?.user?.role !== 'ADMIN') {
-    return { success: false, error: 'Unauthorized: administrator access required.' };
-  }
+export async function retryAccountEmail(userId: string, type: AccountEmailKind): Promise<ActionResult> {
+  const denied = await checkAdmin();
+  if (denied) return denied;
 
   const user = await db.user.findUnique({ where: { id: userId } });
-  if (!user) return { success: false, error: 'User no longer exists.' };
+  if (!user) return fail('User no longer exists.');
 
-  const isApproval = type === 'approval';
-  const subject = isApproval 
-    ? "Welcome to the Downtown Coquitlam Gavel Club Portal"
-    : "DTCGC Account Application Update";
-
-  const color = isApproval ? '#004165' : '#772432';
-  const title = isApproval ? 'Account Approved ✓' : 'Application Update';
-  const body = isApproval 
-    ? `<p>Your portal account has been verified and fully approved by the club administrative team.</p>
-       <p>You can now log in at any time to view upcoming agendas and your assigned operations.</p>
-       <p><a href="https://agendas.coquitlamgavel.com" style="display: inline-block; background-color: #004165; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; margin-top: 10px;">Access Portal</a></p>`
-    : `<p>Unfortunately, your portal access request has been declined at this time.</p>
-       <p>If you believe this was in error, please contact the VP of Education directly.</p>
-       <p>Return to <a href="https://agendas.coquitlamgavel.com" style="color: #772432; font-weight: bold;">agendas.coquitlamgavel.com</a></p>`;
-
-  const html = `
-    <div style="font-family: 'Montserrat', sans-serif; max-width: 600px; margin: 0 auto;">
-      <div style="background: ${color}; color: white; padding: 24px; border-radius: 12px 12px 0 0;">
-        <h2 style="margin: 0;">${title}</h2>
-      </div>
-      <div style="padding: 24px; background: #f8f9fa; border-radius: 0 0 12px 12px; border: 1px solid #eee;">
-        <p>Hi ${user.firstName},</p>
-        ${body}
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-        <p style="font-size: 12px; color: #666;">This is an automated message from the DTCGC Agenda Workflow Engine.</p>
-      </div>
-    </div>
-  `;
-
+  const { subject, html } = accountEmail(type, user.firstName);
   try {
-    await quietlySendEmail(user.email, subject, html);
-    if (!isApproval) {
-      await db.user.delete({ where: { id: userId } });
-    }
-    revalidatePath('/admin/accounts');
-    return { success: true };
+    await sendEmail(user.email, subject, html);
   } catch (error) {
     console.error("Retry failed:", error);
-    return { success: false, error: "Email still failing. Check system SMTP logs." };
+    return fail('The email still could not be sent. Check the Resend dashboard for the reason.');
   }
+
+  if (type === 'rejection') {
+    const deleted = await deletePendingUser(userId);
+    if (!deleted.success) return deleted;
+  }
+  revalidatePath('/admin/accounts');
+  return { success: true };
 }
 
 
-/** Adds a guest email to the mailing list (subscriber table). */
-export async function subscribeGuest(email: string) {
+/** Adds a guest email to the mailing list (subscriber table). Public. */
+export async function subscribeGuest(email: string): Promise<ActionResult> {
+  const address = normalizeEmail(email);
+  if (!isValidEmail(address)) return fail('Please enter a valid email address.');
+
   try {
-    await db.subscriber.create({
-      data: { email }
+    // Upsert: subscribing twice is not an error worth showing a guest.
+    await db.subscriber.upsert({
+      where: { email: address },
+      create: { email: address },
+      update: {},
     });
     return { success: true };
   } catch (error) {
     console.error("Subscription error:", error);
-    return { success: false, error: "Email already subscribed or invalid." };
+    return fail('Something went wrong. Please try again later.');
   }
 }
 
@@ -197,66 +157,59 @@ export async function subscribeGuest(email: string) {
  * Soft-unlinks role assignments (sets userId=null) before hard-deleting
  * the user record, preserving historical meeting data.
  */
-export async function removeUser(formData: FormData) {
-  await requireAdmin();
+export async function removeUser(userId: string): Promise<ActionResult> {
+  const session = await requireAdmin();
 
-  const userId = formData.get('userId') as string;
-  
+  const user = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
+  if (!user) return fail('That member no longer exists.');
+  if (user.role === 'ADMIN' || userId === session?.user?.dbId) {
+    return fail('Administrator accounts cannot be removed from here.');
+  }
+
   try {
-    // Unlink the user from any past or future agenda roles to prevent FK constraint errors
-    await db.roleAssignment.updateMany({
-      where: { userId: userId },
-      data: { userId: null }
-    });
-
-    await db.user.delete({
-      where: { id: userId }
-    });
+    await db.$transaction([
+      // Unlink the user from any past or future agenda roles to prevent FK constraint errors
+      db.roleAssignment.updateMany({ where: { userId }, data: { userId: null } }),
+      db.user.delete({ where: { id: userId } }),
+    ]);
   } catch (error) {
     console.error("Failed to remove user:", error);
+    return fail('The member could not be removed. Please try again.');
   }
-  
+
   revalidatePath('/admin/accounts');
+  revalidateMeetingViews();
+  return { success: true };
 }
 
 /** Removes a guest subscriber from the mailing list. */
-export async function removeSubscriber(formData: FormData) {
+export async function removeSubscriber(subscriberId: string): Promise<ActionResult> {
   await requireAdmin();
 
-  const subscriberId = formData.get('subscriberId') as string;
-  await db.subscriber.delete({
-    where: { id: subscriberId }
-  });
+  await db.subscriber.deleteMany({ where: { id: subscriberId } });
   revalidatePath('/admin/accounts');
+  return { success: true };
 }
 
 /**
  * Allows admins to correct a member's first and last name.
  * Used to fix names inherited from parent Google accounts or typos.
  */
-export async function updateUserName(formData: FormData) {
+export async function updateUserName(userId: string, firstName: string, lastName: string): Promise<ActionResult> {
   // Admin-only: anyone authenticated could otherwise rename arbitrary members.
   await requireAdmin();
 
-  const userId = formData.get('userId') as string;
-  const firstName = (formData.get('firstName') as string)?.trim();
-  const lastName = (formData.get('lastName') as string)?.trim();
-
-  if (!firstName || !lastName) {
-    throw new Error('Both first and last name are required.');
-  }
-
-  const namePattern = /^[a-zA-Z\s\-']+$/;
-  if (!namePattern.test(firstName) || !namePattern.test(lastName)) {
-    throw new Error('Names may only contain letters, spaces, hyphens, and apostrophes.');
-  }
+  const problem = validatePersonName(firstName, lastName);
+  if (problem) return fail(problem);
 
   await db.user.update({
     where: { id: userId },
-    data: { firstName, lastName }
+    data: { firstName: firstName.trim(), lastName: lastName.trim() }
   });
 
   revalidatePath('/admin/accounts');
+  revalidateMeetingViews();
+  return { success: true };
 }
 
 /**

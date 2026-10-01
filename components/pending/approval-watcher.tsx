@@ -28,7 +28,7 @@ export default function ApprovalWatcher() {
       if (role === 'MEMBER') dest = '/agenda'
       else if (role === 'ADMIN') dest = '/admin/calendar'
       else if (role === 'INCOMPLETE') dest = '/complete-profile'
-      else if (!role || role === 'DELETED' || role === 'DENIED') dest = '/login'
+      else if (!role || role === 'DELETED') dest = '/login'
       // role === 'PENDING' → keep waiting on this page.
 
       if (dest) {

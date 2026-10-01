@@ -1,11 +1,11 @@
 /**
- * Major Role Persistence Module
+ * Role Persistence Module
  *
- * Owns the write path behind the admin Role Management panel. Kept out of the
- * server action itself so it can be exercised without a Next.js request context
- * (see test_roles_recency.ts).
+ * Owns every roster write: the admin Role Management panel and the agenda
+ * wizard. Kept out of the server actions so it can be exercised without a
+ * Next.js request context (see tests/roles-recency.test.ts).
  *
- * The write is scoped to exactly the role names the panel renders. This is a
+ * Each write is scoped to exactly the role names its caller owns. This is a
  * correctness boundary, not just tidiness: the delete-then-create below
  * re-stamps `assignedAt`, and `assignedAt` is what the auto-assignment
  * heuristic in lib/agenda-logic.ts sorts on. Letting a minor role through would
@@ -14,7 +14,7 @@
  */
 
 import { db } from './db'
-import { MAJOR_ROLES, BACKUP_SPEAKER } from './agenda-logic'
+import { MAJOR_ROLES, MINOR_ROLES, BACKUP_SPEAKER } from './roles'
 
 /**
  * Every role the Role Management panel owns.
@@ -25,7 +25,20 @@ import { MAJOR_ROLES, BACKUP_SPEAKER } from './agenda-logic'
  * listed explicitly here; a MAJOR_ROLES-only whitelist would silently discard
  * every standby assignment the panel submits.
  */
-const PANEL_ROLES = new Set<string>([...MAJOR_ROLES, BACKUP_SPEAKER])
+export const PANEL_ROLES: ReadonlySet<string> = new Set([...MAJOR_ROLES, BACKUP_SPEAKER])
+
+/**
+ * Roles the agenda wizard may write. The Toastmaster is never among them (an
+ * admin sets it, and the wizard is usually run by the Toastmaster). The other
+ * major roles join only when the caller unlocked "Edit Major Roles".
+ */
+export function wizardRoles(includeMajorRoles: boolean): ReadonlySet<string> {
+  const roles = new Set<string>(MINOR_ROLES)
+  if (includeMajorRoles) {
+    for (const r of PANEL_ROLES) if (r !== 'Toastmaster') roles.add(r)
+  }
+  return roles
+}
 
 /**
  * Drops any assignment whose role is not one the Role Management panel owns.
@@ -41,36 +54,53 @@ export function filterToPanelRoles<T extends { roleName: string }>(assignments: 
   return assignments.filter((a) => PANEL_ROLES.has(a.roleName))
 }
 
+/** Thrown when a payload names someone who is not an approved member. */
+export class UnknownMemberError extends Error {
+  constructor() {
+    super('One of the selected people is no longer an approved member. Reload the page and try again.')
+    this.name = 'UnknownMemberError'
+  }
+}
+
 /**
- * Replaces the major-role assignments for a meeting.
+ * Replaces a meeting's assignments for the roles in `allowedRoles`.
  *
  * Uses a transactional delete-then-create so the swap is atomic. The delete is
- * scoped to the whitelisted role names only, leaving minor roles (and their
+ * scoped to the accepted role names only, leaving every other role (and its
  * `assignedAt` history) untouched.
  *
- * `assignedAt` is carried forward for any role whose holder is unchanged. The
- * panel posts all of its roles on every save, so without this a single speaker
- * swap would re-date every other major role — a Toastmaster assigned weeks ago
- * would look freshly served and sink in the fairness rotation. Only a genuine
+ * `assignedAt` is carried forward for any role whose holder is unchanged.
+ * Callers post all of their roles on every save, so without this a single
+ * swap would re-date every other role — a member assigned weeks ago would
+ * look freshly served and sink in the fairness rotation. Only a genuine
  * change of holder counts as new participation.
  *
- * @param meetingId   - Target meeting ID.
- * @param assignments - Array of { roleName, userId } pairs; empty userId clears the role.
+ * @param meetingId    - Target meeting ID.
+ * @param assignments  - { roleName, userId } pairs; an empty userId clears the role.
+ * @param allowedRoles - The roles this caller owns; anything else is dropped.
  * @returns The role names that were actually accepted and written.
+ * @throws UnknownMemberError when a userId is not an approved account.
  */
-export async function persistMajorRoles(
+export async function persistRoles(
   meetingId: string,
-  assignments: { roleName: string; userId: string }[]
+  assignments: { roleName: string; userId: string }[],
+  allowedRoles: ReadonlySet<string>
 ) {
-  const accepted = filterToPanelRoles(assignments)
+  const accepted = assignments.filter((a) => allowedRoles.has(a.roleName))
   if (accepted.length === 0) return []
 
   const roleNames = accepted.map((a) => a.roleName)
+  const userIds = [...new Set(accepted.map((a) => a.userId).filter(Boolean))]
   const now = new Date()
 
   // Read and write inside one interactive transaction so the timestamps being
   // carried forward cannot be invalidated by a concurrent save.
   await db.$transaction(async (tx) => {
+    const known = await tx.user.count({
+      where: { id: { in: userIds }, role: { in: ['MEMBER', 'ADMIN'] } },
+    })
+    if (known !== userIds.length) throw new UnknownMemberError()
+
     const previous = await tx.roleAssignment.findMany({
       where: { meetingId, roleName: { in: roleNames } },
     })
@@ -97,4 +127,12 @@ export async function persistMajorRoles(
   })
 
   return roleNames
+}
+
+/** The Role Management panel's write: major roles plus the Backup Speaker. */
+export function persistMajorRoles(
+  meetingId: string,
+  assignments: { roleName: string; userId: string }[]
+) {
+  return persistRoles(meetingId, assignments, PANEL_ROLES)
 }
