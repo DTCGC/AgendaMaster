@@ -329,7 +329,17 @@ export default async function TutorialPage() {
                       &ldquo;Waiting for Agenda Details&rdquo;.
                     </Bullet>
                     <Bullet>
-                      Look for your name to find your role. If a role says <strong>TBD</strong>, nobody has it yet.
+                      Once the agenda is ready, your role is shown at the top in a blue <strong>Your Role</strong>{" "}box.
+                      If you have more than one, they&apos;re all listed. If you don&apos;t have a role that week, the
+                      dashboard says so.
+                    </Bullet>
+                    <Bullet>
+                      Your row in the roster is highlighted and marked <strong>You</strong>, so it&apos;s easy to spot.
+                      If a role says <strong>TBD</strong>, nobody has it yet.
+                    </Bullet>
+                    <Bullet>
+                      Above the roster you&apos;ll find the meeting date, and the theme and Question of the Day once
+                      the Toastmaster has chosen them.
                     </Bullet>
                     <Bullet>
                       To sign out, use the <strong>Sign Out</strong>{" "}button in the top-right corner.

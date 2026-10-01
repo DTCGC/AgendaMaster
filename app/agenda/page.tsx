@@ -3,6 +3,8 @@
  *
  * The main member-facing view. Displays the upcoming meeting's role roster
  * and shows a special CTA panel if the logged-in user is the Toastmaster.
+ * Once the roster is finalized, every member also sees their own role(s) in a
+ * banner, with their rows highlighted and tagged "You" in the roster.
  *
  * Also serves as the archive viewer when accessed with `?archivedId=<id>`.
  */
@@ -10,7 +12,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Calendar, FileText } from "lucide-react";
+import { Calendar, FileText, UserCheck } from "lucide-react";
 import { getDisplayName } from '@/lib/user-logic';
 import { MINOR_ROLES } from '@/lib/agenda-logic';
 import ForceSignOut from '@/components/auth/force-sign-out';
@@ -81,20 +83,38 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
     "Roles For Next Meeting", "Business Meeting", "Table Topics Master", "Table Topics Evaluator 1", "Table Topics Evaluator 2"
   ];
 
+  // Rows that always show the same people. They are labels, not assignments,
+  // so they never count as the viewer's role — even if the viewer is "John".
+  const fixedRows: Record<string, string> = {
+    "Roles For Next Meeting": "John",
+    "Business Meeting": "Andrew",
+  };
+
   // Computed display names for all members earlier
   const agendaItems = roleSequence.map(role => {
-      const assignment = nextMeeting.roleAssignments.find((a) => a.roleName === role);
-      if (role === "Roles For Next Meeting") return { role, name: "John" };
-      if (role === "Business Meeting") return { role, name: "Andrew" };
-      
-      const user = assignment?.user;
+      if (role in fixedRows) return { role, name: fixedRows[role], isViewer: false };
+
+      const user = nextMeeting.roleAssignments.find((a) => a.roleName === role)?.user;
       return {
           role,
-          name: user ? getDisplayName(user, allMembers) : "TBD"
+          name: user ? getDisplayName(user, allMembers) : "TBD",
+          isViewer: user?.id === currentUser.id,
       };
   });
 
   const hasFinalized = nextMeeting.roleAssignments.some((a) => MINOR_ROLES.includes(a.roleName));
+
+  // The viewer's own roles, in roster order. The Toastmaster box already
+  // announces the Toastmaster role, so the banner only lists any others.
+  const viewerRoles = agendaItems.filter((item) => item.isViewer).map((item) => item.role);
+  const bannerRoles = isToastmaster ? viewerRoles.filter((role) => role !== 'Toastmaster') : viewerRoles;
+  const showRoleBanner = hasFinalized && !archivedId;
+
+  const meetingDetails = [
+    { label: 'Date', value: nextMeeting.date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) },
+    { label: 'Theme', value: nextMeeting.theme?.trim() },
+    { label: 'Question of the Day', value: nextMeeting.qotd?.trim() },
+  ].filter((detail) => detail.value);
 
   return (
     <div className="flex-1 p-8 bg-brand-cool-grey/10 min-h-screen">
@@ -144,6 +164,32 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
                 </div>
             ) : (
                 <div className="space-y-4">
+                    {showRoleBanner && bannerRoles.length > 0 && (
+                        <div className="mb-8 p-5 bg-brand-loyal-blue/5 rounded-xl border-2 border-brand-loyal-blue/30 flex gap-4 items-center">
+                            <div className="bg-brand-loyal-blue text-white p-3 rounded-lg shadow-md">
+                                <UserCheck size={24} />
+                            </div>
+                            <h2 className="text-xl font-bold text-gray-800 tracking-tight">
+                                {`${isToastmaster ? 'Also ' : ''}Your ${bannerRoles.length > 1 ? 'Roles' : 'Role'}: `}
+                                <span className="text-brand-loyal-blue">{bannerRoles.join(', ')}</span>
+                            </h2>
+                        </div>
+                    )}
+                    {showRoleBanner && viewerRoles.length === 0 && (
+                        <p className="mb-8 px-4 py-3 rounded-xl border bg-gray-50 text-sm text-gray-600">
+                            You don&apos;t have a role this meeting.
+                        </p>
+                    )}
+
+                    <dl className="mb-8 grid gap-3 text-sm">
+                        {meetingDetails.map((detail) => (
+                            <div key={detail.label} className="flex flex-col sm:flex-row sm:gap-3">
+                                <dt className="font-black text-gray-400 uppercase tracking-widest text-xs sm:w-44 sm:shrink-0 sm:pt-0.5">{detail.label}</dt>
+                                <dd className="font-bold text-gray-800">{detail.value}</dd>
+                            </div>
+                        ))}
+                    </dl>
+
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="font-black text-gray-400 uppercase tracking-widest text-xs">{archivedId ? 'Historical Roster' : 'Meeting Roster'}</h3>
                         <div className={`flex items-center gap-2 text-[10px] font-bold px-2 py-0.5 rounded-full border ${archivedId ? 'text-gray-600 bg-gray-50 border-gray-200' : 'text-green-600 bg-green-50 border-green-200'}`}>
@@ -153,10 +199,15 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {agendaItems.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 border rounded-xl hover:bg-white transition-all group">
-                                <span className="text-sm font-bold text-gray-500 group-hover:text-brand-loyal-blue transition-colors">{item.role}</span>
-                                <span className={`text-sm font-black tracking-tight px-3 py-1 rounded-lg ${item.name === 'TBD' ? 'text-red-300 bg-red-50/50 italic' : 'text-brand-loyal-blue bg-white shadow-sm border'}`}>
-                                    {item.name}
+                            <div key={idx} className={`flex justify-between items-center gap-2 p-3 border rounded-xl transition-all group ${item.isViewer ? 'bg-brand-loyal-blue/10 border-brand-loyal-blue ring-1 ring-brand-loyal-blue' : 'bg-gray-50 hover:bg-white'}`}>
+                                <span className={`text-sm font-bold transition-colors ${item.isViewer ? 'text-brand-loyal-blue' : 'text-gray-500 group-hover:text-brand-loyal-blue'}`}>{item.role}</span>
+                                <span className="flex items-center gap-2">
+                                    {item.isViewer && (
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-white bg-brand-true-maroon px-2 py-0.5 rounded-full">You</span>
+                                    )}
+                                    <span className={`text-sm font-black tracking-tight px-3 py-1 rounded-lg ${item.name === 'TBD' ? 'text-red-300 bg-red-50/50 italic' : 'text-brand-loyal-blue bg-white shadow-sm border'}`}>
+                                        {item.name}
+                                    </span>
                                 </span>
                             </div>
                         ))}
