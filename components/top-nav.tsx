@@ -1,180 +1,171 @@
 /**
  * Top Navigation Bar
  *
- * Role-aware navigation component rendered in the root layout.
- * Switches between blue (MEMBER) and maroon (ADMIN) color schemes
- * to provide visual context about the current user's permission level.
+ * Role-aware navigation rendered in the root layout. Blue for members and
+ * maroon for admins, so the permission level is always visible. Below the
+ * md breakpoint the links collapse into a menu panel, so every page stays
+ * reachable on a phone.
  *
- * Includes a confirmation modal for sign-out to prevent accidental logouts.
+ * Sign-out asks for confirmation to prevent accidental logouts.
  */
 'use client'
 
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
-import { signOut } from "next-auth/react";
-import {
-  NavigationMenu,
-  NavigationMenuItem,
-  NavigationMenuList,
-  navigationMenuTriggerStyle,
-} from "@/components/ui/navigation-menu";
 import { usePathname } from "next/navigation";
-import { LogOut, X } from "lucide-react";
+import { signOut } from "next-auth/react";
+import { LogOut, Menu, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
+import { ConfirmDialog } from "@/components/common/confirm-dialog";
+import { cn } from "@/lib/utils";
+
+type NavLink = { href: string; label: string };
+
+function linksFor(role?: string): NavLink[] {
+  const isAdmin = role === 'ADMIN';
+  const isMember = role === 'MEMBER' || isAdmin;
+  return [
+    ...(isMember ? [{ href: '/agenda', label: 'Agenda' }] : []),
+    ...(isAdmin
+      ? [
+          { href: '/admin/calendar', label: 'Calendar' },
+          { href: '/admin/roles', label: 'Roles' },
+          { href: '/admin/accounts', label: 'Approvals' },
+          { href: '/admin/comms', label: 'Comms' },
+        ]
+      : []),
+    // Open to everyone: the getting-started half is public, and the page
+    // itself decides what a visitor may read.
+    { href: '/tutorial', label: 'Tutorial' },
+  ];
+}
 
 export function TopNav({ role }: { role?: string }) {
   const pathname = usePathname();
-  const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
   const isAdmin = role === 'ADMIN';
-  const isMember = role === 'MEMBER' || role === 'ADMIN';
+  const links = linksFor(role);
+  // A section stays highlighted on its sub-pages (/agenda/create → Agenda).
+  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
-  // Toggle based on Admin vs Standard view semantics prescribed by the design system
-  const bgColor = isAdmin ? 'bg-brand-true-maroon' : 'bg-brand-loyal-blue';
-  const activeTextColor = isAdmin ? 'text-brand-true-maroon' : 'text-brand-loyal-blue';
-
-/** Computes active/inactive nav link styling based on current pathname. */
-  const isActive = (path: string) => pathname === path;
-
-  const getNavLinkClass = (path: string) => {
-    const active = isActive(path);
-    return `${navigationMenuTriggerStyle()} transition-all duration-200 cursor-pointer ${
-      active 
-        ? `bg-white ${activeTextColor} shadow-sm font-bold` 
-        : "bg-transparent text-white hover:bg-white/10 hover:text-white"
-    }`;
-  };
+  const linkClass = (href: string) =>
+    cn(
+      "rounded-full px-4 py-2 text-sm font-semibold transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+      isActive(href)
+        ? cn("bg-white shadow-sm", isAdmin ? "text-brand-true-maroon" : "text-brand-loyal-blue")
+        : "text-white/80 hover:bg-white/10 hover:text-white"
+    );
 
   return (
-    <>
-    <div className={`w-full ${bgColor} text-white px-6 py-4 shadow-md flex justify-between items-center z-40 relative`}>
-        <Link href="/" className="flex items-center gap-3 group">
-            <Image 
-                src={isAdmin ? "/assets/images/TrueMaroon/GavelClubLogoTrueMaroon-RGB.png" : "/assets/images/LoyalBlue/GavelClubLogoLoyalBlue-RGB.png"} 
-                alt="Logo" 
-                width={1140} 
-                height={1140} 
-                className="h-10 w-auto group-hover:scale-105 transition-transform drop-shadow-sm"
-            />
-            <div className="font-bold text-xl tracking-wider select-none hidden sm:block">
-                DTCGC
-            </div>
+    <header
+      className={cn(
+        "relative z-40 border-b-4 border-brand-happy-yellow text-white shadow-md",
+        isAdmin ? "bg-brand-true-maroon" : "bg-brand-loyal-blue"
+      )}
+    >
+      <div className="mx-auto flex h-18 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
+        <Link href="/" className="group flex items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+          <Image
+            src={isAdmin ? "/assets/images/TrueMaroon/GavelClubLogoTrueMaroon-RGB.png" : "/assets/images/LoyalBlue/GavelClubLogoLoyalBlue-RGB.png"}
+            alt=""
+            width={1140}
+            height={1140}
+            priority
+            sizes="40px"
+            className="h-10 w-auto drop-shadow-sm transition-transform group-hover:scale-105"
+          />
+          <span className="leading-none select-none">
+            <span className="block text-xl font-black tracking-wider">DTCGC</span>
+            <span className="mt-1 hidden text-xs font-semibold tracking-wide text-white/80 sm:block">AgendaMaster</span>
+          </span>
         </Link>
-        
-        <NavigationMenu>
-            <NavigationMenuList className="space-x-1 lg:space-x-2">
-                {isMember && (
-                    <NavigationMenuItem>
-                    <Link 
-                        href="/agenda" 
-                        className={getNavLinkClass("/agenda")}
-                    >
-                        Agenda
-                    </Link>
-                    </NavigationMenuItem>
-                )}
-                
-                {isAdmin && (
-                    <>
-                        <NavigationMenuItem>
-                        <Link 
-                            href="/admin/calendar" 
-                            className={getNavLinkClass("/admin/calendar")}
-                        >
-                            Calendar
-                        </Link>
-                        </NavigationMenuItem>
-                        
-                        <NavigationMenuItem>
-                        <Link 
-                            href="/admin/roles" 
-                            className={getNavLinkClass("/admin/roles")}
-                        >
-                            Roles
-                        </Link>
-                        </NavigationMenuItem>
 
-                        <NavigationMenuItem className="hidden md:block">
-                        <Link 
-                            href="/admin/accounts" 
-                            className={getNavLinkClass("/admin/accounts")}
-                        >
-                            Approvals
-                        </Link>
-                        </NavigationMenuItem>
-                        
-                        <NavigationMenuItem className="hidden md:block">
-                        <Link 
-                            href="/admin/comms" 
-                            className={getNavLinkClass("/admin/comms")}
-                        >
-                            Comms
-                        </Link>
-                        </NavigationMenuItem>
-                    </>
-                )}
+        <nav aria-label="Main" className={cn(role ? "hidden md:block" : "block")}>
+          <ul className="flex items-center gap-1">
+            {links.map((link) => (
+              <li key={link.href}>
+                <Link href={link.href} className={linkClass(link.href)} aria-current={isActive(link.href) ? "page" : undefined}>
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
-                {/* Open to everyone: the getting-started half is public, and
-                    the page itself decides what a visitor may read. */}
-                <NavigationMenuItem className={isAdmin ? "hidden md:block" : undefined}>
+        <div className="flex items-center gap-2">
+          {role ? (
+            <>
+              <Button variant="on-brand" className="hidden md:inline-flex" onClick={() => setConfirmSignOut(true)}>
+                <LogOut /> Sign Out
+              </Button>
+              <Button
+                variant="on-brand"
+                size="icon"
+                className="md:hidden"
+                aria-label={menuOpen ? "Close menu" : "Open menu"}
+                aria-expanded={menuOpen}
+                aria-controls="mobile-menu"
+                onClick={() => setMenuOpen((open) => !open)}
+              >
+                {menuOpen ? <X /> : <Menu />}
+              </Button>
+            </>
+          ) : (
+            <Link href="/login" className={buttonVariants({ variant: "on-brand" })}>
+              Login
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {role && menuOpen && (
+        <nav id="mobile-menu" aria-label="Main" className="border-t border-white/15 px-4 pt-2 pb-4 md:hidden">
+          <ul className="space-y-1">
+            {links.map((link) => (
+              <li key={link.href}>
                 <Link
-                    href="/tutorial"
-                    className={getNavLinkClass("/tutorial")}
+                  href={link.href}
+                  onClick={() => setMenuOpen(false)}
+                  aria-current={isActive(link.href) ? "page" : undefined}
+                  className={cn(linkClass(link.href), "block rounded-xl px-4 py-3")}
                 >
-                    Tutorial
+                  {link.label}
                 </Link>
-                </NavigationMenuItem>
-            </NavigationMenuList>
-        </NavigationMenu>
+              </li>
+            ))}
+          </ul>
+          <Button
+            variant="on-brand"
+            className="mt-3 w-full"
+            onClick={() => {
+              setMenuOpen(false);
+              setConfirmSignOut(true);
+            }}
+          >
+            <LogOut /> Sign Out
+          </Button>
+        </nav>
+      )}
 
-        <div className="flex items-center">
-            {role ? (
-                <button 
-                    onClick={() => setShowSignOutModal(true)} 
-                    className="text-sm font-bold opacity-80 hover:opacity-100 transition-opacity bg-white/10 px-4 py-2 rounded-lg border border-white/20"
-                >
-                    Sign Out
-                </button>
-            ) : (
-                <Link href="/api/auth/signin" className="text-sm font-bold opacity-80 hover:opacity-100 transition-opacity border border-white/40 px-4 py-2 rounded-lg">
-                    Login
-                </Link>
-            )}
-        </div>
-    </div>
-
-    {/* Sign Out Modal */}
-    {showSignOutModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div 
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
-                onClick={() => setShowSignOutModal(false)}
-            />
-            <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden animate-in fade-in zoom-in duration-200">
-                <div className={`${isAdmin ? 'bg-brand-true-maroon' : 'bg-brand-loyal-blue'} p-6 text-white text-center`}>
-                    <div className="mx-auto w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-4">
-                        <LogOut size={32} />
-                    </div>
-                    <h2 className="text-xl font-bold">Leaving so soon?</h2>
-                    <p className="text-sm opacity-80 mt-1">Confirm your departure from the DTCGC portal.</p>
-                </div>
-                
-                <div className="p-6 space-y-3">
-                    <button 
-                        onClick={() => signOut({ callbackUrl: '/' })}
-                        className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition-transform active:scale-95 ${isAdmin ? 'bg-brand-true-maroon hover:bg-opacity-90' : 'bg-brand-loyal-blue hover:bg-opacity-90'}`}
-                    >
-                        Sign Out
-                    </button>
-                    <button 
-                        onClick={() => setShowSignOutModal(false)}
-                        className="w-full py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"
-                    >
-                        <X size={18} /> Cancel
-                    </button>
-                </div>
-            </div>
-        </div>
-    )}
-    </>
+      <ConfirmDialog
+        open={confirmSignOut}
+        onOpenChange={setConfirmSignOut}
+        tone={isAdmin ? "maroon" : "brand"}
+        icon={LogOut}
+        title="Leaving so soon?"
+        description="Confirm your departure from the DTCGC portal."
+        confirmLabel="Sign Out"
+        busy={signingOut}
+        onConfirm={() => {
+          setSigningOut(true);
+          signOut({ callbackUrl: '/' });
+        }}
+      />
+    </header>
   );
 }
