@@ -1,3 +1,22 @@
+/*
+ * AgendaMaster design conventions (the /tutorial page is the reference).
+ * Reuse the shared pieces in components/common/ and components/ui/ before
+ * writing new class strings.
+ *
+ *   Colour  brand-loyal-blue = primary (headings, buttons, links, focus);
+ *           brand-true-maroon = admin context + "you" highlights;
+ *           brand-happy-yellow = accents only (pills, rules, underlines).
+ *           Raw hues only for states: red = danger, amber = warning,
+ *           green = success. No hex literals in class names.
+ *   Text    gray-800 values/strong · gray-700 body · gray-600 lead and
+ *           secondary · gray-500 captions/help · gray-400 meta/disabled only.
+ *           Smallest size is text-xs. Never fade text with opacity-*; on
+ *           brand backgrounds use text-white or text-white/80.
+ *   Labels  eyebrow/section: text-xs font-bold uppercase tracking-widest
+ *           text-gray-500 (<SectionLabel>); form: <Label>.
+ *   Shape   buttons + inputs rounded-xl; content cards rounded-xl shadow-sm;
+ *           auth/hero cards rounded-2xl shadow-lg; pills rounded-full.
+ */
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "./shadcn-preset.css";
@@ -13,7 +32,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -54,24 +73,25 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* shadcn semantic tokens, mapped onto the club brand (components/ui/*). */
+  --background: #ffffff;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+  --primary: #004165;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #374151;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --accent: #f3f4f6;
+  --accent-foreground: #1f2937;
+  --destructive: #dc2626;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #004165;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -88,39 +108,7 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
-}
+/* The app is light-only: nothing applies a .dark class. */
 
 @layer base {
   * {
@@ -132,4 +120,32 @@
   html {
     @apply font-sans;
   }
+}
+
+/*
+ * Rich-text email editor (components/agenda/tiptap-editor.tsx). Scoped rules
+ * rather than a typography plugin: the editor only produces paragraphs,
+ * bold/italic/strike and lists.
+ */
+.agenda-editor p { margin: 0.75em 0; }
+.agenda-editor > :first-child { margin-top: 0; }
+.agenda-editor > :last-child { margin-bottom: 0; }
+.agenda-editor ul { list-style: disc; padding-left: 1.5rem; margin: 0.5em 0; }
+.agenda-editor ol { list-style: decimal; padding-left: 1.5rem; margin: 0.5em 0; }
+.agenda-editor li { margin: 0.25em 0; }
+.agenda-editor li > p { margin: 0; }
+.agenda-editor strong { font-weight: 700; }
+
+/* Legal pages (components/common/legal-page.tsx). */
+@layer components {
+  .legal-prose { @apply space-y-10 text-gray-700 leading-relaxed; }
+  .legal-prose h2 { @apply mb-4 text-xl font-bold tracking-tight text-brand-loyal-blue md:text-2xl; }
+  .legal-prose p + p, .legal-prose p + ul { @apply mt-4; }
+  .legal-prose ul { @apply list-disc space-y-2 pl-6; }
+  .legal-prose ul ul { @apply mt-2 space-y-1; list-style-type: circle; }
+  .legal-prose strong { @apply font-semibold text-gray-800; }
+  .legal-prose a { @apply font-semibold text-brand-loyal-blue underline underline-offset-2 hover:no-underline; }
+  .legal-prose .legal-lead { @apply text-lg text-gray-700; }
+  .legal-prose .legal-note { @apply mt-2 text-sm text-gray-500; }
+  .legal-prose .legal-callout { @apply rounded-xl border border-brand-happy-yellow bg-brand-happy-yellow/15 p-4; }
 }
