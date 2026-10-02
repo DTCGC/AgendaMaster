@@ -21,7 +21,7 @@ export default async function LandingPage() {
   const session = await auth();
   
   return (
-    <div className="flex-1 flex flex-col items-center p-6 bg-brand-cool-grey/20 relative overflow-hidden">
+    <div className="flex-1 flex flex-col items-center p-6 bg-brand-cool-grey/20 relative overflow-clip">
       {/* Decorative Branding Elements */}
       <div className="absolute -top-24 -right-24 size-96 rounded-full bg-brand-loyal-blue/5 blur-3xl" />
       <div className="absolute -bottom-24 -left-24 size-96 rounded-full bg-brand-true-maroon/5 blur-3xl" />
