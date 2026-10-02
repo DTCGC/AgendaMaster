@@ -33,7 +33,7 @@ export default async function LandingPage() {
             Est. 2023 · Downtown Coquitlam Gavel Club
           </div>
 
-          <h1 className="text-6xl md:text-7xl font-black text-brand-loyal-blue tracking-tighter leading-none">
+          <h1 className="text-[clamp(2.25rem,11vw,4.5rem)] font-black text-brand-loyal-blue tracking-tighter leading-none">
             Agenda<span className="text-brand-true-maroon">Master</span>
           </h1>
 

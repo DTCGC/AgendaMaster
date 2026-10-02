@@ -19,8 +19,10 @@ const LINKS = [
 export function SiteFooter() {
   return (
     <footer className="border-t border-gray-200 bg-white">
-      <div className="mx-auto flex max-w-7xl flex-col items-center gap-6 px-4 py-8 text-sm text-gray-500 sm:px-6 md:flex-row md:justify-between">
-        <div className="flex items-center gap-3">
+      {/* Stacked and centred until there is room for three columns; the
+          equal outer columns then keep the links centred on the page. */}
+      <div className="mx-auto flex max-w-7xl flex-col items-center gap-6 px-4 py-8 text-sm text-gray-500 sm:px-6 xl:grid xl:grid-cols-[1fr_auto_1fr]">
+        <div className="flex items-center gap-3 xl:justify-self-start">
           <Image
             src="/assets/images/LoyalBlue/GavelClubLogoLoyalBlue-RGB.png"
             alt=""
@@ -47,7 +49,7 @@ export function SiteFooter() {
             ))}
           </ul>
         </nav>
-        <p className="text-xs text-gray-400">Build {process.env.APP_BUILD_ID}</p>
+        <p className="text-xs text-gray-400 xl:justify-self-end">Build {process.env.APP_BUILD_ID}</p>
       </div>
     </footer>
   );

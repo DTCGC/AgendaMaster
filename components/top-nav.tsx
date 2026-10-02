@@ -69,21 +69,25 @@ export function TopNav({ role }: { role?: string }) {
       )}
     >
       <div className="mx-auto flex h-18 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
-        <Link href="/" className="group flex items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-white/70">
-          <Image
-            src={isAdmin ? "/assets/images/TrueMaroon/GavelClubLogoTrueMaroon-RGB.png" : "/assets/images/LoyalBlue/GavelClubLogoLoyalBlue-RGB.png"}
-            alt=""
-            width={1140}
-            height={1140}
-            priority
-            sizes="40px"
-            className="h-10 w-auto drop-shadow-sm transition-transform group-hover:scale-105"
-          />
-          <span className="leading-none select-none">
-            <span className="block text-xl font-black tracking-wider">DTCGC</span>
-            <span className="mt-1 hidden text-xs font-semibold tracking-wide text-white/80 sm:block">AgendaMaster</span>
-          </span>
-        </Link>
+        {/* Equal-width sides keep the links centred on the page, whatever the
+            widths of the logo and the right-hand button. */}
+        <div className="flex flex-1 basis-0">
+          <Link href="/" className="group flex items-center gap-3 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+            <Image
+              src={isAdmin ? "/assets/images/TrueMaroon/GavelClubLogoTrueMaroon-RGB.png" : "/assets/images/LoyalBlue/GavelClubLogoLoyalBlue-RGB.png"}
+              alt=""
+              width={1140}
+              height={1140}
+              priority
+              sizes="40px"
+              className="h-10 w-auto drop-shadow-sm transition-transform group-hover:scale-105"
+            />
+            <span className="leading-none select-none">
+              <span className="block text-xl font-black tracking-wider">DTCGC</span>
+              <span className="mt-1 hidden text-xs font-semibold tracking-wide text-white/80 sm:block">AgendaMaster</span>
+            </span>
+          </Link>
+        </div>
 
         <nav aria-label="Main" className={cn(role ? "hidden md:block" : "block")}>
           <ul className="flex items-center gap-1">
@@ -97,7 +101,7 @@ export function TopNav({ role }: { role?: string }) {
           </ul>
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-1 basis-0 items-center justify-end gap-2">
           {role ? (
             <>
               <Button variant="on-brand" className="hidden md:inline-flex" onClick={() => setConfirmSignOut(true)}>
