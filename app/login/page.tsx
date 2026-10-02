@@ -11,11 +11,14 @@
  */
 import { auth, signIn } from "@/auth";
 import Link from "next/link";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ExternalLink } from "lucide-react";
 import { AuthCard, AuthPage } from "@/components/common/auth-card";
 import { redirect } from "next/navigation";
 import GuestSubscribe from "@/components/login/guest-subscribe";
 import EmailLoginForm from "@/components/login/email-login-form";
+import { CREATE_GOOGLE_ACCOUNT_URL } from "@/lib/links";
+
+const LINK = "font-semibold text-brand-loyal-blue underline-offset-2 hover:underline";
 
 export default async function LoginPage() {
   const session = await auth();
@@ -49,18 +52,24 @@ export default async function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-4 space-y-2 text-center text-xs leading-relaxed text-gray-500">
-          <p>New members: Sign in with Google to request access. Your account will be reviewed by the Executive Team.</p>
+        {/* Kept to two short lines; the footer below already says new accounts are reviewed. */}
+        <div className="mt-4 space-y-1.5 text-center text-xs leading-relaxed text-balance text-gray-500">
           <p>
-            No Google account?{" "}
-            <Link href="/signup" className="font-semibold text-brand-loyal-blue underline-offset-2 hover:underline">
-              Register with email instead
+            New members: sign in with Google to request access.{" "}
+            <Link href="/tutorial#create-account" className={LINK}>
+              How it works
             </Link>
           </p>
           <p>
-            New here?{" "}
-            <Link href="/tutorial#create-account" className="font-semibold text-brand-loyal-blue underline-offset-2 hover:underline">
-              Read how to get an account
+            No Google account?{" "}
+            <a href={CREATE_GOOGLE_ACCOUNT_URL} target="_blank" rel="noopener noreferrer" className={LINK}>
+              Create one
+              <ExternalLink size={11} className="ml-0.5 inline align-baseline" aria-hidden="true" />
+              <span className="sr-only"> (opens Google Help in a new tab)</span>
+            </a>{" "}
+            or{" "}
+            <Link href="/signup" className={LINK}>
+              use email
             </Link>
           </p>
         </div>

@@ -19,6 +19,7 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { Lock } from "lucide-react";
+import { CREATE_GOOGLE_ACCOUNT_URL } from "@/lib/links";
 import {
   Part, Section, SubHeading, Bullets, Bullet, Steps, Step, Note, Figure, ExampleEmail, MembersOnly,
 } from "@/components/tutorial/blocks";
@@ -199,7 +200,16 @@ export default async function TutorialPage() {
               <Note title="No Gmail? No problem">
                 <p>
                   You don&apos;t need your own Gmail address. A parent&apos;s or family member&apos;s Google account
-                  works fine — you&apos;ll enter <em>your</em>{" "}name in the next step.
+                  works fine — you&apos;ll enter <em>your</em>{" "}name in the next step. You can also{" "}
+                  <a
+                    href={CREATE_GOOGLE_ACCOUNT_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-loyal-blue font-semibold underline"
+                  >
+                    make a free Google account
+                  </a>{" "}
+                  in a few minutes (the <strong>Create one</strong>{" "}link on the login page goes there too).
                 </p>
                 <p>
                   Google will ask whether AgendaMaster may create spreadsheets and send email for you.
@@ -240,7 +250,7 @@ export default async function TutorialPage() {
               <SubHeading>What if I can&apos;t use Google at all?</SubHeading>
               <p className="text-gray-700 leading-relaxed">
                 A few members have no way to use any Google account. For them, there&apos;s a{" "}
-                <strong>Register with email instead</strong>{" "}link under the Google button on the login page. It lets
+                <strong>use email</strong>{" "}link under the Google button on the login page. It lets
                 you make an account with an email address and a password.
               </p>
               <Bullets>

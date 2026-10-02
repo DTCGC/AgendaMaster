@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { FormError, Notice, Spinner } from '@/components/common/surfaces'
 import { cn } from '@/lib/utils'
+import { CREATE_GOOGLE_ACCOUNT_URL } from '@/lib/links'
 import { registerWithPassword } from '@/app/actions/profile'
 import { isValidEmail, normalizeEmail, validateNewPassword } from '@/lib/password-rules'
 
@@ -51,7 +52,11 @@ export default function EmailSignup() {
 
         <Notice tone="brand" icon={false} className="text-xs">
           <p>
-            <strong className="text-gray-800">You don&apos;t need a Gmail address to use Google sign-in.</strong>{' '}A parent&apos;s or family member&apos;s Google account works fine — you will still enter your own name afterwards. You can also make a free Google account in a few minutes.
+            <strong className="text-gray-800">You don&apos;t need a Gmail address to use Google sign-in.</strong>{' '}A parent&apos;s or family member&apos;s Google account works fine — you will still enter your own name afterwards. You can also{' '}
+            <a href={CREATE_GOOGLE_ACCOUNT_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand-loyal-blue underline underline-offset-2">
+              make a free Google account
+            </a>{' '}
+            in a few minutes.
           </p>
         </Notice>
 
