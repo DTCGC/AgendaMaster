@@ -3,9 +3,9 @@
  *
  * Receives `email.received` webhook events from Resend when someone
  * emails info@coquitlamgavel.com. Fetches the full email body via the
- * Resend Receiving API, wraps it in branded HTML, and forwards it to
- * the club's Gmail account (coquitlamgavel@gmail.com) with the original
- * sender set as Reply-To for seamless correspondence.
+ * Resend Receiving API, and forwards it unchanged to the club's Gmail
+ * account (coquitlamgavel@gmail.com) under the original sender's name,
+ * with their address as Reply-To for seamless correspondence.
  *
  * Every delivery must carry a valid Svix signature made with
  * RESEND_WEBHOOK_SECRET (Resend dashboard → Webhooks → signing secret).
@@ -36,6 +36,12 @@ const LOOP_GUARD_ADDRESSES = [CLUB_INBOX, 'info@coquitlamgavel.com', FROM_ADDRES
 function extractAddress(from: string): string {
   const match = from.match(/<([^>]+)>/);
   return (match ? match[1] : from).trim().toLowerCase();
+}
+
+/** The display name of a "Display Name <addr@host>" header value ("" when there is none). */
+function displayNameOf(from: string): string {
+  const match = from.match(/^\s*"?([^"<]*?)"?\s*</);
+  return match ? match[1].trim() : '';
 }
 
 /**
@@ -171,26 +177,17 @@ export async function POST(req: Request) {
       console.error(`[Webhook] No body recoverable for email ${email_id} from ${senderAddress}.`);
     }
 
-    const formattedSubject = `FWD: ${subject || 'No Subject'}`;
-    const formattedHtml = `
-      <div style="background: #f4f4f4; padding: 15px; border-radius: 5px; margin-bottom: 20px; font-family: sans-serif;">
-        <p style="margin: 0; color: #666; font-size: 14px;"><strong>AgendaMaster Forwarding Service</strong></p>
-        <p style="margin: 5px 0 0 0; color: #333;">You received a new message via the contact address.</p>
-        <p style="margin: 5px 0 0 0; color: #333;"><strong>Original Sender:</strong> ${escapeHtml(from)}</p>
-        <p style="margin: 5px 0 0 0; color: #772432; font-size: 12px;"><em>(Replying to this email sends your response to ${escapeHtml(senderAddress)}. Your reply comes from the club Gmail account unless you have configured a "send as" alias.)</em></p>
-      </div>
-      <div style="padding: 10px; border-left: 4px solid #004165; background: #fff; color: #000;">
-        ${rawNotice}
-        ${html || (text ? `<pre style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(text)}</pre>` : '<em>No content provided or failed to retrieve body.</em>')}
-      </div>
-    `;
+    // Delivered as the original message, not wrapped in a forwarding notice:
+    // the inbox shows the sender's name and their subject, and Reply goes to
+    // them. Only the address it comes from is ours (it has to be: Resend only
+    // sends from verified domains, and receiving mail must pass DMARC).
+    const forwardedHtml = `${rawNotice}${html || (text ? `<pre style="white-space: pre-wrap; font-family: inherit;">${escapeHtml(text)}</pre>` : '<em>No content provided or failed to retrieve body.</em>')}`;
 
-    // Forward to the club's Gmail account, preserving the original sender as Reply-To.
     await sendEmail(
       CLUB_INBOX,
-      formattedSubject,
-      formattedHtml,
-      { replyTo: from }
+      subject || '(no subject)',
+      forwardedHtml,
+      { replyTo: from, fromName: displayNameOf(from) || senderAddress }
     );
 
     console.log(`✓ Successfully forwarded inbound email from ${from} (sent as ${FROM_EMAIL})`);

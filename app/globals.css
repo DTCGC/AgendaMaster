@@ -125,7 +125,8 @@
 /*
  * Rich-text email editor (components/agenda/tiptap-editor.tsx). Scoped rules
  * rather than a typography plugin: the editor only produces paragraphs,
- * bold/italic/strike and lists.
+ * bold/italic/strike, lists, links and link preview cards (which carry their
+ * own inline styles, as the email needs them).
  */
 /* No paragraph margins: Toastmasters separate paragraphs with a blank line
    (see the tutorial), so an empty paragraph is the spacing. */
@@ -135,6 +136,10 @@
 .agenda-editor li { margin: 0.25em 0; }
 .agenda-editor li > p { margin: 0; }
 .agenda-editor strong { font-weight: 700; }
+/* Shown as mail clients show a link; the sent HTML carries no styles for it. */
+.agenda-editor a { color: var(--color-brand-loyal-blue); text-decoration: underline; }
+.agenda-editor table[data-link-preview] a { text-decoration: none; }
+.agenda-editor table[data-link-preview].ProseMirror-selectednode { outline: 3px solid color-mix(in srgb, var(--color-brand-loyal-blue) 30%, transparent); }
 
 /* Legal pages (components/common/legal-page.tsx). */
 @layer components {

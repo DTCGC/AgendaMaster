@@ -6,15 +6,22 @@
  *
  * The `initialized` ref prevents content from being overwritten when the
  * component re-renders after localStorage hydration on the client.
+ *
+ * Opt-in extras (the broadcast panel uses them; the agenda wizard, whose
+ * toolbar the tutorial screenshots show, does not):
+ *   - `links`: a toolbar button to add or edit a link.
+ *   - `loadPreview`: an "Embed" button that inserts a link preview card.
  */
 'use client'
 
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { Bold, Italic, Strikethrough, List, ListOrdered, type LucideIcon } from 'lucide-react'
+import { Bold, Italic, Strikethrough, List, ListOrdered, Link2, Newspaper, type LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Spinner } from '@/components/common/surfaces'
 import { cn } from '@/lib/utils'
+import { LinkPreviewCard } from './link-preview-node'
+import { LinkDialog, EmbedDialog, type LoadPreview } from './editor-link-dialogs'
 
 /** Shown in an empty editor: a sample agenda email. */
 const SAMPLE_AGENDA_EMAIL = (
@@ -30,20 +37,30 @@ export default function TiptapEditor({
   content,
   onChange,
   placeholder = SAMPLE_AGENDA_EMAIL,
+  links = false,
+  loadPreview,
 }: {
   content: string,
   onChange: (html: string) => void,
   placeholder?: React.ReactNode,
+  links?: boolean,
+  loadPreview?: LoadPreview,
 }) {
   const initialized = useRef(false);
 
   // Re-render on every transaction so the toolbar's active states stay current.
   const [, setTick] = useState(0);
+  const [dialog, setDialog] = useState<'link' | 'embed' | null>(null);
 
   const editor = useEditor({
     // List and paragraph styling comes from `.agenda-editor` in globals.css,
     // so the HTML sent in the email carries no app class names.
-    extensions: [StarterKit],
+    // StarterKit's Link mark also links pasted and typed URLs; clicking one
+    // while writing should place the cursor, not leave the page.
+    extensions: [
+      StarterKit.configure({ link: { openOnClick: false, defaultProtocol: 'https' } }),
+      ...(loadPreview ? [LinkPreviewCard] : []),
+    ],
     content: content,
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
@@ -88,7 +105,7 @@ export default function TiptapEditor({
       data-shot="email-editor"
       className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-colors focus-within:border-brand-loyal-blue focus-within:ring-3 focus-within:ring-brand-loyal-blue/15"
     >
-      <div className="flex items-center gap-1 border-b border-gray-200 bg-gray-50 p-2" role="toolbar" aria-label="Formatting">
+      <div className="flex flex-wrap items-center gap-1 border-b border-gray-200 bg-gray-50 p-2" role="toolbar" aria-label="Formatting">
         {tools.map((tool, i) => (
           <span key={tool.label} className="contents">
             {i === 3 && <span aria-hidden className="mx-2 h-6 w-px bg-gray-300" />}
@@ -107,7 +124,36 @@ export default function TiptapEditor({
             </button>
           </span>
         ))}
+        {(links || loadPreview) && <span aria-hidden className="mx-2 h-6 w-px bg-gray-300" />}
+        {links && (
+          <button
+            type="button"
+            onClick={() => setDialog('link')}
+            aria-pressed={editor.isActive('link')}
+            title="Add or edit a link"
+            className={cn(
+              "flex items-center gap-1.5 rounded-lg p-2 text-xs font-semibold transition-colors hover:bg-gray-200",
+              editor.isActive('link') ? "bg-gray-200 text-brand-true-maroon" : "text-gray-600"
+            )}
+          >
+            <Link2 size={18} /> Link
+          </button>
+        )}
+        {loadPreview && (
+          <button
+            type="button"
+            onClick={() => setDialog('embed')}
+            title="Embed a link as a preview card"
+            className="flex items-center gap-1.5 rounded-lg p-2 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-200"
+          >
+            <Newspaper size={18} /> Embed
+          </button>
+        )}
       </div>
+      {links && <LinkDialog editor={editor} open={dialog === 'link'} onOpenChange={(open) => setDialog(open ? 'link' : null)} />}
+      {loadPreview && (
+        <EmbedDialog editor={editor} open={dialog === 'embed'} onOpenChange={(open) => setDialog(open ? 'embed' : null)} loadPreview={loadPreview} />
+      )}
       <div className="relative grow">
         {editor.isEmpty && (
           <div aria-hidden className="agenda-editor pointer-events-none absolute inset-0 p-6 text-sm leading-relaxed text-gray-400">

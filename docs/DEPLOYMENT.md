@@ -189,6 +189,47 @@ valid Svix signature, made with the endpoint's signing secret:
 While the variable is missing the endpoint answers `503` and forwards nothing (Resend retries
 failed deliveries for a while, so mail sent in the gap is not lost immediately).
 
+The forward arrives in the club's Gmail as the original message: the sender's name, their subject
+and their body, with Reply-To set to them. It is sent *from* `RESEND_FROM_EMAIL`'s address, because
+Resend only sends from the verified domain.
+
+---
+
+## 9. Upload Size (Broadcast Attachments)
+
+The Mass Broadcast page uploads attachments (up to 7 MB in total, `lib/email-limits.ts`) through a
+server action. nginx refuses any request body over **1 MB** by default, answering `413` before the
+app sees it, so the limit has to be raised once on the Droplet:
+
+```bash
+echo 'client_max_body_size 10m;' | sudo tee /etc/nginx/conf.d/upload-size.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+`conf.d/` is included in nginx's `http` block on Ubuntu, so this applies to every site without
+touching the Certbot-managed server block. Keep it at or above `serverActions.bodySizeLimit` in
+`next.config.ts` (8 MB). Without it, broadcasts still work but any upload over 1 MB fails, and the
+page says the upload was refused.
+
+---
+
+## 10. Resend Limits
+
+`lib/email.ts` keeps every send inside Resend's limits; nothing needs configuring, but these
+explain what the broadcast page reports:
+
+- **Rate limit**: 10 requests/second per team. Requests are spaced 250 ms apart per PM2 worker,
+  and a `429` is retried after the `retry-after` Resend names. Every request carries an
+  idempotency key, so a retry never delivers twice.
+- **Daily quota (free plan)**: 100 emails a day, reset at midnight UTC (5 PM Pacific in summer, 4 PM
+  in winter). **Every recipient counts**, and so does every email received at `info@`. The page shows
+  what a broadcast will use and refuses one that doesn't fit, rather than reaching half the club.
+  Usage comes from Resend's `x-resend-daily-quota` response header, stored in the `Settings` table.
+  On a paid plan (no daily quota), set `RESEND_DAILY_LIMIT=0` in `.env`; any other number
+  overrides the 100.
+- **Bounces**: Resend pauses accounts whose bounce rate passes 4%, so broadcasts drop malformed
+  addresses and send each address once, compared case-insensitively.
+
 ---
 
 ## Related Documentation

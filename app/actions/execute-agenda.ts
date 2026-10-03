@@ -30,7 +30,6 @@ import { getGoogleAccessToken } from '@/lib/google-user-token'
 import { buildSheetPayload } from '@/lib/agenda-sheet'
 import { meetingEditDenial } from '@/lib/meeting-access'
 import { revalidateMeetingViews } from '@/lib/revalidate'
-import { escapeHtml } from '@/lib/html'
 import { fail, type ActionResult } from '@/lib/action-result'
 
 export type PipelineResult = ActionResult<{
@@ -184,19 +183,15 @@ export async function executeAgendaPipeline(
     }
 
     if (mustSendEmail) {
-      // Sent through the club account: say who it is really from, and route
-      // replies to the Toastmaster instead of the club inbox.
-      let onBehalfNote = '';
+      // Sent through the club account: route replies to the Toastmaster
+      // instead of the club inbox.
       let replyTo: string | undefined;
       if (!accessToken && session.user.dbId) {
         const sender = await db.user.findUnique({
           where: { id: session.user.dbId },
-          select: { firstName: true, lastName: true, email: true }
+          select: { email: true }
         });
-        if (sender) {
-          replyTo = sender.email;
-          onBehalfNote = `<p style="font-size: 11px; color: #999;">Sent from the club's account on behalf of ${escapeHtml(`${sender.firstName} ${sender.lastName}`.trim())}, this meeting's Toastmaster. Replies go to them directly.</p>`;
-        }
+        if (sender) replyTo = sender.email;
       }
 
       // Build the email with the sheet link appended
@@ -208,11 +203,6 @@ export async function executeAgendaPipeline(
             <a href="${sheetUrl}" style="color: #004165; font-weight: bold;">${sheetUrl}</a>
           </p>
         </div>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-        <p style="font-size: 11px; color: #999;">
-          Sent via DTCGC AgendaMaster — Downtown Coquitlam Gavel Club
-        </p>
-        ${onBehalfNote}
       `;
 
       const subscribers = await db.subscriber.findMany({ select: { email: true } });

@@ -20,7 +20,7 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
 - **Guest Subscription**: Dedicated system for managing guest subscribers and converted members.
 - **Admin Dashboard**: Centralized control for account approvals, inline name editing, role overrides, and meeting scheduling.
 - **Admin Agenda Editing**: Admins can open any upcoming meeting's roster in the wizard's update mode and push changes to the existing agenda sheet. Since the admin login has no Google identity, those sheet updates authenticate as a **Google service account** (`GOOGLE_SERVICE_ACCOUNT_KEY`), which the app automatically grants Editor access on every newly created sheet. Sheets created before this feature must be shared with the service account manually once.
-- **Mass Communications (Resend API)**: Admin broadcasts and account-approval notifications are delivered via the Resend API (BCC) to bypass server SMTP blocks.
+- **Mass Communications (Resend API)**: Admin broadcasts and account-approval notifications are delivered via the Resend API (BCC) to bypass server SMTP blocks. Broadcasts can carry **attachments** (photos, PDFs, documents; 7 MB in total so no inbox bounces them), **links**, and **link preview cards**, the email-safe form of an embed: the page's picture, title and summary, fetched server-side behind an SSRF guard. Sends stay inside Resend's rate limit, retry safely with idempotency keys, and are refused up front when the free plan's daily quota (which counts every recipient) can't cover them. See [Resend Limits](./docs/DEPLOYMENT.md#10-resend-limits). Uploads over 1 MB need nginx's body limit raised once ([Upload Size](./docs/DEPLOYMENT.md#9-upload-size-broadcast-attachments)).
 
 ### 📖 Tutorial
 - **In-app Tutorial (`/tutorial`)**: A plain-language, illustrated guide linked from the top navigation, the landing page, the login page, the Toastmaster's dashboard card and the wizard's "How do I write the email?" link. The **Getting Started** part (what the app is, creating an account, the parents' guest mailing list) is public, so people can read it before they have an account. The **Toastmaster** and **Meeting Day** parts are rendered only for approved members (MEMBER/ADMIN), so they are never sent to anyone else.
@@ -67,7 +67,7 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
    GOOGLE_CLIENT_ID="your-client-id"
    GOOGLE_CLIENT_SECRET="your-client-secret"
    RESEND_API_KEY="re_your_api_key"          # optional in dev — omit to mock-log emails
-   RESEND_FROM_EMAIL="AgendaMaster <info@coquitlamgavel.com>"
+   RESEND_FROM_EMAIL="Downtown Coquitlam Gavel Club <info@coquitlamgavel.com>"
    RESEND_WEBHOOK_SECRET=""                  # signing secret of the inbound-email webhook (whsec_...)
    GOOGLE_SERVICE_ACCOUNT_KEY=""             # optional — service-account JSON (or base64), enables admin sheet edits
    SEED_ADMIN_PASSWORD="choose-a-dev-admin-password"
@@ -123,6 +123,8 @@ What is covered (all of it invisible-when-broken behaviour, which is why it is p
 | `tests/meeting-access.test.ts` | Only the meeting's own Toastmaster (or an admin) may save its roster or run its agenda pipeline, and only while the meeting is scheduled and still editable. Server actions are public endpoints, so this is the real security boundary. |
 | `tests/request-auth.test.ts` | The inbound-email webhook accepts only correctly signed, fresh Resend deliveries, and the cron endpoints only the exact `CRON_SECRET`. |
 | `tests/email-delivery.test.ts` | No member's address appears in the agenda email's visible `To:` header, and mass email is split into batches within Resend's recipient limit. |
+| `tests/resend-sending.test.ts` | Rate-limited and failed Resend requests are retried with the *same* idempotency key (so never sent twice), quota errors stop a broadcast instead of being retried, the daily quota is tracked from Resend's header, attachments go out base64 with types Resend refuses stopped first, and a sender name can't inject headers. |
+| `tests/link-preview.test.ts` | Link preview cards read Open Graph tags (even ~720 KB into a page), and the preview fetch never reaches loopback, private or cloud-metadata addresses, whether by IP or by hostname. |
 | `tests/meeting-schedule.test.ts` | The calendar offers only Fridays at 6:45 PM outside July and August, never in the past. |
 
 **Do not deploy test files.** The artifact list in `.github/workflows/deploy.yml` copies only

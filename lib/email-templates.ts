@@ -34,7 +34,7 @@ export function accountEmail(kind: AccountEmailKind, firstName: string): { subje
         <p>Hi ${escapeHtml(firstName)},</p>
         ${body}
         <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-        <p style="font-size: 12px; color: #666;">This is an automated message from DTCGC AgendaMaster.</p>
+        <p style="font-size: 12px; color: #666;">Downtown Coquitlam Gavel Club</p>
       </div>
     </div>
   `,

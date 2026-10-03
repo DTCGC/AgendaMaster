@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
   },
   // Enable version skew protection (forces hard refresh if visitor is on an old build)
   deploymentId: process.env.BUILD_ID || 'agendamaster-stable',
+  experimental: {
+    serverActions: {
+      // Broadcast attachments (7 MB max, lib/email-limits.ts) plus the message
+      // and multipart overhead. nginx's client_max_body_size on the Droplet
+      // must be at least this, or it answers 413 first (docs/DEPLOYMENT.md).
+      bodySizeLimit: '8mb',
+    },
+  },
 };
 
 export default nextConfig;

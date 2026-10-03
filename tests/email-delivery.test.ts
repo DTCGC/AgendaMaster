@@ -5,11 +5,14 @@
  * in the visible To header exposes their address to everyone; a mass email
  * past Resend's recipient limit fails outright. Neither shows in the UI.
  */
+// lib/email reaches lib/db (quota bookkeeping), so the scratch database must be set up first.
+import './helpers/env'
+
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { buildRawGmailMessage } from '@/lib/google-api'
-import { bccBatches } from '@/lib/email'
+import { bccBatches, bccQuotaCost } from '@/lib/email'
 
 describe('agenda email headers', () => {
   test('no recipient appears in the visible To header', () => {
@@ -37,5 +40,12 @@ describe('bccBatches', () => {
 
   test('a small list is one batch', () => {
     assert.equal(bccBatches(addresses(10)).length, 1)
+  })
+
+  test('quota cost counts every recipient plus each batch’s visible To', () => {
+    assert.equal(bccQuotaCost(10), 11)
+    assert.equal(bccQuotaCost(49), 50)
+    assert.equal(bccQuotaCost(50), 52)
+    assert.equal(bccQuotaCost(120), 120 + bccBatches(addresses(120)).length)
   })
 })
