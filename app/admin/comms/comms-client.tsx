@@ -4,7 +4,7 @@
  * Admin-facing rich email composition interface with target group selection.
  * Supports three delivery targets: Active Members, Guest Subscribers, or All.
  * The message can carry links, link preview cards and file attachments, and
- * the Recipients panel shows what the send costs against Resend's daily quota.
+ * the Recipients panel shows how many people the send reaches.
  * Includes a clipboard fallback for sending the message by hand.
  */
 'use client'
@@ -42,7 +42,7 @@ export default function CommsClient() {
     const [copied, setCopied] = useState(false)
     const fileInput = useRef<HTMLInputElement>(null)
 
-    // Recount whenever the group changes, and after each send (the quota moved).
+    // Recount whenever the group changes, and after each send.
     useEffect(() => {
         let cancelled = false
         getBroadcastAudience(targetGroup)
@@ -51,7 +51,7 @@ export default function CommsClient() {
         return () => { cancelled = true }
     }, [targetGroup, result])
 
-    const overQuota = !!audience && audience.remainingToday !== null && audience.quotaCost > audience.remainingToday
+    const tooMany = !!audience && audience.recipientCount > audience.maxRecipients
     const totalBytes = files.reduce((sum, f) => sum + f.size, 0)
 
     /** Adds files, refusing the whole addition if the result would break a limit. */
@@ -240,22 +240,17 @@ export default function CommsClient() {
                         <div className="space-y-2">
                             <p className="text-sm text-gray-700">
                                 <strong>{audience.recipientCount}</strong> recipient{audience.recipientCount === 1 ? '' : 's'}
-                                {audience.remainingToday !== null && (
-                                    <span className="text-gray-500"> · uses {audience.quotaCost} of the {audience.remainingToday} emails left today</span>
-                                )}
                             </p>
-                            {overQuota && (
+                            {tooMany && (
                                 <Notice tone="warning">
-                                    {audience.dailyLimit !== null && audience.quotaCost > audience.dailyLimit
-                                        ? `Resend's plan sends at most ${audience.dailyLimit} emails a day, and each recipient counts as one, so this group is too big to email in one day. Choose a smaller group.`
-                                        : `Not enough of today's allowance is left for this group. It resets at ${audience.resetsAt} (Pacific).`}
+                                    {`Gmail sends one email to at most ${audience.maxRecipients} people, so this group is too big. Choose a smaller group.`}
                                 </Notice>
                             )}
                         </div>
                     )}
 
                     <div className="space-y-3 border-t border-gray-200 pt-6">
-                        <Button onClick={handleDispatch} disabled={isDispatching || !subject.trim() || overQuota} className="w-full">
+                        <Button onClick={handleDispatch} disabled={isDispatching || !subject.trim() || tooMany} className="w-full">
                             {isDispatching ? <Spinner /> : <Send />}
                             {isDispatching ? 'Sending…' : 'Send Email'}
                         </Button>

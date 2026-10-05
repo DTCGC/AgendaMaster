@@ -33,10 +33,10 @@ export function LegalContact({ title, children }: { title: string; children: Rea
       <p className="text-lg font-bold text-brand-loyal-blue">{title}</p>
       <p className="mt-1 text-sm text-gray-600">{children}</p>
       <a
-        href="mailto:info@coquitlamgavel.com"
+        href="mailto:coquitlamgavel@gmail.com"
         className="mt-3 inline-flex items-center gap-2 font-bold text-brand-loyal-blue hover:underline"
       >
-        <Mail size={16} /> info@coquitlamgavel.com
+        <Mail size={16} /> coquitlamgavel@gmail.com
       </a>
     </div>
   )

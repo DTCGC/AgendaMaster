@@ -155,13 +155,18 @@ Notes:
 
 ---
 
-## Step 7: Connect the Club Google Account (Members Without Google)
+## Step 7: Connect the Club Google Account (Email and Members Without Google)
 
-A few members may register with an email and password instead of Google. They
-have no Google identity, so when one of them is Toastmaster the app creates the
-agenda sheet in — and sends the agenda email from — the club's own account,
-`coquitlamgavel@gmail.com`. (Later updates to that sheet go through the service
-account from Step 6, like admin edits.)
+The app sends every admin broadcast and account approval/rejection email from
+the club's own account, `coquitlamgavel@gmail.com`, through the Gmail API.
+
+A few members may also register with an email and password instead of Google.
+They have no Google identity, so when one of them is Toastmaster the app creates
+the agenda sheet in — and sends the agenda email from — the club's account too.
+(Later updates to that sheet go through the service account from Step 6, like
+admin edits.)
+
+Until this connection is made, broadcasts and account emails can't be sent.
 
 1. Sign in to the portal with the admin email + password
 2. Open **Member Management** and find the **Club Google Account** card

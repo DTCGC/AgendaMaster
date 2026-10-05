@@ -82,7 +82,7 @@ export default function PrivacyPolicy() {
             </li>
             <li>
               <strong>Deletion:</strong> You may request the deletion of your account and all associated personal data at any time by contacting us at 
-              <strong> info@coquitlamgavel.com</strong>. Once requested, your data will be permanently removed from our production database within 30 days.
+              <strong> coquitlamgavel@gmail.com</strong>. Once requested, your data will be permanently removed from our production database within 30 days.
             </li>
           </ul>
         </section>
@@ -99,7 +99,7 @@ export default function PrivacyPolicy() {
             </li>
             <li>
               <strong>Access and Correction:</strong> You may ask to see, or to correct, the personal information we hold about you by contacting us at
-              <strong> info@coquitlamgavel.com</strong>.
+              <strong> coquitlamgavel@gmail.com</strong>.
             </li>
           </ul>
         </section>

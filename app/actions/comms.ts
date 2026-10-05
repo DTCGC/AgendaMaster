@@ -3,14 +3,13 @@
  *
  * Handles mass email dispatch from the admin Broadcast panel.
  * Segments recipients into MEMBERS (active users), SUBSCRIBERS (guest waitlist),
- * or ALL (both). Uses BCC delivery via lib/email.ts, with optional file
- * attachments, and checks Resend's daily quota before anything goes out.
+ * or ALL (both). Sent as one BCC email from the club's Gmail via
+ * lib/email.ts, with optional file attachments.
  */
 'use server'
 
 import { db } from '@/lib/db'
-import { sendBccEmail, bccQuotaCost, type EmailAttachment } from '@/lib/email'
-import { dailyLimit, remainingToday, quotaResetsAt } from '@/lib/email-quota'
+import { sendBccEmail, emailFailureReason, MAX_RECIPIENTS_PER_EMAIL, type EmailAttachment } from '@/lib/email'
 import { checkAttachments, cleanAttachmentName } from '@/lib/email-limits'
 import { fetchLinkPreview, isPreviewError, type LinkPreview } from '@/lib/link-preview'
 import { normalizeWebUrl } from '@/lib/web-url'
@@ -29,8 +28,8 @@ function isTarget(value: unknown): value is BroadcastTarget {
 /**
  * Everyone in the target group, once each. Addresses are compared lowercased
  * (a member who is also a subscriber under different capitalisation would
- * otherwise get two copies), and malformed ones are dropped: a hard bounce
- * counts against Resend's 4% bounce-rate limit, past which it pauses sending.
+ * otherwise get two copies), and malformed ones are dropped: Gmail refuses
+ * the whole email if any address in it is malformed.
  */
 async function collectRecipients(targetGroup: BroadcastTarget) {
     let emailList: string[] = []
@@ -55,22 +54,13 @@ async function collectRecipients(targetGroup: BroadcastTarget) {
     return { recipients: valid, skipped: normalized.length - valid.length }
 }
 
-/** "5:00 PM": when Resend's quota day (midnight UTC) ends, in club time. */
-function resetTime(): string {
-    return quotaResetsAt().toLocaleTimeString('en-CA', { timeZone: 'America/Vancouver', hour: 'numeric', minute: '2-digit' })
-}
-
 export type BroadcastAudience = {
     recipientCount: number
-    /** Daily-quota units this broadcast would use (recipients plus one per batch). */
-    quotaCost: number
-    /** Units left today, or null when the plan has no daily limit. */
-    remainingToday: number | null
-    dailyLimit: number | null
-    resetsAt: string
+    /** The most one email can go to; a bigger group can't be sent. */
+    maxRecipients: number
 }
 
-/** How many people a broadcast to `targetGroup` reaches, and whether today's quota covers it. */
+/** How many people a broadcast to `targetGroup` reaches. */
 export async function getBroadcastAudience(targetGroup: BroadcastTarget): Promise<ActionResult<{ audience: BroadcastAudience }>> {
     const denied = await checkAdmin()
     if (denied) return denied
@@ -81,10 +71,7 @@ export async function getBroadcastAudience(targetGroup: BroadcastTarget): Promis
         success: true,
         audience: {
             recipientCount: recipients.length,
-            quotaCost: bccQuotaCost(recipients.length),
-            remainingToday: await remainingToday(),
-            dailyLimit: dailyLimit(),
-            resetsAt: resetTime(),
+            maxRecipients: MAX_RECIPIENTS_PER_EMAIL,
         },
     }
 }
@@ -122,15 +109,8 @@ export async function dispatchMassComms(
         return fail('Nobody is in the selected group yet.');
     }
 
-    // Refuse up front rather than reach half the club and stop.
-    const cost = bccQuotaCost(recipients.length);
-    const limit = dailyLimit();
-    if (limit !== null && cost > limit) {
-        return fail(`This group has ${recipients.length} recipients, and Resend's plan allows only ${limit} emails a day (each recipient counts as one). Send to a smaller group, or upgrade the Resend plan and set RESEND_DAILY_LIMIT on the server.`);
-    }
-    const remaining = await remainingToday();
-    if (remaining !== null && cost > remaining) {
-        return fail(`Not enough of today's email allowance is left: this needs ${cost} and about ${remaining} remain. The allowance resets at ${resetTime()} (Pacific). Nothing was sent.`);
+    if (recipients.length > MAX_RECIPIENTS_PER_EMAIL) {
+        return fail(`This group has ${recipients.length} recipients, and Gmail sends one email to at most ${MAX_RECIPIENTS_PER_EMAIL}. Send to a smaller group.`);
     }
 
     const attachments: EmailAttachment[] = await Promise.all(files.map(async (file) => ({
@@ -139,24 +119,15 @@ export async function dispatchMassComms(
         ...(file.type ? { contentType: file.type } : {}),
     })));
 
-    const result = await sendBccEmail(recipients, subject, htmlBody, { attachments });
-
-    if (result.failed > 0) {
-        if (result.quotaExhausted) {
-            return fail(
-                result.succeeded > 0
-                    ? `Resend's email allowance ran out partway: ${result.succeeded} recipients got the email and ${result.failed} did not. It resets at ${resetTime()} (Pacific). Check the Resend dashboard for who was reached before sending again.`
-                    : `Resend's email allowance is used up, so nothing was sent. It resets at ${resetTime()} (Pacific).`
-            );
-        }
-        return fail(
-            result.succeeded > 0
-                ? `Sent to ${result.succeeded} recipients, but ${result.failed} could not be reached. Check the Resend dashboard before resending.`
-                : 'The email could not be sent. Check the Resend API key and sending limits on the live server.'
-        );
+    let recipientCount: number;
+    try {
+        recipientCount = await sendBccEmail(recipients, subject, htmlBody, { attachments });
+    } catch (error) {
+        console.error('Broadcast failed:', error);
+        return fail(emailFailureReason(error));
     }
 
-    return { success: true, recipientCount: result.succeeded, skipped };
+    return { success: true, recipientCount, skipped };
 }
 
 /** Reads a page's title, image and description for a link card in the email. */

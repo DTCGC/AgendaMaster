@@ -175,23 +175,27 @@ The response lists each meeting's result; a `500` means at least one sheet faile
 
 ---
 
-## 8. Inbound Email Webhook
+## 8. Email
 
-Mail sent to `info@coquitlamgavel.com` arrives through a Resend inbound webhook
-(`POST /api/webhooks/email`) and is forwarded to the club's Gmail. Every delivery must carry a
-valid Svix signature, made with the endpoint's signing secret:
+All email goes out through the **Gmail API**; there is no mail service, SMTP server or email DNS to
+configure, and the app receives no email (the club reads `coquitlamgavel@gmail.com` directly).
 
-1. In the Resend dashboard open **Webhooks**, select the endpoint, and copy its **Signing secret**
-   (it starts with `whsec_`).
-2. Add it to `/var/www/agendamaster/.env` on the Droplet as `RESEND_WEBHOOK_SECRET`, then
-   `pm2 reload ecosystem.config.js --update-env`.
+- **Agenda emails** come from the Toastmaster's own Gmail, or from the club's for a member without
+  Google.
+- **Broadcasts and account approval/rejection emails** come from the club's Gmail, as
+  `"Downtown Coquitlam Gavel Club" <coquitlamgavel@gmail.com>`. A broadcast is one email with every
+  recipient in BCC, and a copy lands in the club Gmail's Sent folder.
 
-While the variable is missing the endpoint answers `503` and forwards nothing (Resend retries
-failed deliveries for a while, so mail sent in the gap is not lost immediately).
+Both club-account paths use the connection made once on the Member Management page
+([Google Cloud Setup, Step 7](./GOOGLE_CLOUD_SETUP.md)). If it is revoked, sends fail with a message
+asking an executive to reconnect it; an approval still goes through, and its email can be retried.
 
-The forward arrives in the club's Gmail as the original message: the sender's name, their subject
-and their body, with Reply-To set to them. It is sent *from* `RESEND_FROM_EMAIL`'s address, because
-Resend only sends from the verified domain.
+**Gmail's limits** for a personal account: 500 recipients per email and 500 emails a day
+([Google's page](https://support.google.com/mail/answer/22839)). A broadcast to more than 500 people
+is refused before sending. Going over the daily limit locks sending for up to 24 hours.
+
+Outside production (`NODE_ENV` other than `production`), broadcasts and account emails are only
+logged to the console and `logs/mock-emails.md`.
 
 ---
 
@@ -210,25 +214,6 @@ sudo nginx -t && sudo systemctl reload nginx
 touching the Certbot-managed server block. Keep it at or above `serverActions.bodySizeLimit` in
 `next.config.ts` (8 MB). Without it, broadcasts still work but any upload over 1 MB fails, and the
 page says the upload was refused.
-
----
-
-## 10. Resend Limits
-
-`lib/email.ts` keeps every send inside Resend's limits; nothing needs configuring, but these
-explain what the broadcast page reports:
-
-- **Rate limit**: 10 requests/second per team. Requests are spaced 250 ms apart per PM2 worker,
-  and a `429` is retried after the `retry-after` Resend names. Every request carries an
-  idempotency key, so a retry never delivers twice.
-- **Daily quota (free plan)**: 100 emails a day, reset at midnight UTC (5 PM Pacific in summer, 4 PM
-  in winter). **Every recipient counts**, and so does every email received at `info@`. The page shows
-  what a broadcast will use and refuses one that doesn't fit, rather than reaching half the club.
-  Usage comes from Resend's `x-resend-daily-quota` response header, stored in the `Settings` table.
-  On a paid plan (no daily quota), set `RESEND_DAILY_LIMIT=0` in `.env`; any other number
-  overrides the 100.
-- **Bounces**: Resend pauses accounts whose bounce rate passes 4%, so broadcasts drop malformed
-  addresses and send each address once, compared case-insensitively.
 
 ---
 

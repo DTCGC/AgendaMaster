@@ -6,8 +6,8 @@
  * Client-safe: no Node or database imports.
  *
  * Why these numbers:
- *   - Resend refuses an email over 40 MB *after* base64 encoding, which
- *     inflates attachments by about 37%.
+ *   - Gmail refuses to send an email over 25 MB, and attachments grow by
+ *     about 37% when base64-encoded into the message.
  *   - The tighter limit is the recipient's mail server. Gmail, Outlook.com and
  *     Yahoo accept 20–25 MB, but older Exchange servers (schools, workplaces)
  *     still default to 10 MB, and anything bigger bounces. 7 MB of files is
@@ -24,18 +24,16 @@ export const MAX_ATTACHMENT_TOTAL_BYTES = 7 * 1024 * 1024
 export const MAX_ATTACHMENTS = 10
 
 /**
- * Extensions Resend will not send, so they must be stopped here rather than
- * failing the whole broadcast. Mirrors
- * https://resend.com/docs/knowledge-base/what-attachment-types-are-not-supported
+ * Extensions Gmail will not send, so they must be stopped here rather than
+ * failing the whole broadcast. Mirrors https://support.google.com/mail/answer/6590
+ * (Gmail also refuses archives that contain these, which only it can see.)
  */
 const BLOCKED_EXTENSIONS = new Set([
-  'adp', 'app', 'asp', 'bas', 'bat', 'cer', 'chm', 'cmd', 'com', 'cpl', 'crt', 'csh', 'der', 'exe',
-  'fxp', 'gadget', 'hlp', 'hta', 'inf', 'ins', 'isp', 'its', 'js', 'jse', 'ksh', 'lib', 'lnk', 'mad',
-  'maf', 'mag', 'mam', 'maq', 'mar', 'mas', 'mat', 'mau', 'mav', 'maw', 'mda', 'mdb', 'mde', 'mdt',
-  'mdw', 'mdz', 'msc', 'msh', 'msh1', 'msh2', 'mshxml', 'msh1xml', 'msh2xml', 'msi', 'msp', 'mst',
-  'ops', 'pcd', 'pif', 'plg', 'prf', 'prg', 'reg', 'scf', 'scr', 'sct', 'shb', 'shs', 'sys', 'ps1',
-  'ps1xml', 'ps2', 'ps2xml', 'psc1', 'psc2', 'tmp', 'url', 'vb', 'vbe', 'vbs', 'vps', 'vsmacros',
-  'vss', 'vst', 'vsw', 'vxd', 'ws', 'wsc', 'wsf', 'wsh', 'xnk',
+  'ade', 'adp', 'apk', 'appx', 'appxbundle', 'bat', 'cab', 'chm', 'cmd', 'com', 'cpl', 'diagcab',
+  'diagcfg', 'diagpkg', 'dll', 'dmg', 'ex', 'ex_', 'exe', 'hta', 'img', 'ins', 'iso', 'isp', 'jar',
+  'jnlp', 'js', 'jse', 'lib', 'lnk', 'mde', 'mjs', 'msc', 'msi', 'msix', 'msixbundle', 'msp', 'mst',
+  'nsh', 'pif', 'ps1', 'scr', 'sct', 'shb', 'sys', 'vb', 'vbe', 'vbs', 'vhd', 'vxd', 'wsc', 'wsf',
+  'wsh', 'xll',
 ])
 
 function extensionOf(filename: string): string {

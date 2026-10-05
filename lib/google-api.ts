@@ -10,8 +10,9 @@
  *   - createAgendaSheet()  — Creates a new Google Sheet and makes it shareable
  *   - updateAgendaSheet()  — Updates an existing sheet with new role assignments
  *   - sendGmailAsUser()    — Sends email via Gmail API as the authenticated user
- *                            (a Toastmaster, or the club account on a member's behalf)
+ *                            (a Toastmaster, or the club account)
  */
+import { randomUUID } from 'crypto';
 import { google, sheets_v4 } from 'googleapis';
 import { formatMeetingMonthDay } from './meeting-time';
 
@@ -452,63 +453,130 @@ function sanitizeHeaderValue(value: string): string {
   return value.replace(/[\r\n]+/g, ' ').trim();
 }
 
+export type GmailAttachment = { filename: string; content: Buffer; contentType?: string };
+
+export type GmailMessageOptions = {
+  /** Set when the club account sends on a member's behalf, so replies reach them instead of the club inbox. */
+  replyTo?: string;
+  /** Full From header, e.g. `"Club Name" <club@gmail.com>`. Omitted, Gmail uses the account's own. */
+  from?: string;
+  /** false puts the recipients in To instead of Bcc: only for an email to one person. */
+  bcc?: boolean;
+  attachments?: GmailAttachment[];
+};
+
+/** Base64 in 76-character lines, as MIME requires. */
+function base64Lines(data: Buffer | string): string {
+  return (Buffer.from(data).toString('base64').match(/.{1,76}/g) ?? []).join('\r\n');
+}
+
+/** An attachment's declared type, if it looks like one; anything else goes out as plain bytes. */
+function safeContentType(type: string | undefined): string {
+  return type && /^[\w.+-]+\/[\w.+-]+$/.test(type) ? type : 'application/octet-stream';
+}
+
 /**
- * Builds the RFC 2822 message the Gmail API expects (before base64url encoding).
- * Every recipient goes in Bcc to protect member email privacy; the visible To
- * is the empty "undisclosed-recipients" group, so no member's address shows.
+ * Content-Disposition for a file. A printable-ASCII name is quoted as-is; any
+ * other name uses the RFC 2231 encoded form, which Gmail and Outlook both read.
+ */
+function attachmentDisposition(filename: string): string {
+  const name = sanitizeHeaderValue(filename).replace(/["\\]/g, '');
+  if (/^[\x20-\x7e]*$/.test(name)) return `attachment; filename="${name}"`;
+  const encoded = encodeURIComponent(name).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename*=UTF-8''${encoded}`;
+}
+
+/**
+ * Builds the RFC 2822 message the Gmail API expects. Every recipient goes in
+ * Bcc to protect member email privacy; the visible To is the empty
+ * "undisclosed-recipients" group, so no member's address shows.
+ *
+ * Every part is base64, so a long single-line HTML body never breaks the
+ * 998-character line limit, and the multipart boundary (which uses characters
+ * outside the base64 alphabet) can never occur inside a part.
  */
 export function buildRawGmailMessage(
   recipients: string[],
   subject: string,
   htmlBody: string,
-  options?: { replyTo?: string }
+  options?: GmailMessageOptions
 ): string {
   const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
+  const list = sanitizeHeaderValue(recipients.join(', '));
   const headers = [
-    `Content-Type: text/html; charset="UTF-8"`,
     `MIME-Version: 1.0`,
-    `To: undisclosed-recipients:;`,
-    `Bcc: ${sanitizeHeaderValue(recipients.join(', '))}`,
+    ...(options?.from ? [`From: ${sanitizeHeaderValue(options.from)}`] : []),
+    ...(options?.bcc === false ? [`To: ${list}`] : [`To: undisclosed-recipients:;`, `Bcc: ${list}`]),
     `Subject: ${utf8Subject}`,
   ];
-  // Set when the club account sends on a member's behalf, so replies reach
-  // the Toastmaster instead of the club inbox.
   if (options?.replyTo) {
     headers.push(`Reply-To: ${sanitizeHeaderValue(options.replyTo)}`);
   }
-  return [...headers, '', htmlBody].join('\r\n');
+
+  const htmlPart = [
+    `Content-Type: text/html; charset="UTF-8"`,
+    `Content-Transfer-Encoding: base64`,
+    '',
+    base64Lines(htmlBody),
+  ].join('\r\n');
+
+  const attachments = options?.attachments ?? [];
+  if (attachments.length === 0) {
+    return [...headers, htmlPart].join('\r\n');
+  }
+
+  const boundary = `=_AgendaMaster_${randomUUID()}`;
+  const parts = [
+    htmlPart,
+    ...attachments.map((a) => [
+      `Content-Type: ${safeContentType(a.contentType)}`,
+      `Content-Disposition: ${attachmentDisposition(a.filename)}`,
+      `Content-Transfer-Encoding: base64`,
+      '',
+      base64Lines(a.content),
+    ].join('\r\n')),
+  ];
+  return [
+    ...headers,
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+    '',
+    ...parts.map((part) => `--${boundary}\r\n${part}`),
+    `--${boundary}--`,
+    '',
+  ].join('\r\n');
 }
 
 /**
  * Sends an email via the Gmail API from the authenticated user's account —
- * the Toastmaster's own, or the club's on behalf of a member without Google.
+ * the Toastmaster's own, or the club's (broadcasts, account emails, and
+ * agendas for members without Google).
+ *
+ * The message goes to the upload endpoint as message/rfc822, which accepts up
+ * to 35 MB; the JSON `raw` field has a much smaller request limit, too small
+ * for broadcast attachments.
+ *
+ * @returns The sent message's Gmail ID.
  */
 export async function sendGmailAsUser(
   accessToken: string,
   recipients: string[],
   subject: string,
   htmlBody: string,
-  options?: { replyTo?: string }
-) {
+  options?: GmailMessageOptions
+): Promise<string | null | undefined> {
   console.log(`[GoogleAPI] Sending Gmail to ${recipients.length} recipients...`);
 
-  // Gmail API requires RFC 2822 formatted messages, base64url-encoded.
   const message = buildRawGmailMessage(recipients, subject, htmlBody, options);
-
-  const encodedMessage = Buffer.from(message)
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
 
   const auth = getGoogleAuth(accessToken);
   const gmail = google.gmail({ version: 'v1', auth });
 
   const res = await gmail.users.messages.send({
     userId: 'me',
-    requestBody: { raw: encodedMessage }
+    media: { mimeType: 'message/rfc822', body: message },
   });
 
   console.log(`✓ Gmail dispatched successfully (ID: ${res.data.id})`);
+  return res.data.id;
 }
 

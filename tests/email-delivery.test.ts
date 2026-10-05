@@ -1,51 +1,112 @@
 /**
- * Email delivery shape: who can see whom.
+ * Email message shape: who can see whom, and what survives the trip.
  *
- * The agenda email goes to every member and subscriber at once. A recipient
- * in the visible To header exposes their address to everyone; a mass email
- * past Resend's recipient limit fails outright. Neither shows in the UI.
+ * Agenda emails and broadcasts go to every member and subscriber at once. A
+ * recipient in the visible To header exposes their address to everyone; a
+ * malformed MIME part arrives as a broken attachment or a blank email.
+ * Neither shows in the UI.
  */
-// lib/email reaches lib/db (quota bookkeeping), so the scratch database must be set up first.
-import './helpers/env'
-
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 
 import { buildRawGmailMessage } from '@/lib/google-api'
-import { bccBatches, bccQuotaCost } from '@/lib/email'
 
-describe('agenda email headers', () => {
+const headersOf = (raw: string) => raw.split('\r\n\r\n')[0].split('\r\n')
+
+describe('recipient privacy', () => {
   test('no recipient appears in the visible To header', () => {
-    const raw = buildRawGmailMessage(['first@example.com', 'second@example.com'], 'Subject', '<p>Body</p>')
-    const headers = raw.split('\r\n\r\n')[0].split('\r\n')
+    const headers = headersOf(buildRawGmailMessage(['first@example.com', 'second@example.com'], 'Subject', '<p>Body</p>'))
     const to = headers.find((h) => h.startsWith('To:'))
     assert.ok(to, 'a To header is still required')
     assert.ok(!to.includes('@'), `To header exposes an address: ${to}`)
     assert.ok(headers.some((h) => h.startsWith('Bcc:') && h.includes('first@example.com')))
   })
+
+  test('an email to one person can name them in To instead', () => {
+    const headers = headersOf(buildRawGmailMessage(['jane@example.com'], 'Welcome', '<p>Hi</p>', { bcc: false }))
+    assert.ok(headers.includes('To: jane@example.com'))
+    assert.ok(!headers.some((h) => h.startsWith('Bcc:')))
+  })
 })
 
-describe('bccBatches', () => {
-  const addresses = (n: number) => Array.from({ length: n }, (_, i) => `m${i}@example.com`)
-
-  test('keeps every batch within Resend’s 50-recipient limit, counting the nominal To', () => {
-    const batches = bccBatches(addresses(120))
-    assert.ok(batches.every((b) => b.length + 1 <= 50))
+describe('headers', () => {
+  test('From, Reply-To and recipients cannot inject extra headers', () => {
+    const raw = buildRawGmailMessage(['a@example.com\r\nBcc: all@example.com'], 'Hi', '<p>Hi</p>', {
+      from: '"Club" <club@example.com>\r\nX-Evil: 1',
+      replyTo: 'jane@example.com\nBcc: all@example.com',
+    })
+    const headers = headersOf(raw)
+    assert.equal(headers.filter((h) => h.startsWith('Bcc:')).length, 1)
+    assert.ok(!headers.some((h) => h.startsWith('X-Evil')))
   })
 
-  test('sends to everyone exactly once', () => {
-    const list = addresses(120)
-    assert.deepEqual(bccBatches(list).flat(), list)
+  test('the subject survives non-ASCII characters', () => {
+    const headers = headersOf(buildRawGmailMessage(['a@example.com'], 'Réunion — 10月', '<p>Hi</p>'))
+    const encoded = headers.find((h) => h.startsWith('Subject: '))!.match(/=\?utf-8\?B\?(.+)\?=/)![1]
+    assert.equal(Buffer.from(encoded, 'base64').toString(), 'Réunion — 10月')
+  })
+})
+
+describe('body and attachments', () => {
+  const pdf = Buffer.from('%PDF-1.4 test file')
+
+  function attachmentMessage(filename = 'flyer.pdf') {
+    return buildRawGmailMessage(['a@example.com'], 'Flyer', '<p>See attached</p>', {
+      attachments: [{ filename, content: pdf, contentType: 'application/pdf' }],
+    })
+  }
+
+  /** The parts of a multipart message, split on its declared boundary. */
+  function partsOf(raw: string) {
+    const boundary = raw.match(/boundary="([^"]+)"/)![1]
+    const sections = raw.split(`--${boundary}`)
+    assert.equal(sections.at(-1)!.trim(), '--', 'the message ends with the closing boundary')
+    return { boundary, parts: sections.slice(1, -1) }
+  }
+
+  const decode = (part: string) => Buffer.from(part.split('\r\n\r\n')[1].replace(/\r\n/g, ''), 'base64')
+
+  test('without attachments the body is a single base64 HTML part', () => {
+    const html = `<p>${'x'.repeat(5000)}</p>`
+    const raw = buildRawGmailMessage(['a@example.com'], 'Hi', html)
+    assert.ok(!raw.includes('multipart'))
+    assert.ok(raw.split('\r\n').every((line) => line.length <= 998), 'no line over the SMTP limit')
+    assert.equal(decode(raw).toString(), html)
   })
 
-  test('a small list is one batch', () => {
-    assert.equal(bccBatches(addresses(10)).length, 1)
+  test('attachments arrive as their own base64 parts, byte for byte', () => {
+    const raw = attachmentMessage()
+    const { parts } = partsOf(raw)
+    assert.equal(parts.length, 2)
+    assert.equal(decode(parts[0]).toString(), '<p>See attached</p>')
+    assert.match(parts[1], /Content-Type: application\/pdf/)
+    assert.match(parts[1], /Content-Disposition: attachment; filename="flyer.pdf"/)
+    assert.deepEqual(decode(parts[1]), pdf)
   })
 
-  test('quota cost counts every recipient plus each batch’s visible To', () => {
-    assert.equal(bccQuotaCost(10), 11)
-    assert.equal(bccQuotaCost(49), 50)
-    assert.equal(bccQuotaCost(50), 52)
-    assert.equal(bccQuotaCost(120), 120 + bccBatches(addresses(120)).length)
+  test('the boundary never appears inside a part', () => {
+    const big = Buffer.alloc(200_000, 0xff)
+    const raw = buildRawGmailMessage(['a@example.com'], 'Hi', '<p>--=_AgendaMaster_</p>', {
+      attachments: [{ filename: 'noise.bin', content: big }],
+    })
+    const { parts } = partsOf(raw)
+    assert.equal(parts.length, 2, 'only the real boundaries split the message')
+    assert.equal(decode(parts[0]).toString(), '<p>--=_AgendaMaster_</p>')
+    assert.deepEqual(decode(parts[1]), big)
+  })
+
+  test('a filename cannot inject headers, and non-ASCII names are encoded', () => {
+    const injected = partsOf(attachmentMessage('a"\r\nX-Evil: 1.pdf')).parts[1]
+    assert.ok(!injected.split('\r\n').some((line) => line.startsWith('X-Evil')))
+
+    const accented = partsOf(attachmentMessage('réunion.pdf')).parts[1]
+    assert.match(accented, /filename\*=UTF-8''r%C3%A9union\.pdf/)
+  })
+
+  test('an implausible content type falls back to plain bytes', () => {
+    const raw = buildRawGmailMessage(['a@example.com'], 'Hi', '<p>Hi</p>', {
+      attachments: [{ filename: 'x.pdf', content: pdf, contentType: 'text/html\r\nX-Evil: 1' }],
+    })
+    assert.match(partsOf(raw).parts[1], /Content-Type: application\/octet-stream/)
   })
 })

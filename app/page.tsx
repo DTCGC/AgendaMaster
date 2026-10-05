@@ -78,7 +78,7 @@ export default async function LandingPage() {
             <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-xs font-bold uppercase tracking-widest text-gray-500">
               <Link href="/privacy" className="transition-colors hover:text-brand-loyal-blue">Privacy Policy</Link>
               <Link href="/tos" className="transition-colors hover:text-brand-loyal-blue">Terms of Service</Link>
-              <a href="mailto:info@coquitlamgavel.com" className="transition-colors hover:text-brand-loyal-blue">Contact Support</a>
+              <a href="mailto:coquitlamgavel@gmail.com" className="transition-colors hover:text-brand-loyal-blue">Contact Support</a>
             </div>
           </div>
         </section>

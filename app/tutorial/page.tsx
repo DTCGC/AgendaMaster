@@ -314,7 +314,7 @@ export default async function TutorialPage() {
             <Section id="help" title="Need Help?">
               <p className="text-gray-700 leading-relaxed">
                 If something doesn&apos;t work, or you&apos;re not sure what to do, talk to any executive at a meeting,
-                or email <a href="mailto:info@coquitlamgavel.com" className="text-brand-loyal-blue font-semibold underline">info@coquitlamgavel.com</a>.
+                or email <a href="mailto:coquitlamgavel@gmail.com" className="text-brand-loyal-blue font-semibold underline">coquitlamgavel@gmail.com</a>.
               </p>
             </Section>
           </Part>

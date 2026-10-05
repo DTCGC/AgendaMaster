@@ -13,7 +13,7 @@ const LINKS = [
   { href: "/tutorial", label: "Tutorial" },
   { href: "/privacy", label: "Privacy Policy" },
   { href: "/tos", label: "Terms of Service" },
-  { href: "mailto:info@coquitlamgavel.com", label: "Contact" },
+  { href: "mailto:coquitlamgavel@gmail.com", label: "Contact" },
 ];
 
 export function SiteFooter() {

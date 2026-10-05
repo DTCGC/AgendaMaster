@@ -12,7 +12,7 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { sendEmail } from '@/lib/email'
+import { sendEmail, emailFailureReason } from '@/lib/email'
 import { accountEmail, type AccountEmailKind } from '@/lib/email-templates'
 import { revalidatePath } from 'next/cache'
 import { requireAdmin, checkAdmin } from '@/lib/auth-guard'
@@ -121,7 +121,7 @@ export async function retryAccountEmail(userId: string, type: AccountEmailKind):
     await sendEmail(user.email, subject, html);
   } catch (error) {
     console.error("Retry failed:", error);
-    return fail('The email still could not be sent. Check the Resend dashboard for the reason.');
+    return fail(emailFailureReason(error));
   }
 
   if (type === 'rejection') {
