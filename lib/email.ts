@@ -100,7 +100,8 @@ export async function sendBccEmail(recipients: string[], subject: string, html: 
     return unique.length;
   }
 
-  const id = await sendGmailAsUser(await getClubAccessToken(), unique, subject, html, { ...options, from: FROM_EMAIL });
+  // The club inbox is the visible To, so it keeps a copy of every broadcast.
+  const id = await sendGmailAsUser(await getClubAccessToken(), unique, subject, html, { ...options, from: FROM_EMAIL, visibleTo: CLUB_GOOGLE_EMAIL });
   console.log(`✓ BCC email to ${unique.length} recipients dispatched via Gmail (ID: ${id})`);
   return unique.length;
 }

@@ -462,6 +462,11 @@ export type GmailMessageOptions = {
   from?: string;
   /** false puts the recipients in To instead of Bcc: only for an email to one person. */
   bcc?: boolean;
+  /**
+   * The visible To of a Bcc email: the sender's own address, so no member's
+   * address shows and the sender keeps a copy. Required unless `bcc` is false.
+   */
+  visibleTo?: string;
   attachments?: GmailAttachment[];
 };
 
@@ -488,8 +493,12 @@ function attachmentDisposition(filename: string): string {
 
 /**
  * Builds the RFC 2822 message the Gmail API expects. Every recipient goes in
- * Bcc to protect member email privacy; the visible To is the empty
- * "undisclosed-recipients" group, so no member's address shows.
+ * Bcc to protect member email privacy; the visible To is the sender's own
+ * address (`visibleTo`), so no member's address shows.
+ *
+ * NOT the empty "undisclosed-recipients:;" group: valid RFC 5322, but the
+ * first agenda email sent with it (Oct 2026) failed with an "invalid header"
+ * error, where every earlier one, with a real address in To, had gone out.
  *
  * Every part is base64, so a long single-line HTML body never breaks the
  * 998-character line limit, and the multipart boundary (which uses characters
@@ -503,10 +512,14 @@ export function buildRawGmailMessage(
 ): string {
   const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
   const list = sanitizeHeaderValue(recipients.join(', '));
+  const visibleTo = sanitizeHeaderValue(options?.visibleTo ?? '');
+  if (options?.bcc !== false && !visibleTo) {
+    throw new Error('A Bcc email needs a visible To address (visibleTo).');
+  }
   const headers = [
     `MIME-Version: 1.0`,
     ...(options?.from ? [`From: ${sanitizeHeaderValue(options.from)}`] : []),
-    ...(options?.bcc === false ? [`To: ${list}`] : [`To: undisclosed-recipients:;`, `Bcc: ${list}`]),
+    ...(options?.bcc === false ? [`To: ${list}`] : [`To: ${visibleTo}`, `Bcc: ${list}`]),
     `Subject: ${utf8Subject}`,
   ];
   if (options?.replyTo) {
@@ -551,9 +564,10 @@ export function buildRawGmailMessage(
  * the Toastmaster's own, or the club's (broadcasts, account emails, and
  * agendas for members without Google).
  *
- * The message goes to the upload endpoint as message/rfc822, which accepts up
- * to 35 MB; the JSON `raw` field has a much smaller request limit, too small
- * for broadcast attachments.
+ * A message without attachments goes as the JSON `raw` field, the path every
+ * agenda email has used since launch. One with attachments goes to the upload
+ * endpoint as message/rfc822, which accepts up to 35 MB; `raw` has a much
+ * smaller request limit, too small for broadcast attachments.
  *
  * @returns The sent message's Gmail ID.
  */
@@ -571,10 +585,15 @@ export async function sendGmailAsUser(
   const auth = getGoogleAuth(accessToken);
   const gmail = google.gmail({ version: 'v1', auth });
 
-  const res = await gmail.users.messages.send({
-    userId: 'me',
-    media: { mimeType: 'message/rfc822', body: message },
-  });
+  const res = options?.attachments?.length
+    ? await gmail.users.messages.send({
+        userId: 'me',
+        media: { mimeType: 'message/rfc822', body: message },
+      })
+    : await gmail.users.messages.send({
+        userId: 'me',
+        requestBody: { raw: Buffer.from(message).toString('base64url') },
+      });
 
   console.log(`✓ Gmail dispatched successfully (ID: ${res.data.id})`);
   return res.data.id;

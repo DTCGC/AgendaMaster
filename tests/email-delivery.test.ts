@@ -9,17 +9,28 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { buildRawGmailMessage } from '@/lib/google-api'
+import { buildRawGmailMessage as build, type GmailMessageOptions } from '@/lib/google-api'
+import { agendaEmailDue, needsFullWizard } from '@/lib/agenda-email'
 
 const headersOf = (raw: string) => raw.split('\r\n\r\n')[0].split('\r\n')
 
+/** A Bcc email from the club account, unless the test says otherwise. */
+const buildRawGmailMessage = (recipients: string[], subject: string, html: string, options?: GmailMessageOptions) =>
+  build(recipients, subject, html, { visibleTo: 'club@example.com', ...options })
+
 describe('recipient privacy', () => {
-  test('no recipient appears in the visible To header', () => {
+  test('no recipient appears in the visible To header, only the sender', () => {
     const headers = headersOf(buildRawGmailMessage(['first@example.com', 'second@example.com'], 'Subject', '<p>Body</p>'))
-    const to = headers.find((h) => h.startsWith('To:'))
-    assert.ok(to, 'a To header is still required')
-    assert.ok(!to.includes('@'), `To header exposes an address: ${to}`)
+    assert.ok(headers.includes('To: club@example.com'))
     assert.ok(headers.some((h) => h.startsWith('Bcc:') && h.includes('first@example.com')))
+  })
+
+  test('the visible To is a real address, never the undisclosed-recipients group', () => {
+    // Gmail failed the first agenda email sent with `To: undisclosed-recipients:;`.
+    assert.throws(() => build(['a@example.com'], 'Subject', '<p>Body</p>'), /visibleTo/)
+    assert.throws(() => build(['a@example.com'], 'Subject', '<p>Body</p>', { visibleTo: ' \r\n' }), /visibleTo/)
+    const headers = headersOf(buildRawGmailMessage(['a@example.com'], 'Subject', '<p>Body</p>'))
+    assert.ok(!headers.some((h) => h.includes('undisclosed-recipients')))
   })
 
   test('an email to one person can name them in To instead', () => {
@@ -33,6 +44,7 @@ describe('headers', () => {
   test('From, Reply-To and recipients cannot inject extra headers', () => {
     const raw = buildRawGmailMessage(['a@example.com\r\nBcc: all@example.com'], 'Hi', '<p>Hi</p>', {
       from: '"Club" <club@example.com>\r\nX-Evil: 1',
+      visibleTo: 'club@example.com\r\nX-Evil: 2',
       replyTo: 'jane@example.com\nBcc: all@example.com',
     })
     const headers = headersOf(raw)
@@ -108,5 +120,35 @@ describe('body and attachments', () => {
       attachments: [{ filename: 'x.pdf', content: pdf, contentType: 'text/html\r\nX-Evil: 1' }],
     })
     assert.match(partsOf(raw).parts[1], /Content-Type: application\/octet-stream/)
+  })
+})
+
+describe('the agenda email goes out once per meeting', () => {
+  const fresh = { googleSheetId: null, agendaEmailPending: false }
+  const failedSend = { googleSheetId: 'sheet', agendaEmailPending: true }
+  const sent = { googleSheetId: 'sheet', agendaEmailPending: false }
+
+  test('the first Step 4 run sends it', () => {
+    assert.equal(agendaEmailDue('create', fresh), true)
+  })
+
+  test('a Step 4 rerun after a failed send sends it', () => {
+    assert.equal(agendaEmailDue('create', failedSend), true)
+  })
+
+  test('once sent, no later run sends it again', () => {
+    assert.equal(agendaEmailDue('create', sent), false)
+    assert.equal(agendaEmailDue('update', sent), false)
+  })
+
+  test('roster-only update mode never sends it', () => {
+    assert.equal(agendaEmailDue('update', failedSend), false)
+    assert.equal(agendaEmailDue('update', fresh), false)
+  })
+
+  test('the dashboard opens the full wizard only while the email is still owed', () => {
+    assert.equal(needsFullWizard(fresh), true)
+    assert.equal(needsFullWizard(failedSend), true)
+    assert.equal(needsFullWizard(sent), false)
   })
 })

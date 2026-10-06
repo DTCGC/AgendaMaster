@@ -16,6 +16,7 @@ import { Calendar, FileText, UserCheck } from "lucide-react";
 import { getDisplayName } from '@/lib/user-logic';
 import { MINOR_ROLES, FIXED_ROLES, ROSTER_ORDER } from '@/lib/roles';
 import { visibleMeetingsSince } from '@/lib/archival';
+import { needsFullWizard } from '@/lib/agenda-email';
 import { formatMeetingDate, formatMeetingDateLong } from '@/lib/meeting-time';
 import ForceSignOut from '@/components/auth/force-sign-out';
 import { PageShell, SectionLabel } from '@/components/common/page';
@@ -90,10 +91,12 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
   });
 
   const hasFinalized = nextMeeting.roleAssignments.some((a) => MINOR_ROLES.includes(a.roleName));
-  // Update mode (?step=3) only syncs an existing sheet. Until the sheet exists
-  // — e.g. Step 4 saved the roles but the sheet or email failed — the
-  // Toastmaster goes back through the full wizard, which creates and sends it.
+  // Update mode (?step=3) only syncs an existing sheet and never emails. Until
+  // the agenda email has gone out — no sheet yet, or the sheet exists but the
+  // send failed — the Toastmaster goes back through the full wizard, whose
+  // Step 4 creates and/or sends. Once sent, it's update mode for good.
   const hasSheet = !!nextMeeting.googleSheetId;
+  const emailPending = needsFullWizard(nextMeeting);
 
   // The viewer's own roles, in roster order. The Toastmaster box already
   // announces the Toastmaster role, so the banner only lists any others.
@@ -126,8 +129,13 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
               <p className="mb-6 max-w-md text-sm leading-relaxed text-gray-600">
                 You are the lead for the meeting on <strong className="text-brand-true-maroon">{formatMeetingDate(nextMeeting.date)}</strong>. Start the workflow below to prepare the agenda.
               </p>
-              <Link href={`/agenda/create${hasSheet ? '?step=3' : ''}`} className={cn(buttonVariants({ size: "lg" }), "shadow-md")}>
-                {hasSheet ? 'Update Agenda' : hasFinalized ? 'Finish Meeting Prep' : 'Begin Meeting Prep'}
+              {hasSheet && emailPending && (
+                <p className="mb-4 max-w-md text-sm font-semibold leading-relaxed text-brand-true-maroon">
+                  Your agenda sheet is ready, but the agenda email hasn&apos;t gone out yet. Go through the steps again and press the button in Step 4 to send it.
+                </p>
+              )}
+              <Link href={`/agenda/create${emailPending ? '' : '?step=3'}`} className={cn(buttonVariants({ size: "lg" }), "shadow-md")}>
+                {!emailPending ? 'Update Agenda' : hasSheet ? 'Send Agenda Email' : hasFinalized ? 'Finish Meeting Prep' : 'Begin Meeting Prep'}
               </Link>
               <p className="mt-4 text-xs text-gray-500">
                 First time as Toastmaster?{' '}

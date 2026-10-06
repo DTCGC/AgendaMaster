@@ -149,7 +149,7 @@ describe('agenda email sent on a member\'s behalf', () => {
       ['a@example.com', 'b@example.com'],
       'Subject',
       '<p>Body</p>',
-      { replyTo: 'sam@example.com\r\nBcc: evil@example.com' }
+      { replyTo: 'sam@example.com\r\nBcc: evil@example.com', visibleTo: 'club@example.com' }
     )
     const [head] = raw.split('\r\n\r\n')
     const headers = head.split('\r\n')
@@ -158,7 +158,7 @@ describe('agenda email sent on a member\'s behalf', () => {
   })
 
   test('has no Reply-To when the Toastmaster sends it themselves', () => {
-    const raw = buildRawGmailMessage(['a@example.com'], 'Subject', '<p>Body</p>')
+    const raw = buildRawGmailMessage(['a@example.com'], 'Subject', '<p>Body</p>', { visibleTo: 'tm@example.com' })
     assert.ok(!raw.includes('Reply-To:'))
   })
 })

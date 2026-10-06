@@ -837,11 +837,13 @@ function WizardContent({ meetingId }: { meetingId: string }) {
 
              {/* Execution Result */}
              {executionResult && (executionResult.success ? (
-                <Notice tone="success" title={executionResult.isUpdate ? 'Agenda Sheet Updated' : 'Agenda Created and Sent'} className="animate-in fade-in zoom-in-95 duration-300">
+                <Notice tone="success" title={!executionResult.isUpdate ? 'Agenda Created and Sent' : executionResult.emailSent ? 'Agenda Updated and Sent' : 'Agenda Sheet Updated'} className="animate-in fade-in zoom-in-95 duration-300">
                     <p>
-                        {executionResult.isUpdate
-                            ? 'The existing Google Sheet has been updated with the latest role assignments.'
-                            : 'Google Sheet created and email dispatched to all club members.'}
+                        {!executionResult.isUpdate
+                            ? 'Google Sheet created and email dispatched to all club members.'
+                            : executionResult.emailSent
+                                ? 'The Google Sheet has been updated with the latest role assignments, and the agenda email has now been sent to all club members.'
+                                : 'The existing Google Sheet has been updated with the latest role assignments.'}
                     </p>
                     {executionResult.warning && (
                         <Notice tone="warning" className="mt-3">{executionResult.warning}</Notice>

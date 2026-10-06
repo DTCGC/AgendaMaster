@@ -24,17 +24,20 @@
 import { auth } from '@/auth'
 import { db } from '@/lib/db'
 import { createAgendaSheet, updateAgendaSheet, sendGmailAsUser, getServiceAccountEmail } from '@/lib/google-api'
-import { getClubAccessToken, ClubGoogleUnavailableError } from '@/lib/club-google'
+import { getClubAccessToken, ClubGoogleUnavailableError, CLUB_GOOGLE_EMAIL } from '@/lib/club-google'
 import { resolveGoogleAuthPath } from '@/lib/google-auth-path'
 import { getGoogleAccessToken } from '@/lib/google-user-token'
 import { buildSheetPayload } from '@/lib/agenda-sheet'
 import { meetingEditDenial } from '@/lib/meeting-access'
 import { revalidateMeetingViews } from '@/lib/revalidate'
 import { fail, type ActionResult } from '@/lib/action-result'
+import { agendaEmailDue } from '@/lib/agenda-email'
 
 export type PipelineResult = ActionResult<{
   sheetUrl: string;
   isUpdate: boolean;
+  /** This run sent the agenda email (on a retry, isUpdate is true too). */
+  emailSent: boolean;
   /** Something the caller must read even though the run succeeded. */
   warning?: string;
 }>
@@ -112,7 +115,7 @@ export async function executeAgendaPipeline(
     } = payload;
 
     const isUpdate = !!meeting.googleSheetId;
-    const mustSendEmail = mode === 'create' && (!isUpdate || meeting.agendaEmailPending);
+    const mustSendEmail = agendaEmailDue(mode, meeting);
 
     if (!isUpdate && mode === 'update') {
       return fail(
@@ -133,6 +136,7 @@ export async function executeAgendaPipeline(
 
     let sheetUrl: string;
     let warning: string | undefined;
+    let emailSent = false;
 
     if (isUpdate) {
       // Re-populate the existing sheet
@@ -211,14 +215,18 @@ export async function executeAgendaPipeline(
         ...subscribers.map((s) => s.email),
       ]));
 
-      // Send via Gmail API (as the Toastmaster, or the club account for them)
-      await sendGmailAsUser(await creatorToken(), allRecipients, input.emailSubject, emailWithLink, { replyTo });
+      // Send via Gmail API (as the Toastmaster, or the club account for them).
+      // The sending account's own address is the visible To, so it keeps a
+      // copy and no member's address shows.
+      const visibleTo = accessToken ? (session.user.email ?? CLUB_GOOGLE_EMAIL) : CLUB_GOOGLE_EMAIL;
+      await sendGmailAsUser(await creatorToken(), allRecipients, input.emailSubject, emailWithLink, { replyTo, visibleTo });
+      emailSent = true;
       await db.meeting.update({ where: { id: meetingId }, data: { agendaEmailPending: false } });
     }
 
     revalidateMeetingViews();
 
-    return { success: true, sheetUrl, isUpdate, warning };
+    return { success: true, sheetUrl, isUpdate, emailSent, warning };
   } catch (error: unknown) {
     console.error('Agenda execution pipeline error:', error);
     // The sheet may have been saved before the failure.
