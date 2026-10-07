@@ -12,7 +12,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Calendar, FileText, UserCheck } from "lucide-react";
+import { Calendar, FileText, PencilLine, UserCheck } from "lucide-react";
 import { getDisplayName } from '@/lib/user-logic';
 import { MINOR_ROLES, FIXED_ROLES, ROSTER_ORDER } from '@/lib/roles';
 import { visibleMeetingsSince } from '@/lib/archival';
@@ -143,6 +143,25 @@ export default async function AgendaPage(props: { searchParams?: Promise<{ archi
                   Read the guide →
                 </Link>
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Admins edit through /agenda/create's admin update mode (roster only,
+            via the service account); this is its only entry point. */}
+        {currentUser.role === 'ADMIN' && !isToastmaster && !archivedId && (
+          <div className="mb-10 flex gap-4 rounded-xl border-2 border-brand-loyal-blue/30 bg-brand-loyal-blue/5 p-6">
+            <IconDisc icon={PencilLine} tone="brand-solid" rounded="xl" />
+            <div>
+              <h2 className="mb-1 text-xl font-bold tracking-tight text-gray-800">Executive Editing</h2>
+              <p className="mb-6 max-w-md text-sm leading-relaxed text-gray-600">
+                {hasSheet
+                  ? 'You can change this meeting’s roles. Saving updates the agenda sheet too, without sending any email.'
+                  : 'You can change this meeting’s roles. The agenda sheet and email are only created when the Toastmaster finishes the wizard.'}
+              </p>
+              <Link href={`/agenda/create?step=3&meetingId=${nextMeeting.id}`} className={cn(buttonVariants({ size: "lg" }), "shadow-md")}>
+                Edit Agenda
+              </Link>
             </div>
           </div>
         )}

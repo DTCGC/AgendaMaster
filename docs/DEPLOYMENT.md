@@ -109,6 +109,26 @@ The ecosystem file pins `TZ=America/Vancouver`. Meeting dates are built in serve
 must run on Pacific time whatever the Droplet's own timezone is. The deploy reloads PM2 with
 `--update-env` so changes to that `env` block take effect.
 
+### Logs
+
+Server-side output (every `console.log`/`console.error`, so every agenda-pipeline, Gmail and
+Sheets error) is in the app's PM2 logs, one timestamped line at a time:
+
+```bash
+pm2 logs AgendaMaster --lines 200       # or: /root/.pm2/logs/AgendaMaster-{out,error}.log
+```
+
+PM2 runs Next's own entry point (`node_modules/next/dist/bin/next start`), not `npm run start`.
+Through npm, PM2 only sees npm, and next-server's output landed in PM2's daemon log
+(`/root/.pm2/pm2.log`) instead; output from before October 2026 is still there.
+
+A deploy's `pm2 reload` does **not** pick up a changed `script` in the ecosystem file. After
+changing it, recreate the process once (a few seconds of downtime):
+
+```bash
+pm2 delete AgendaMaster && pm2 start ecosystem.config.js && pm2 save
+```
+
 ---
 
 ## 5. Nginx Reverse Proxy (optional, for IP-only access)
