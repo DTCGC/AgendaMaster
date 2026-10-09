@@ -3,7 +3,7 @@ import { LegalPage, LegalContact } from "@/components/common/legal-page";
 
 export default function PrivacyPolicy() {
   return (
-    <LegalPage title="Privacy Policy" updated="October 2, 2026">
+    <LegalPage title="Privacy Policy" updated="October 9, 2026">
 
         <section>
           <h2>1. Introduction</h2>
@@ -92,10 +92,10 @@ export default function PrivacyPolicy() {
           <ul>
             <li>
               <strong>BC Privacy Law:</strong> The Club collects, uses and discloses personal information in keeping with British Columbia&apos;s{" "}
-              <a href="https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/96165_00" target="_blank" rel="noopener noreferrer">
-                Freedom of Information and Protection of Privacy Act
+              <a href="https://www.bclaws.gov.bc.ca/civix/document/id/complete/statreg/03063_01" target="_blank" rel="noopener noreferrer">
+                Personal Information Protection Act
               </a>{" "}
-              [RSBC&nbsp;1996] c.&nbsp;165 (FIPPA).
+              [SBC&nbsp;2003] c.&nbsp;63 (PIPA).
             </li>
             <li>
               <strong>Access and Correction:</strong> You may ask to see, or to correct, the personal information we hold about you by contacting us at
