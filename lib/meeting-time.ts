@@ -33,3 +33,10 @@ export function formatMeetingDateShort(date: Date): string {
 export function formatMeetingMonthDay(date: Date): string {
   return date.toLocaleDateString('en-US', { timeZone: CLUB_TIMEZONE, month: '2-digit', day: '2-digit' })
 }
+
+/** "Oct 2, 6:44 PM" — when something happened, e.g. an agenda changelog entry. */
+export function formatClubDateTime(date: Date): string {
+  return date.toLocaleString('en-US', {
+    timeZone: CLUB_TIMEZONE, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  })
+}

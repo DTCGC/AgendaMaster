@@ -14,7 +14,7 @@
  */
 import { randomUUID } from 'crypto';
 import { google, sheets_v4 } from 'googleapis';
-import { formatMeetingMonthDay } from './meeting-time';
+import { formatMeetingMonthDay, formatClubDateTime } from './meeting-time';
 
 // ---------- Template Population (pure logic, no API calls) ----------
 
@@ -50,7 +50,9 @@ export function populateTemplate(
   qotd: string,
   roleMap: Record<string, string>,
   unassignedNames: string[],
-  changelog: string[] = [],
+  // Rows for the CHANGELOG section, each starting at column B (see
+  // buildChangelog). The template's own example and numbered lines are dropped.
+  changelog: string[][] = [],
   // Guest Education Session with a guest name set: relabel the Speaker 3 row
   // as "Guest Speaker" on the output sheet. The roleMap already carries the
   // guest's name under 'Speaker 3' when this is true (see buildRoleMap()).
@@ -133,22 +135,10 @@ export function populateTemplate(
     }
   }
 
-  // Append changelog entries (role swaps from previous version)
-  if (changelogStartIndex >= 0 && changelog.length > 0) {
-    let ci = 0;
-    // Overwrite subsequent rows with changelog data
-    for (let r = changelogStartIndex + 1; r < rows.length && ci < changelog.length; r++) {
-        rows[r][1] = changelog[ci++];
-    }
-    // If changelog exceeds available empty rows, push new rows
-    while (ci < changelog.length) {
-      rows.push(['', changelog[ci++], '', '', '']);
-    }
-  } else if (changelogStartIndex >= 0) {
-    // If no changelog, just clear the example line
-    if (changelogStartIndex + 1 < rows.length) {
-      rows[changelogStartIndex + 1][1] = '';
-    }
+  // Replace everything under the CHANGELOG header with the log itself
+  if (changelogStartIndex >= 0) {
+    rows.splice(changelogStartIndex + 1);
+    for (const entry of changelog) rows.push(['', ...entry]);
   }
 
   return rows;
@@ -316,59 +306,95 @@ export async function createAgendaSheet(
   return { sheetUrl, sheetId, shareWarning };
 }
 
+// ---------- Changelog ----------
+
+/** A name cell that holds nobody: the template placeholder, TBD, or an unstaffed '-'. */
+function isNobody(name: string): boolean {
+  return !name || name === 'NAME' || name === 'TBD' || name === NO_PERSON;
+}
+
 /**
- * Computes a person-centric changelog by diffing existing sheet data against a new role map.
- * Produces entries like "[John: Timer ---> Grammarian]" for the CHANGELOG section.
- *
- * @param existingRows - 2D array of current sheet data (fetched via Values API).
- * @param newRoleMap   - The new role→person mapping being applied.
- * @returns Array of human-readable changelog strings.
+ * Normalizes a role label so the same row matches across writes: "Speaker #1"
+ * and "Speaker 1" are one role, and a Guest Education Session's relabeled
+ * "Guest Speaker" row is still the Speaker 3 slot.
  */
-function computeChangelog(existingRows: string[][], newRoleMap: Record<string, string>): string[] {
-  // Rows that must never produce a changelog line. General Feedback is unstaffed
-  // by design; the Backup Speaker is a standby title that routinely changes
-  // hands without anyone's actual duties changing, so diffing it is pure noise.
-  const isExempt = (roleLabel: string) => {
-    const l = roleLabel.toLowerCase().replace(/:$/, '').trim();
-    return l.startsWith('general fe') || l === 'backup speaker';
-  };
+function roleKey(label: string): string {
+  const key = label.toLowerCase().replace(/#/g, '').replace(/:$/, '').replace(/\s+/g, ' ').trim();
+  return key === 'guest speaker' ? 'speaker 3' : key;
+}
 
-  const oldRoleMap: Record<string, string> = {};
-  
-  for (const row of existingRows) {
-    if (row.length > 3 && row[1]) {
-      const roleLabel = row[1].trim();
-      const person = row[3].trim();
-      if (person && person !== 'NAME' && person !== 'TBD' && person !== NO_PERSON) {
-        oldRoleMap[roleLabel] = person;
-      }
-    }
+/**
+ * Rows that never produce a changelog line: General Feedback and Break Time are
+ * unstaffed by design, and Comments and Closing Remarks always mirrors the
+ * Toastmaster, whose own row already reports the change.
+ */
+function isExemptRole(key: string): boolean {
+  return key.startsWith('general fe') || key === 'break time' || key === 'comments and closing remarks';
+}
+
+/**
+ * Role → name for the agenda's role rows: everything above the BACKUP SPEAKER
+ * line. The "No Roles" attendance grid and the changelog below it are not
+ * roles, so reading them as such would report names as role changes. Roles
+ * printed twice (Timer, Toastmaster…) are read once, from their first row.
+ */
+function agendaRoles(rows: string[][]): Map<string, { label: string; name: string }> {
+  const roles = new Map<string, { label: string; name: string }>();
+  for (const row of rows.slice(2)) {
+    const label = (row[1] || '').trim();
+    if (/^(backup speaker|no roles|changelog)/i.test(label)) break;
+    if (!label) continue;
+    const key = roleKey(label);
+    if (isExemptRole(key) || roles.has(key)) continue;
+    roles.set(key, { label, name: (row[3] || '').trim() });
+  }
+  return roles;
+}
+
+/**
+ * The entries already under the sheet's CHANGELOG header, each from column B
+ * on. The template's example line and numbered blanks are not entries. Lines
+ * someone typed in by hand are kept like any other.
+ */
+function existingChangelog(rows: string[][]): string[][] {
+  const header = rows.findIndex((r) => (r[1] || '').trim().startsWith('CHANGELOG'));
+  if (header < 0) return [];
+  return rows.slice(header + 1)
+    .map((r) => r.slice(1).map((c) => (c ?? '').trim()))
+    .filter((cells) => {
+      const filled = cells.filter(Boolean);
+      if (filled.length === 0) return false;
+      return !(filled.length === 1 && (/^example:/i.test(filled[0]) || /^\d+$/.test(filled[0])));
+    });
+}
+
+/**
+ * The CHANGELOG section for an update: every entry already on the sheet, then
+ * one line per role whose holder this write changes, e.g.
+ * "[Oct 9, 6:44 PM] Grammarian: Franklin ---> Evangeline". An empty slot reads
+ * "TBD", as it does on the agenda itself.
+ *
+ * The log only ever grows. A write that changes nobody (the pre-meeting
+ * refresh, a re-save) adds nothing and keeps what is there.
+ *
+ * @param existingRows - The sheet as it is now (fetched via the Values API).
+ * @param newRows      - The agenda about to be written (populateTemplate output).
+ * @param now          - When the change is made, for the entry's timestamp.
+ */
+export function buildChangelog(existingRows: string[][], newRows: string[][], now: Date): string[][] {
+  const before = agendaRoles(existingRows);
+  const stamp = formatClubDateTime(now);
+  const entries: string[][] = [];
+
+  for (const [key, after] of agendaRoles(newRows)) {
+    const prior = before.get(key);
+    if (!prior) continue; // a row the old sheet did not have: nothing to compare
+    const from = isNobody(prior.name) ? 'TBD' : prior.name;
+    const to = isNobody(after.name) ? 'TBD' : after.name;
+    if (from !== to) entries.push([`[${stamp}] ${after.label}: ${from} ---> ${to}`]);
   }
 
-  const persons = new Set<string>();
-  for (const p of Object.values(oldRoleMap)) persons.add(p);
-  for (const p of Object.values(newRoleMap)) if (p && p !== 'TBD' && p !== NO_PERSON) persons.add(p);
-
-  const changelog: string[] = [];
-
-  for (const p of persons) {
-    const oldR = Object.keys(oldRoleMap).filter(r => oldRoleMap[r] === p && !isExempt(r));
-    const newR = Object.keys(newRoleMap).filter(r => newRoleMap[r] === p && !isExempt(r));
-
-    const lost = oldR.filter(r => !newR.includes(r));
-    const gained = newR.filter(r => !oldR.includes(r));
-
-    const maxProps = Math.max(lost.length, gained.length);
-    for (let i = 0; i < maxProps; i++) {
-        if (i < lost.length && i < gained.length) {
-            changelog.push(`[${p}: ${lost[i]} ---> ${gained[i]}]`);
-        } else if (i < lost.length) {
-            changelog.push(`[${p}: ${lost[i]} ---> TBD]`);
-        }
-    }
-  }
-  
-  return changelog;
+  return [...existingChangelog(existingRows), ...entries];
 }
 
 /**
@@ -392,21 +418,18 @@ export async function updateAgendaSheet(
   const auth = accessToken ? getGoogleAuth(accessToken) : getServiceAccountAuth();
   const sheets = google.sheets({ version: 'v4', auth });
   
-  // Fetch existing sheet data to compute the changelog
-  let existingRows: string[][] = [];
-  try {
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: existingSheetId,
-      range: 'Sheet1!A1:E80'
-    });
-    existingRows = res.data.values || [];
-  } catch (err) {
-    console.error('[GoogleAPI] Failed to fetch existing sheet for changelog:', err);
-  }
+  // The sheet as it is now: the changelog is diffed against it and carried
+  // over from it. Not optional — writing without it would wipe the log.
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: existingSheetId,
+    range: 'Sheet1'
+  });
+  const existingRows = (res.data.values || []) as string[][];
 
-  const changelog = computeChangelog(existingRows, roleMap);
+  const agendaRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames, [], guestEducationActive);
+  const changelog = buildChangelog(existingRows, agendaRows, new Date());
   const populatedRows = populateTemplate(csvTemplate, theme, qotd, roleMap, unassignedNames, changelog, guestEducationActive);
-  
+
   // Pad to the sheet's previous height: a shorter write would leave the old
   // tail (e.g. extra changelog lines from an earlier update) in place.
   await writeSheetData(sheets, existingSheetId, populatedRows, existingRows.length);

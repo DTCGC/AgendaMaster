@@ -13,6 +13,7 @@
  * rotation without them having done anything.
  */
 
+import type { Prisma } from '@prisma/client'
 import { db } from './db'
 import { MAJOR_ROLES, MINOR_ROLES, BACKUP_SPEAKER } from './roles'
 
@@ -75,6 +76,9 @@ export class UnknownMemberError extends Error {
  * look freshly served and sink in the fairness rotation. Only a genuine
  * change of holder counts as new participation.
  *
+ * A change of Backup Speaker also gives the new standby a speaking slot at the
+ * next scheduled meeting (see carryBackupForward).
+ *
  * @param meetingId    - Target meeting ID.
  * @param assignments  - { roleName, userId } pairs; an empty userId clears the role.
  * @param allowedRoles - The roles this caller owns; anything else is dropped.
@@ -124,9 +128,117 @@ export async function persistRoles(
           }
         }),
     })
+
+    if (roleNames.includes(BACKUP_SPEAKER)) {
+      const before = previousByRole.get(BACKUP_SPEAKER)
+      const after = await tx.roleAssignment.findFirst({ where: { meetingId, roleName: BACKUP_SPEAKER } })
+      if (before?.userId !== after?.userId) await carryBackupForward(tx, meetingId, before, after)
+    }
   })
 
   return roleNames
+}
+
+/** The booked speaking slots a Backup Speaker is carried forward into. */
+export const SPEAKER_SLOTS = ['Speaker 1', 'Speaker 2', 'Speaker 3']
+
+type Tx = Prisma.TransactionClient
+type StandbyRow = { userId: string | null; assignedAt: Date }
+
+/**
+ * Follows a change of a meeting's Backup Speaker into the next scheduled
+ * meeting: the new standby is given an open Speaker 1-3 slot there, and the
+ * slot the old standby was automatically given is taken back.
+ *
+ * An automatic slot is recognised by its `assignedAt`, which is copied from
+ * the standby row that produced it. persistRoles keeps `assignedAt` for an
+ * unchanged holder, so the marker survives later saves of the next meeting,
+ * and is lost (correctly) as soon as an admin moves that person themselves.
+ */
+async function carryBackupForward(tx: Tx, meetingId: string, before?: StandbyRow, after?: StandbyRow | null) {
+  const meeting = await tx.meeting.findUnique({ where: { id: meetingId }, select: { date: true } })
+  if (!meeting) return
+  const next = await tx.meeting.findFirst({
+    where: { status: 'SCHEDULED', date: { gt: meeting.date } },
+    orderBy: { date: 'asc' },
+  })
+  if (!next) return
+
+  if (before?.userId) {
+    await tx.roleAssignment.deleteMany({
+      where: {
+        meetingId: next.id,
+        userId: before.userId,
+        roleName: { in: SPEAKER_SLOTS },
+        assignedAt: before.assignedAt,
+      },
+    })
+  }
+  if (after?.userId) await giveSpeakerSlot(tx, next, after)
+}
+
+/**
+ * Puts a former standby into a random open speaker slot of `meeting`.
+ *
+ * Does nothing when they already have any role there (no double-booking) or
+ * every slot is taken; the Role Management panel then shows its reminder.
+ * Speaker 3 is avoided while a guest speaker name is set, since a Guest
+ * Education Session prints the guest over that row.
+ */
+async function giveSpeakerSlot(
+  tx: Tx,
+  meeting: { id: string; guestSpeakerName: string | null },
+  standby: StandbyRow
+) {
+  const rows = await tx.roleAssignment.findMany({ where: { meetingId: meeting.id } })
+  if (rows.some((r) => r.userId === standby.userId)) return
+
+  const open = SPEAKER_SLOTS
+    .filter((slot) => !(slot === 'Speaker 3' && meeting.guestSpeakerName?.trim()))
+    .filter((slot) => !rows.some((r) => r.roleName === slot && r.userId))
+  if (open.length === 0) return
+
+  await tx.roleAssignment.create({
+    data: {
+      meetingId: meeting.id,
+      roleName: open[Math.floor(Math.random() * open.length)],
+      userId: standby.userId,
+      assignedAt: standby.assignedAt,
+    },
+  })
+}
+
+/**
+ * Gives a newly scheduled (or re-enabled) meeting the Backup Speaker of the
+ * meeting before it, if that standby has not already been carried forward to
+ * a later meeting. The counterpart of carryBackupForward for when the next
+ * meeting did not exist yet at the time the standby was chosen.
+ */
+export async function carryBackupInto(meetingId: string) {
+  await db.$transaction(async (tx) => {
+    const meeting = await tx.meeting.findUnique({ where: { id: meetingId } })
+    if (!meeting || meeting.status !== 'SCHEDULED') return
+
+    const previous = await tx.meeting.findFirst({
+      where: { date: { lt: meeting.date }, status: { not: 'CANCELLED' } },
+      orderBy: { date: 'desc' },
+    })
+    if (!previous) return
+    const standby = await tx.roleAssignment.findFirst({
+      where: { meetingId: previous.id, roleName: BACKUP_SPEAKER, userId: { not: null } },
+    })
+    if (!standby) return
+
+    const alreadyCarried = await tx.roleAssignment.findFirst({
+      where: {
+        userId: standby.userId,
+        roleName: { in: SPEAKER_SLOTS },
+        assignedAt: standby.assignedAt,
+        meeting: { date: { gt: previous.date } },
+      },
+    })
+    if (!alreadyCarried) await giveSpeakerSlot(tx, meeting, standby)
+  })
 }
 
 /** The Role Management panel's write: major roles plus the Backup Speaker. */

@@ -26,8 +26,8 @@ export function buildRoleMap(
   // 1. Fixed roles (held by the same people every meeting — lib/roles.ts)
   Object.assign(map, FIXED_ROLES);
   // Dismissal is permanently Franklin's — it no longer follows the Sergeant at
-  // Arms. Listed here as well as in the CSV so computeChangelog() diffs it
-  // against a matching entry and never reports it as a swap.
+  // Arms. Listed here as well as in the CSV, for templates that still carry
+  // the NAME placeholder on that row.
   map['Dismissal'] = 'Franklin';
 
   // 2. DB assignments (major + minor roles assigned in the app)
@@ -81,11 +81,6 @@ export function buildRoleMap(
   const guestName = meeting.guestSpeakerName?.trim();
   if (meeting.isGuestEducationSession && guestName) {
     map['Speaker 3'] = guestName;
-    // Also under the label the sheet will actually display after the swap in
-    // populateTemplate(). computeChangelog() diffs the sheet's labels against
-    // this map, and without this entry every re-run of an active session would
-    // log a phantom "[<guest>: Guest Speaker ---> Speaker 3]" swap.
-    map['Guest Speaker'] = guestName;
   }
 
   return map;

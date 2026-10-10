@@ -13,6 +13,7 @@ import { MINOR_ROLES } from '@/lib/roles'
 import { checkAdmin } from '@/lib/auth-guard'
 import { isMeetingDay, meetingStartFor } from '@/lib/meeting-schedule'
 import { revalidateMeetingViews } from '@/lib/revalidate'
+import { carryBackupInto } from '@/lib/roles-logic'
 import { fail, type ActionResult } from '@/lib/action-result'
 
 /**
@@ -20,7 +21,9 @@ import { fail, type ActionResult } from '@/lib/action-result'
  *
  * Cancelling clears everything the Toastmaster prepared (theme, question,
  * meeting type, sheet link, minor roles) so a re-enabled meeting starts fresh;
- * admin-set major roles and the guest speaker name are kept.
+ * admin-set major roles and the guest speaker name are kept. A scheduled or
+ * re-enabled meeting inherits the previous meeting's Backup Speaker as a
+ * speaker (lib/roles-logic.ts carryBackupInto).
  *
  * @param ymd        - The Friday, as "YYYY-MM-DD".
  * @param existingId - If provided, toggles that meeting's status.
@@ -58,6 +61,7 @@ export async function toggleMeeting(ymd: string, existingId?: string): Promise<A
                 ? [db.roleAssignment.deleteMany({ where: { meetingId: existingId, roleName: { in: MINOR_ROLES } } })]
                 : []),
         ]);
+        if (!cancelling) await carryBackupInto(existingId);
     } else {
         // One meeting per Friday: a double-submit must not create a second one.
         const dayStart = new Date(start.getFullYear(), start.getMonth(), start.getDate());
@@ -74,9 +78,11 @@ export async function toggleMeeting(ymd: string, existingId?: string): Promise<A
         const regularTemplate = await db.meetingTemplate.findFirst({ where: { type: 'Regular' } });
         if (!regularTemplate) return fail('The Regular agenda template is missing. Re-run the database seed.');
 
-        await db.meeting.create({
+        const created = await db.meeting.create({
             data: { date: start, typeId: regularTemplate.id, status: 'SCHEDULED' },
         });
+        // The previous meeting's Backup Speaker gets a speaking slot here.
+        await carryBackupInto(created.id);
     }
 
     revalidateMeetingViews();

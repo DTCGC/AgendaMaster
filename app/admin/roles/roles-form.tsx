@@ -21,7 +21,8 @@ type UserData = {
     id: string
     firstName: string
     lastName: string
-    roleAssignments: { assignedAt: Date }[]
+    /** ISO date of the last meeting (before this one) where they held a major role. */
+    lastMajorRole: string | null
 }
 
 export default function RolesForm({
@@ -34,8 +35,11 @@ export default function RolesForm({
     meetingId: string
     initialAssignments: Record<string, string>
     members: UserData[]
-    /** Most recent standby before this meeting, for the promotion reminder. */
-    previousBackup: { name: string; meetingDate: string } | null
+    /**
+     * Most recent standby before this meeting, for the promotion reminder.
+     * `roleHere` is the major role they already hold in this meeting, if any.
+     */
+    previousBackup: { name: string; meetingDate: string; roleHere: string | null } | null
     /** Free-text guest speaker (meeting-level, not a member). */
     initialGuestSpeakerName: string
 }) {
@@ -104,7 +108,7 @@ export default function RolesForm({
                                 {members.map(u => (
                                     <option key={u.id} value={u.id}>
                                         {u.firstName} {u.lastName}
-                                        {u.roleAssignments[0] ? ` (Last Active: ${formatMeetingDate(new Date(u.roleAssignments[0].assignedAt))})` : ` (Never Active)`}
+                                        {u.lastMajorRole ? ` (Last major role: ${formatMeetingDate(new Date(u.lastMajorRole))})` : ` (No major role yet)`}
                                     </option>
                                 ))}
                             </NativeSelect>
@@ -156,10 +160,19 @@ export default function RolesForm({
                             ))}
                         </NativeSelect>
                         <FieldHint>
-                            Counts as roleless — they can still be given a minor role, and their participation history is unaffected.
+                            Counts as roleless — they can still be given a minor role, and their participation history is unaffected. They are also given a random open speaker slot (1–3) at the next scheduled meeting.
                         </FieldHint>
 
-                        {previousBackup && (
+                        {previousBackup && (previousBackup.roleHere ? (
+                            <Notice tone="brand" icon={Info} className="mt-3">
+                                <p>
+                                    <strong>{previousBackup.name}</strong> was on standby for{' '}
+                                    {formatMeetingDateShort(new Date(previousBackup.meetingDate))}, so
+                                    they are {previousBackup.roleHere} at this meeting.
+                                    If they ended up speaking that day, you can give the slot to someone else.
+                                </p>
+                            </Notice>
+                        ) : (
                             <Notice tone="warning" icon={Info} className="mt-3">
                                 <p>
                                     <strong>{previousBackup.name}</strong> was on standby for{' '}
@@ -167,7 +180,7 @@ export default function RolesForm({
                                     If all three speakers turned up, they never got to speak — consider giving them a speaking slot now.
                                 </p>
                             </Notice>
-                        )}
+                        ))}
                     </div>
                 </div>
 

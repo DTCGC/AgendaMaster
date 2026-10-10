@@ -60,7 +60,7 @@ export default async function RolesPage({
         where: {
           roleName: BACKUP_SPEAKER,
           userId: { not: null },
-          meeting: { date: { lt: currentMeeting.date } }
+          meeting: { date: { lt: currentMeeting.date }, status: { not: 'CANCELLED' } }
         },
         orderBy: { meeting: { date: 'desc' } },
         include: { user: true, meeting: true }
@@ -82,6 +82,34 @@ export default async function RolesPage({
   })
   const lastActive = (m: (typeof members)[number]) => m.roleAssignments[0]?.assignedAt.getTime() ?? 0
   const byPriority = [...members].sort((a, b) => lastActive(a) - lastActive(b))
+
+  // The dropdowns rank by the last meeting each member held a MAJOR role,
+  // before the one being edited. Minor roles and standby duty don't count, and
+  // neither does a cancelled meeting, where nobody actually spoke.
+  const majorRows = currentMeeting
+    ? await db.roleAssignment.findMany({
+        where: {
+          roleName: { in: MAJOR_ROLES },
+          userId: { not: null },
+          meeting: { date: { lt: currentMeeting.date }, status: { not: 'CANCELLED' } }
+        },
+        select: { userId: true, meeting: { select: { date: true } } }
+      })
+    : []
+  const lastMajor = new Map<string, Date>()
+  for (const row of majorRows) {
+    const seen = lastMajor.get(row.userId!)
+    if (!seen || row.meeting.date > seen) lastMajor.set(row.userId!, row.meeting.date)
+  }
+  const lastMajorTime = (id: string) => lastMajor.get(id)?.getTime() ?? 0
+  const byMajorRecency = [...members].sort((a, b) =>
+    lastMajorTime(a.id) - lastMajorTime(b.id) ||
+    `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
+
+  // Where the previous standby landed in this meeting, if anywhere (they are
+  // given a speaker slot automatically — lib/roles-logic.ts carryBackupForward).
+  const previousBackupRole = previousBackup && currentMeeting.roleAssignments
+    .find((a) => a.userId === previousBackup.userId && MAJOR_ROLES.includes(a.roleName))?.roleName
 
   return (
     <PageShell width="6xl">
@@ -133,15 +161,16 @@ export default async function RolesPage({
                                     acc[curr.roleName] = curr.userId || ""
                                     return acc
                                 }, {})}
-                            members={members.map((u) => ({
+                            members={byMajorRecency.map((u) => ({
                                 id: u.id,
                                 firstName: u.firstName,
                                 lastName: u.lastName,
-                                roleAssignments: u.roleAssignments.map((ra) => ({ assignedAt: ra.assignedAt }))
+                                lastMajorRole: lastMajor.get(u.id)?.toISOString() ?? null
                             }))}
                             previousBackup={previousBackup?.user ? {
                                 name: `${previousBackup.user.firstName} ${previousBackup.user.lastName}`,
-                                meetingDate: previousBackup.meeting.date.toISOString()
+                                meetingDate: previousBackup.meeting.date.toISOString(),
+                                roleHere: previousBackupRole ?? null
                             } : null}
                             initialGuestSpeakerName={currentMeeting.guestSpeakerName ?? ''}
                         />
