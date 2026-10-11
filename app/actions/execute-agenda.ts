@@ -6,7 +6,8 @@
  *
  * Two modes, chosen by the caller and enforced here:
  *   1. 'create' (Step 4): creates the Google Sheet, emails it to all
- *      members + subscribers, and stores the sheet ID/URL on the meeting. On a
+ *      members + subscribers (and posts the same text to the club Discord —
+ *      lib/discord.ts), and stores the sheet ID/URL on the meeting. On a
  *      meeting that already has a sheet it updates the sheet instead, and only
  *      sends the email if an earlier run created the sheet but failed to send.
  *   2. 'update' (update mode's Save & Close): updates an existing sheet only.
@@ -32,6 +33,7 @@ import { meetingEditDenial } from '@/lib/meeting-access'
 import { revalidateMeetingViews } from '@/lib/revalidate'
 import { fail, type ActionResult } from '@/lib/action-result'
 import { agendaEmailDue } from '@/lib/agenda-email'
+import { postAgendaToDiscord } from '@/lib/discord'
 
 export type PipelineResult = ActionResult<{
   sheetUrl: string;
@@ -222,6 +224,17 @@ export async function executeAgendaPipeline(
       await sendGmailAsUser(await creatorToken(), allRecipients, input.emailSubject, emailWithLink, { replyTo, visibleTo });
       emailSent = true;
       await db.meeting.update({ where: { id: meetingId }, data: { agendaEmailPending: false } });
+
+      // The same agenda, posted to the club Discord. The email has already
+      // gone out, so a failure here is a warning, never a failed run — and
+      // there is no retry, since re-running Step 4 no longer sends anything.
+      try {
+        await postAgendaToDiscord({ subject: input.emailSubject, html: input.emailHtmlBody, sheetUrl });
+      } catch (error) {
+        console.error('Discord agenda post failed:', error);
+        warning = [warning, 'The agenda email went out, but posting it to the club Discord failed — please paste it into Discord yourself.']
+          .filter(Boolean).join(' ');
+      }
     }
 
     revalidateMeetingViews();

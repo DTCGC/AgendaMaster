@@ -617,6 +617,10 @@ export default async function TutorialPage() {
                       email address.
                     </Bullet>
                     <Bullet>Replies come straight to your inbox.</Bullet>
+                    <Bullet>
+                      It posts the same email in the club&apos;s <strong>Discord</strong>{" "}server too, with a ping for
+                      every member.
+                    </Bullet>
                     <Bullet>The dashboard updates, so every member can see their role right away.</Bullet>
                   </Bullets>
                   <p className="text-gray-700 leading-relaxed">

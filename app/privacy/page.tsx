@@ -3,7 +3,7 @@ import { LegalPage, LegalContact } from "@/components/common/legal-page";
 
 export default function PrivacyPolicy() {
   return (
-    <LegalPage title="Privacy Policy" updated="October 9, 2026">
+    <LegalPage title="Privacy Policy" updated="October 10, 2026">
 
         <section>
           <h2>1. Introduction</h2>
@@ -62,6 +62,10 @@ export default function PrivacyPolicy() {
           <p>
             AgendaMaster does not sell, trade, or otherwise transfer your personal information to third parties. 
             Information is only shared with service providers (like Google) as necessary to perform the application&apos;s core functions.
+          </p>
+          <p>
+            Each meeting&apos;s agenda email, which names the members taking roles, is also posted to the club&apos;s
+            Discord server so members can see it there.
           </p>
         </section>
 

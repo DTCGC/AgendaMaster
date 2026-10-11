@@ -237,6 +237,45 @@ page says the upload was refused.
 
 ---
 
+## 10. Discord Agenda Announcements
+
+When a Toastmaster's Step 4 sends the agenda email, the same text (the subject, the body converted
+to Discord markdown, and the agenda sheet link) is posted to a Discord channel through a **channel
+webhook**, pinging a members role. There is no bot and no extra process. The code is in
+`lib/discord.ts`.
+
+One-time setup (needs **Manage Webhooks** and **Manage Roles** on the server):
+
+1. **Role**: Server Settings → Roles → create the role to ping (e.g. `Members`) and give it to the
+   members.
+2. **Webhook**: open the announcement channel's settings → Integrations → Webhooks → **New
+   Webhook**. Name it (e.g. `AgendaMaster`), give it the club logo, and press **Copy Webhook URL**.
+3. **Role ID**: User Settings → Advanced → turn on **Developer Mode**. Then Server Settings →
+   Roles, right-click the role → **Copy Role ID**.
+4. Add both to the Droplet's `.env` and restart:
+
+   ```bash
+   nano /var/www/agendamaster/.env
+   # DISCORD_AGENDA_WEBHOOK_URL="https://discord.com/api/webhooks/…"
+   # DISCORD_AGENDA_ROLE_ID="123456789012345678"
+   pm2 restart AgendaMaster
+   ```
+
+Both variables are optional. Without the URL nothing is posted, and without the role ID the post
+goes out without a ping. If the post appears but nobody is notified, turn on **Allow anyone to
+@mention this role** on the role.
+
+- **Only the configured role is ever pinged.** An `@everyone` or a pasted mention in the email
+  shows as text.
+- **Long agendas are split.** Discord caps a message at 2,000 characters, so a longer agenda goes
+  out as several messages, and only the first one pings.
+- **A failed post never fails the run.** The email has already gone out, so the Toastmaster sees a
+  warning asking them to paste the agenda into Discord themselves. Nothing is retried.
+- **The webhook URL is a secret.** Anyone who has it can post to the channel. If it leaks, delete
+  the webhook in Discord and make a new one.
+
+---
+
 ## Related Documentation
 
 - [README](../README.md) — project overview, features, and local setup.

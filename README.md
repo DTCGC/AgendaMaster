@@ -12,6 +12,7 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
 - **Automated Generation**: One-click meeting agenda creation via Google Sheets integration.
 - **Tiptap Editor**: A rich-text interface for fine-tuning meeting themes and details before generation.
 - **Agenda Delivery (Gmail API)**: The designated Toastmaster sends the agenda email — with the generated Sheet link — from their **own Gmail account** via the Gmail API, BCC'd to all members and subscribers.
+- **Discord Announcements**: The same agenda email (subject, body and sheet link) is posted to the club Discord through a channel webhook, pinging a members role. Only that role can ever be pinged, a long agenda is split across messages, and a failed post only warns the Toastmaster. Optional: set up as described in [Discord Agenda Announcements](./docs/DEPLOYMENT.md#10-discord-agenda-announcements).
 
 ### 👥 Member & Role Management
 - **Identity Verification**: Members provide their own name during a Profile Completion step after first sign-in, ensuring accurate club records even when using a parent's or shared Google account.
@@ -69,6 +70,8 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
    GOOGLE_CLIENT_ID="your-client-id"
    GOOGLE_CLIENT_SECRET="your-client-secret"
    GOOGLE_SERVICE_ACCOUNT_KEY=""             # optional — service-account JSON (or base64), enables admin sheet edits
+   DISCORD_AGENDA_WEBHOOK_URL=""             # optional — posts each agenda email to Discord
+   DISCORD_AGENDA_ROLE_ID=""                 # optional — the role that post pings
    SEED_ADMIN_PASSWORD="choose-a-dev-admin-password"
    ```
 
@@ -125,6 +128,7 @@ What is covered (all of it invisible-when-broken behaviour, which is why it is p
 | `tests/meeting-access.test.ts` | Only the meeting's own Toastmaster (or an admin) may save its roster or run its agenda pipeline, and only while the meeting is scheduled and still editable. Server actions are public endpoints, so this is the real security boundary. |
 | `tests/request-auth.test.ts` | The cron endpoints accept only the exact `CRON_SECRET`. |
 | `tests/email-delivery.test.ts` | No member's address appears in an email's visible `To:` header, no header can be injected through a name, address or filename, and attachments survive the MIME encoding byte for byte. |
+| `tests/discord.test.ts` | The agenda email's HTML becomes readable Discord markdown (lists, links, escaped names), long agendas split under Discord's 2,000-character cap, and nothing typed into the email can ping anyone: only the configured role, once. Without a webhook URL nothing is posted. |
 | `tests/email-limits.test.ts` | Attachment types Gmail refuses are stopped before sending, the total size stays under what every inbox accepts, and filenames lose path parts and header-breaking characters. |
 | `tests/link-preview.test.ts` | Link preview cards read Open Graph tags (even ~720 KB into a page), and the preview fetch never reaches loopback, private or cloud-metadata addresses, whether by IP or by hostname. |
 | `tests/meeting-schedule.test.ts` | The calendar offers only Fridays at 6:45 PM outside July and August, never in the past. |
@@ -184,7 +188,7 @@ shipped application diverges from it in a few notable ways:
   only if) the Toastmaster also selects "Guest Education Session" in the wizard's Step 2, the
   sheet's `Speaker 3` row is relabeled `Guest Speaker` and carries the guest's name. With
   either half missing, the value sits inert and the meeting renders as Regular.
-- The post-development **Discord bot** guide remains a pending task.
+- The spec's **Discord bot**, which would fetch the email through an API endpoint, is instead a **channel webhook** that the agenda pipeline posts to directly. There is no bot process and no public endpoint.
 
 ---
 
