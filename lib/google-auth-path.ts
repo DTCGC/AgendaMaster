@@ -4,6 +4,7 @@
  * Pure so the routing is testable — getting it wrong is silent (the wrong
  * account touches the sheet) until Google answers with a 403/404.
  */
+import { missingGoogleScopes } from '@/lib/google-scopes'
 
 export type GoogleAuthPath =
   /** The caller's own Google OAuth token: a Toastmaster who signed in with Google. */
@@ -14,6 +15,8 @@ export type GoogleAuthPath =
    * email) through the club's connected Google account.
    */
   | { kind: 'service-account'; clubCreate: boolean }
+  /** Signed in with Google, but unticked some of the permissions it asked for. */
+  | { kind: 'missing-scopes'; missing: string[] }
   /** No usable credential. */
   | { kind: 'none' }
 
@@ -21,6 +24,8 @@ export function resolveGoogleAuthPath(caller: {
   role?: string
   authMethod?: 'google' | 'credentials'
   accessToken?: string | null
+  /** The `scope` Google returned at sign-in; absent on older sessions. */
+  grantedScopes?: string | null
 }): GoogleAuthPath {
   // ADMIN always goes through the service account, even when holding a token.
   // An admin who connected the club account is signed in with the CLUB's
@@ -39,6 +44,10 @@ export function resolveGoogleAuthPath(caller: {
   }
 
   if (caller.accessToken) {
+    // Checked up front so the run can't half-happen (a sheet created, then
+    // the email refused).
+    const missing = missingGoogleScopes(caller.grantedScopes)
+    if (missing?.length) return { kind: 'missing-scopes', missing }
     return { kind: 'user-token', accessToken: caller.accessToken }
   }
 

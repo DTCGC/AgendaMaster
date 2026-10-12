@@ -31,6 +31,8 @@ declare module '@auth/core/jwt' {
     refreshToken?: string
     /** Epoch ms when accessToken expires. */
     accessTokenExpires?: number
+    /** Space-separated scopes Google granted at sign-in (lib/google-scopes.ts). */
+    grantedScopes?: string
     authMethod?: 'google' | 'credentials'
   }
 }

@@ -27,7 +27,8 @@ import { db } from '@/lib/db'
 import { createAgendaSheet, updateAgendaSheet, sendGmailAsUser, getServiceAccountEmail } from '@/lib/google-api'
 import { getClubAccessToken, ClubGoogleUnavailableError, CLUB_GOOGLE_EMAIL } from '@/lib/club-google'
 import { resolveGoogleAuthPath } from '@/lib/google-auth-path'
-import { getGoogleAccessToken } from '@/lib/google-user-token'
+import { getGoogleCredential } from '@/lib/google-user-token'
+import { isInsufficientScopeError, missingScopesMessage } from '@/lib/google-scopes'
 import { buildSheetPayload } from '@/lib/agenda-sheet'
 import { meetingEditDenial } from '@/lib/meeting-access'
 import { revalidateMeetingViews } from '@/lib/revalidate'
@@ -77,16 +78,21 @@ export async function executeAgendaPipeline(
   //   - a member who registered with email + password also updates through the
   //     service account, and creates the sheet + sends the email through the
   //     club's connected Google account.
+  const credential = session.user.authMethod === 'google' && session.user.role !== 'ADMIN'
+    ? await getGoogleCredential()
+    : null;
   const authPath = resolveGoogleAuthPath({
     role: session.user.role,
     authMethod: session.user.authMethod,
-    accessToken: session.user.authMethod === 'google' && session.user.role !== 'ADMIN'
-      ? await getGoogleAccessToken()
-      : null,
+    accessToken: credential?.accessToken,
+    grantedScopes: credential?.grantedScopes,
   });
 
   if (authPath.kind === 'none') {
     return fail('Your Google sign-in has expired or is missing permissions. Please sign out, sign back in with Google, and try again.');
+  }
+  if (authPath.kind === 'missing-scopes') {
+    return fail(missingScopesMessage(authPath.missing));
   }
 
   const usingServiceAccount = authPath.kind === 'service-account';
@@ -247,6 +253,12 @@ export async function executeAgendaPipeline(
 
     if (error instanceof ClubGoogleUnavailableError) {
       return fail(error.message);
+    }
+
+    // A permission unticked at sign-in on a session that predates recording
+    // the granted scopes (newer ones are refused up front).
+    if (accessToken && isInsufficientScopeError(error)) {
+      return fail(missingScopesMessage(null));
     }
 
     // KNOWN LIMITATION, surfaced on purpose: sheets created before the

@@ -18,8 +18,11 @@ import { google } from 'googleapis'
 /** Refresh a minute early so a token can't expire mid-pipeline. */
 const EXPIRY_MARGIN_MS = 60 * 1000
 
-/** @returns A usable access token, or null when the session holds no Google credential. */
-export async function getGoogleAccessToken(): Promise<string | null> {
+/**
+ * @returns A usable access token (null when the session holds no Google
+ *   credential) and the scopes granted at sign-in (lib/google-scopes.ts).
+ */
+export async function getGoogleCredential(): Promise<{ accessToken: string | null; grantedScopes?: string }> {
   const cookieStore = await cookies()
   const secureCookie = cookieStore.getAll().some((c) => c.name.startsWith('__Secure-authjs.session-token'))
   const token = await getToken({
@@ -27,19 +30,20 @@ export async function getGoogleAccessToken(): Promise<string | null> {
     secret: process.env.AUTH_SECRET,
     secureCookie,
   })
-  if (!token?.accessToken) return null
+  if (!token?.accessToken) return { accessToken: null }
+  const grantedScopes = token.grantedScopes
 
   const fresh = !token.accessTokenExpires || token.accessTokenExpires - EXPIRY_MARGIN_MS > Date.now()
-  if (fresh || !token.refreshToken) return token.accessToken
+  if (fresh || !token.refreshToken) return { accessToken: token.accessToken, grantedScopes }
 
   try {
     const client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET)
     client.setCredentials({ refresh_token: token.refreshToken })
     const { token: refreshed } = await client.getAccessToken()
-    return refreshed ?? null
+    return { accessToken: refreshed ?? null, grantedScopes }
   } catch (error) {
     // Revoked access or a changed password: the caller asks them to sign in again.
     console.error('[GoogleToken] Could not refresh the Google access token:', error)
-    return null
+    return { accessToken: null }
   }
 }

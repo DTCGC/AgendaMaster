@@ -16,6 +16,7 @@ import Credentials from 'next-auth/providers/credentials';
 import { db } from '@/lib/db';
 import { verifyPasswordLogin } from '@/lib/password-auth';
 import { CLUB_GOOGLE_EMAIL, saveClubGoogleConnection } from '@/lib/club-google';
+import { REQUIRED_GOOGLE_SCOPES, missingGoogleScopes } from '@/lib/google-scopes';
 
 export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
@@ -34,8 +35,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
             'openid',
             'email',
             'profile',
-            'https://www.googleapis.com/auth/gmail.send',
-            'https://www.googleapis.com/auth/drive.file',
+            ...Object.keys(REQUIRED_GOOGLE_SCOPES),
           ].join(' '),
         },
       },
@@ -129,6 +129,9 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
             token.accessToken = account.access_token;
             token.refreshToken = account.refresh_token;
             token.accessTokenExpires = account.expires_at ? account.expires_at * 1000 : undefined;
+            // Google lets members untick individual permissions on the consent
+            // screen; the pipeline checks this before touching Google.
+            token.grantedScopes = account.scope;
 
             // An admin signing in with Google as the club account (the
             // "Connect" button on Member Management) stores that account's
@@ -139,10 +142,17 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
                 (user?.email ?? token.email)?.toLowerCase() === CLUB_GOOGLE_EMAIL &&
                 token.role === 'ADMIN'
             ) {
-                try {
-                    await saveClubGoogleConnection(account.refresh_token);
-                } catch (error) {
-                    console.error("Failed to store the club Google connection:", error);
+                const missing = missingGoogleScopes(account.scope);
+                if (missing?.length) {
+                    // Keep any earlier, complete connection rather than
+                    // replacing it with one that can't create or send.
+                    console.error("Club Google connection not stored: missing permissions", missing);
+                } else {
+                    try {
+                        await saveClubGoogleConnection(account.refresh_token);
+                    } catch (error) {
+                        console.error("Failed to store the club Google connection:", error);
+                    }
                 }
             }
         }
