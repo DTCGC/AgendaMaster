@@ -5,13 +5,17 @@
  * and text-cleaning utilities used by the Agenda Wizard.
  *
  * The auto-assignment heuristic works by:
- * 1. Querying all MEMBER users with their most recent role assignment date.
- * 2. Sorting by recency (oldest first = highest priority).
- * 3. Restoring any minor roles already saved for the meeting.
- * 4. Distributing the remaining, still-empty MINOR_ROLES sequentially among
- *    members who hold no role for that meeting yet.
+ * 1. Restoring any minor roles already saved for the meeting.
+ * 2. Reading which minor roles each MEMBER held at earlier meetings, and when.
+ * 3. Filling the still-empty MINOR_ROLES from members who hold no role for the
+ *    meeting yet, by per-role recency (lib/minor-rotation.ts).
  *
- * Step 3 is what makes the wizard safe to reopen: saved rosters are preserved
+ * History is dated by the meeting a role was held at, not by `assignedAt`
+ * (when it was saved), so "days since Timer" means what it says however early
+ * or late a roster was finalised. Major roles and standby duty are not part
+ * of it; the Role Management panel ranks major roles separately.
+ *
+ * Step 1 is what makes the wizard safe to reopen: saved rosters are preserved
  * rather than regenerated, so pressing "Update" never scrambles finalized roles.
  * Passing `ignoreSavedMinorRoles` skips it, which is the only way to force a
  * deliberate reshuffle — that is what the wizard's Regenerate button does.
@@ -24,6 +28,7 @@ import type { UserWithDisplayName, AutoAssignmentResult } from './types';
 // Role definitions live in lib/roles.ts (no database import, so client
 // components can use them); re-exported here for existing server callers.
 import { MINOR_ROLES, MAJOR_ROLES, BACKUP_SPEAKER } from './roles';
+import { planMinorRoles, buildRoleHistory } from './minor-rotation';
 export { MINOR_ROLES, MAJOR_ROLES, BACKUP_SPEAKER };
 
 /**
@@ -45,42 +50,42 @@ export async function getAutoAssignments(
   const activeUsers = await db.user.findMany({
     where: {
       role: 'MEMBER'
-    },
-    include: {
-      roleAssignments: {
-        // Standby duty is not participation — see BACKUP_SPEAKER above.
-        where: { roleName: { not: BACKUP_SPEAKER } },
-        orderBy: {
-          assignedAt: 'desc' // Most recent first
-        },
-        take: 1
-      }
     }
   });
 
-  // Build a sortable stats array: each member gets a recency timestamp and a display name
-  const userStats = activeUsers.map((user) => {
-    const lastAssignment = user.roleAssignments[0]?.assignedAt;
-    const lastAssignedAt = lastAssignment ? new Date(lastAssignment).getTime() : 0;
-    
-    // Compute display name into a new object (avoids mutating Prisma result)
-    const displayName = getDisplayName(user, activeUsers);
-    
-    return {
-      user: { id: user.id, firstName: user.firstName, lastName: user.lastName, displayName },
-      lastAssignedAt
-    };
-  });
+  // Compute display names into new objects (avoids mutating Prisma results)
+  const members: UserWithDisplayName[] = activeUsers.map((user) => ({
+    id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    displayName: getDisplayName(user, activeUsers)
+  }));
 
-  // Sort ascending: members who haven't had a role recently (or ever) get priority
-  userStats.sort((a, b) => a.lastAssignedAt - b.lastAssignedAt);
+  const meeting = await db.meeting.findUnique({ where: { id: meetingId }, select: { date: true } });
+  const meetingDate = meeting?.date ?? new Date();
+
+  // Each member's latest meeting per minor role, before this one. A cancelled
+  // meeting keeps its roster but nobody served at it, so it does not count.
+  const pastMinorRoles = await db.roleAssignment.findMany({
+    where: {
+      roleName: { in: MINOR_ROLES },
+      userId: { not: null },
+      meeting: { date: { lt: meetingDate }, status: { not: 'CANCELLED' } }
+    },
+    select: { userId: true, roleName: true, meeting: { select: { date: true } } }
+  });
+  const history = buildRoleHistory(pastMinorRoles.map((row) => ({
+    userId: row.userId!,
+    roleName: row.roleName,
+    meetingTime: row.meeting.date.getTime()
+  })));
 
   const existingAssignments = await db.roleAssignment.findMany({
     where: { meetingId }
   });
 
   // Lookup of member id → display-name-decorated user
-  const usersById = new Map(userStats.map((stats) => [stats.user.id, stats.user]));
+  const usersById = new Map(members.map((user) => [user.id, user]));
 
   // STEP 1 — Restore minor roles already saved for this meeting.
   // The heuristic is a *starting point*, not a source of truth: once the
@@ -117,22 +122,19 @@ export async function getAutoAssignments(
       .map((a) => a.userId)
   );
 
-  const eligibleUsers = userStats
-    .map((stats) => stats.user)
-    .filter((u) => !usersWithExistingRole.has(u.id));
+  const eligibleUsers = members.filter((u) => !usersWithExistingRole.has(u.id));
 
-  // STEP 2 — Round-robin the *still-empty* minor roles to members who hold
-  // nothing yet, in priority order (least-recently-assigned first).
-  let userIndex = 0;
-  for (const role of MINOR_ROLES) {
-    if (assignments[role]) continue;
-    if (userIndex < eligibleUsers.length) {
-      assignments[role] = eligibleUsers[userIndex];
-      userIndex++;
-    }
-  }
-
-  const unassigned = eligibleUsers.slice(userIndex);
+  // STEP 2 — Fill the *still-empty* minor roles from members who hold nothing
+  // yet: whoever has gone longest without a minor role serves, and each takes
+  // the role they have gone longest without.
+  const plan = planMinorRoles(
+    MINOR_ROLES.filter((role) => !assignments[role]),
+    eligibleUsers,
+    history,
+    meetingDate.getTime()
+  );
+  Object.assign(assignments, plan.assignments);
+  const unassigned = plan.unassigned;
 
   // Resolved separately from `assignments` so no caller can mistake it for a
   // real role slot. Note the holder deliberately remains in `unassigned` too.

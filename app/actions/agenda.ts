@@ -85,7 +85,7 @@ export async function formatDraft(text: string) {
  * those rows and silently revert any change an admin made in the meantime.
  *
  * Holders who did not change keep their `assignedAt`, so re-saving a roster
- * never pushes its members back in the fairness rotation.
+ * never makes its members look freshly served in the participation tracker.
  *
  * @param meetingId   - Target meeting ID.
  * @param assignments - Map of roleName → user object (null = unassigned).

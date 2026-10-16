@@ -74,8 +74,8 @@ describe('the title does not consume its holder', () => {
 
 describe('standby duty is not participation', () => {
   test('a fresh standby row does not lower priority', async () => {
-    // Bob..Jack each hold a real minor role dated today. Alice, Kara and Liam
-    // hold only standby rows, also dated today. If standby counted as
+    // Bob..Jack each held a real minor role at the last meeting. Alice, Kara
+    // and Liam held only standby rows there. If standby counted as
     // participation all twelve would rank together; instead the three standbys
     // must take the first slots, because they have effectively never served.
     const served = ['Bob', 'Carl', 'Dana', 'Evan', 'Fay', 'Gina', 'Hank', 'Iris', 'Jack']

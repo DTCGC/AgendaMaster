@@ -560,8 +560,8 @@ export default async function TutorialPage() {
                   <Bullets>
                     <Bullet>
                       <strong>Minor roles are picked fairly.</strong>{" "}Members who haven&apos;t had a role in a while
-                      get one first, so everyone gets their turn. Look them over — you can change any of them with its
-                      dropdown (1).
+                      get one first, and each gets the role they haven&apos;t done in the longest time, so everyone takes
+                      turns at every role. Look them over — you can change any of them with its dropdown (1).
                     </Bullet>
                     <Bullet>
                       <strong>Role requests:</strong>{" "}if a member asks you for a certain role, try your best to make it

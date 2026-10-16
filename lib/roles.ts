@@ -6,7 +6,7 @@
  * the database layer that lib/agenda-logic.ts needs.
  */
 
-/** Roles automatically assigned by the heuristic engine (round-robin by recency). */
+/** Roles automatically assigned by the rotation in lib/minor-rotation.ts. */
 export const MINOR_ROLES = [
   "Sergeant at Arms",
   "Timer",
@@ -18,6 +18,16 @@ export const MINOR_ROLES = [
   "Table Topics Evaluator 1",
   "Table Topics Evaluator 2"
 ];
+
+/**
+ * The job a minor role slot stands for, which is what the rotation tracks.
+ * The numbered slots are the same duty, so "days since Evaluator" counts
+ * Evaluator 1, 2 and 3 alike; otherwise a member could evaluate three meetings
+ * running and look fresh for each new slot number.
+ */
+export function minorRoleFamily(roleName: string): string {
+  return roleName.replace(/ \d+$/, "");
+}
 
 /** Roles manually assigned by admins via the Role Management panel. */
 export const MAJOR_ROLES = [

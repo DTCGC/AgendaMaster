@@ -16,8 +16,8 @@ import { db } from '@/lib/db'
  * Saves all major role assignments for a meeting.
  *
  * Role names outside MAJOR_ROLES are discarded server-side — the write
- * re-stamps `assignedAt`, so accepting a minor role here would corrupt the
- * participation-recency data the auto-assignment heuristic depends on.
+ * re-stamps `assignedAt`, so accepting a minor role here would overwrite the
+ * wizard's roster and corrupt the participation tracker's recency data.
  *
  * @param meetingId   - Target meeting ID.
  * @param assignments - Array of { roleName, userId } pairs.

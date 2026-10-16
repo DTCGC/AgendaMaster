@@ -7,10 +7,12 @@
  *
  * Each write is scoped to exactly the role names its caller owns. This is a
  * correctness boundary, not just tidiness: the delete-then-create below
- * re-stamps `assignedAt`, and `assignedAt` is what the auto-assignment
- * heuristic in lib/agenda-logic.ts sorts on. Letting a minor role through would
- * make its holder look freshly-served and silently demote them in the fairness
- * rotation without them having done anything.
+ * re-stamps `assignedAt`, which the Role Management panel's participation
+ * tracker shows as "days ago" and the Backup Speaker carry-forward uses as its
+ * marker. Letting a minor role through would make its holder look
+ * freshly-served there without them having done anything. (The minor-role
+ * rotation itself dates history by meeting, so it is immune — see
+ * lib/agenda-logic.ts.)
  */
 
 import type { Prisma } from '@prisma/client'
@@ -73,7 +75,7 @@ export class UnknownMemberError extends Error {
  * `assignedAt` is carried forward for any role whose holder is unchanged.
  * Callers post all of their roles on every save, so without this a single
  * swap would re-date every other role — a member assigned weeks ago would
- * look freshly served and sink in the fairness rotation. Only a genuine
+ * look freshly served in the participation tracker. Only a genuine
  * change of holder counts as new participation.
  *
  * A change of Backup Speaker also gives the new standby a speaking slot at the
