@@ -26,7 +26,7 @@ const LATER = new Date('2026-10-10T01:50:00Z')
 
 const ROSTER: Record<string, string> = {
   'Sergeant at Arms': 'Curtis', Toastmaster: 'Ethan', Timer: 'Millie', Grammarian: 'Franklin',
-  'Speaker 1': 'Torres', 'Speaker #1': 'Torres', 'Speaker 3': 'Andrew',
+  'Speaker 1': 'Torres', 'Speaker #1': 'Torres', 'Speaker 3': 'Andrew', 'Speaker #3': 'Andrew',
   'Comments and Closing Remarks': 'Ethan',
 }
 
@@ -83,7 +83,7 @@ describe('entries', () => {
   })
 
   test('a Guest Education relabel logs the Speaker 3 change once, and only once', () => {
-    const guestMap = { ...ROSTER, 'Speaker 3': 'Dr. Jane Doe' }
+    const guestMap = { ...ROSTER, 'Speaker 3': 'Dr. Jane Doe', 'Speaker #3': 'Dr. Jane Doe' }
     const first = update(sheet(ROSTER), guestMap, NOW, [], true)
     const second = update(first, guestMap, LATER, [], true)
 

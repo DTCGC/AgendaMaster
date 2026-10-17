@@ -48,7 +48,7 @@ export function buildRoleMap(
 
   alias('Speaker #1', 'Speaker 1');
   alias('Speaker #2', 'Speaker 2');
-  // "Speaker 3" in CSV matches internal name directly — no alias needed
+  alias('Speaker #3', 'Speaker 3');
   alias('Evaluator #1', 'Evaluator 1');
   alias('Evaluator #2', 'Evaluator 2');
   alias('Evaluator #3', 'Evaluator 3');
@@ -80,7 +80,9 @@ export function buildRoleMap(
   // TBD) — and when both hold, the guest wins even over an assigned member.
   const guestName = meeting.guestSpeakerName?.trim();
   if (meeting.isGuestEducationSession && guestName) {
+    // Both keys: the alias above already copied any member into the "#" label.
     map['Speaker 3'] = guestName;
+    map['Speaker #3'] = guestName;
   }
 
   return map;

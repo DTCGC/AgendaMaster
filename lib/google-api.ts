@@ -114,10 +114,11 @@ export function populateTemplate(
       }
     }
 
-    // Label swap runs AFTER the name substitution above — 'Speaker 3' must
+    // Label swap runs AFTER the name substitution above — 'Speaker #3' must
     // stay intact as the roleMap lookup key while the person is resolved.
-    if (guestEducationActive && roleLabel === 'Speaker 3') {
-      row[1] = row[1].replace('Speaker 3', 'Guest Speaker');
+    // 'Speaker 3' (no "#") is what templates seeded before the rename carry.
+    if (guestEducationActive && (roleLabel === 'Speaker #3' || roleLabel === 'Speaker 3')) {
+      row[1] = row[1].replace(roleLabel, 'Guest Speaker');
     }
   }
 

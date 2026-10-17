@@ -8,7 +8,7 @@
  *
  * The gating itself (both-conditions-required) lives in buildRoleMap() inside
  * app/actions/execute-agenda.ts, which encodes an active override as
- * map['Speaker 3'] = <guest> plus the guestEducationActive flag. These tests
+ * map['Speaker 3'] = map['Speaker #3'] = <guest> plus the guestEducationActive flag. These tests
  * pin down the populateTemplate() half: the label swap and its inertness.
  */
 import { test, describe } from 'node:test'
@@ -28,10 +28,10 @@ const findRow = (rows: string[][], label: string) =>
 
 describe('guest override inactive (default)', () => {
   test('Speaker 3 row keeps its label and assigned member', () => {
-    const rows = populateTemplate(csvTemplate, 'Theme', 'QOTD', { 'Speaker 3': 'Alice' }, [])
+    const rows = populateTemplate(csvTemplate, 'Theme', 'QOTD', { 'Speaker #3': 'Alice' }, [])
 
-    const row = findRow(rows, 'Speaker 3')
-    assert.ok(row, 'Speaker 3 row must survive untouched')
+    const row = findRow(rows, 'Speaker #3')
+    assert.ok(row, 'Speaker #3 row must survive untouched')
     assert.equal(row![3], 'Alice')
     assert.equal(findRow(rows, 'Guest Speaker'), undefined)
   })
@@ -39,13 +39,14 @@ describe('guest override inactive (default)', () => {
   test('an unassigned Speaker 3 still renders as TBD', () => {
     const rows = populateTemplate(csvTemplate, 'Theme', 'QOTD', {}, [])
 
-    assert.equal(findRow(rows, 'Speaker 3')![3], 'TBD')
+    assert.equal(findRow(rows, 'Speaker #3')![3], 'TBD')
   })
 })
 
 describe('guest override active', () => {
   const roleMap = {
     'Speaker 3': 'Dr. Jane Doe',
+    'Speaker #3': 'Dr. Jane Doe',
     'Guest Speaker': 'Dr. Jane Doe',
     'Speaker 1': 'Bob'
   }
@@ -53,7 +54,7 @@ describe('guest override active', () => {
   test('the row is relabeled Guest Speaker and carries the guest name', () => {
     const rows = populateTemplate(csvTemplate, 'Theme', 'QOTD', roleMap, [], [], true)
 
-    assert.equal(findRow(rows, 'Speaker 3'), undefined, 'the Speaker 3 label must not remain')
+    assert.equal(findRow(rows, 'Speaker #3'), undefined, 'the Speaker #3 label must not remain')
     const row = findRow(rows, 'Guest Speaker')
     assert.ok(row, 'a Guest Speaker row must exist')
     assert.equal(row![3], 'Dr. Jane Doe')
@@ -73,7 +74,7 @@ describe('guest override active', () => {
 
     assert.equal(regular.length, guest.length)
     for (let i = 0; i < regular.length; i++) {
-      if ((regular[i][1] || '').trim() === 'Speaker 3') continue
+      if ((regular[i][1] || '').trim() === 'Speaker #3') continue
       assert.deepEqual(guest[i], regular[i], `row ${i} must be identical to the regular output`)
     }
   })

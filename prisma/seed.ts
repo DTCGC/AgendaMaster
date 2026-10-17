@@ -64,6 +64,13 @@ async function main() {
       applied.push('Dismissal → Franklin');
     }
 
+    // Speaker 3 lacked the "#" its neighbours carry ("Speaker #1", "Speaker #2").
+    const withHash = repaired.replace(/,Speaker 3,/g, ',Speaker #3,');
+    if (withHash !== repaired) {
+      repaired = withHash;
+      applied.push('Speaker 3 → Speaker #3');
+    }
+
     if (applied.length > 0) {
       await prisma.meetingTemplate.update({
         where: { id: existingRegular.id },
