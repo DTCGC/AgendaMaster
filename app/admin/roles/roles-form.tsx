@@ -48,11 +48,13 @@ export default function RolesForm({
     const [isSaving, setIsSaving] = useState(false)
     const [saved, setSaved] = useState(false)
     const [error, setError] = useState('')
+    const [warning, setWarning] = useState('')
 
     const handleSave = async () => {
         setIsSaving(true)
         setSaved(false)
         setError('')
+        setWarning('')
         
         // Post only the roles this form renders. Anything else in state would be
         // deleted and recreated by the server action, re-stamping its assignedAt.
@@ -74,6 +76,8 @@ export default function RolesForm({
             setError(failure.error)
             return
         }
+        const [rolesResult] = results
+        if (rolesResult.success && rolesResult.warning) setWarning(rolesResult.warning)
         setSaved(true)
         setTimeout(() => setSaved(false), 3000)
     }
@@ -91,6 +95,7 @@ export default function RolesForm({
             </CardHeader>
             <div className="p-6">
                 {error && <FormError className="mb-4">{error}</FormError>}
+                {warning && <Notice tone="warning" className="mb-4"><p>{warning}</p></Notice>}
 
                 <div className="space-y-4">
                     {MAJOR_ROLES.map(role => {

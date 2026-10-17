@@ -34,6 +34,15 @@ export function formatMeetingMonthDay(date: Date): string {
   return date.toLocaleDateString('en-US', { timeZone: CLUB_TIMEZONE, month: '2-digit', day: '2-digit' })
 }
 
+/** "2026/10/02" — the club-time calendar date, sortable as a string. */
+export function formatClubDateYmd(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: CLUB_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value
+  return `${part('year')}/${part('month')}/${part('day')}`
+}
+
 /** "Oct 2, 6:44 PM" — when something happened, e.g. an agenda changelog entry. */
 export function formatClubDateTime(date: Date): string {
   return date.toLocaleString('en-US', {

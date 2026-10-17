@@ -65,7 +65,9 @@ export default function PrivacyPolicy() {
           </p>
           <p>
             Each meeting&apos;s agenda email, which names the members taking roles, is also posted to the club&apos;s
-            Discord server so members can see it there.
+            Discord server so members can see it there. The roles for each upcoming meeting are posted there too.
+            An administrator may record a member&apos;s Discord user ID so that post can mention them; without
+            one, the post shows their first name.
           </p>
         </section>
 

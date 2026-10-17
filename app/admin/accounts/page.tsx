@@ -3,7 +3,7 @@
  *
  * Three-panel view for managing club membership:
  *   1. Pending approvals queue (new sign-up requests)
- *   2. Active member directory (with inline name editing)
+ *   2. Active member directory (with inline name and Discord ID editing)
  *   3. Guest subscriber list
  * Plus the club Google account connection used by members without Google.
  */
@@ -18,6 +18,7 @@ import { PageShell, PageHeader, SectionLabel } from '@/components/common/page'
 import { Badge, Card, EmptyState, IconDisc } from '@/components/common/surfaces'
 import { Button } from '@/components/ui/button'
 import EditableName from '@/components/admin/editable-name'
+import EditableDiscordId from '@/components/admin/editable-discord-id'
 import AccountActionButtons from '@/components/admin/account-action-buttons'
 import { formatMeetingDate } from '@/lib/meeting-time'
 
@@ -128,6 +129,9 @@ export default async function AccountsPage() {
                                             {emailLoginBadge(user)}
                                         </div>
                                         <div className="truncate text-xs text-gray-500">{user.email}</div>
+                                        {user.role !== 'ADMIN' && (
+                                            <EditableDiscordId userId={user.id} name={`${user.firstName} ${user.lastName}`} discordId={user.discordId} />
+                                        )}
                                     </div>
                                 </div>
 

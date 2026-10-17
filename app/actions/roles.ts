@@ -11,6 +11,8 @@ import { persistMajorRoles, UnknownMemberError } from '@/lib/roles-logic'
 import { revalidateMeetingViews } from '@/lib/revalidate'
 import { fail, type ActionResult } from '@/lib/action-result'
 import { db } from '@/lib/db'
+import { BACKUP_SPEAKER } from '@/lib/roles'
+import { syncRolesPostsAfterSave } from '@/lib/next-meeting-roles'
 
 /**
  * Saves all major role assignments for a meeting.
@@ -19,15 +21,24 @@ import { db } from '@/lib/db'
  * re-stamps `assignedAt`, so accepting a minor role here would overwrite the
  * wizard's roster and corrupt the participation tracker's recency data.
  *
+ * Also brings the #next-meeting-roles Discord post up to date
+ * (lib/next-meeting-roles.ts). The roles are saved either way, so a failed
+ * post comes back as a warning, never a failure.
+ *
  * @param meetingId   - Target meeting ID.
  * @param assignments - Array of { roleName, userId } pairs.
  */
 export async function saveAllMajorRoles(
     meetingId: string,
     assignments: { roleName: string, userId: string }[]
-): Promise<ActionResult> {
+): Promise<ActionResult<{ warning?: string }>> {
     const denied = await checkAdmin();
     if (denied) return denied;
+
+    const backupBefore = await db.roleAssignment.findFirst({
+        where: { meetingId, roleName: BACKUP_SPEAKER },
+        select: { userId: true }
+    });
 
     try {
         await persistMajorRoles(meetingId, assignments);
@@ -35,8 +46,20 @@ export async function saveAllMajorRoles(
         if (error instanceof UnknownMemberError) return fail(error.message);
         throw error;
     }
-
     revalidateMeetingViews();
+
+    const backupAfter = assignments.find((a) => a.roleName === BACKUP_SPEAKER);
+    const backupChanged = !!backupAfter && (backupAfter.userId || null) !== (backupBefore?.userId ?? null);
+    try {
+        await syncRolesPostsAfterSave(meetingId, { backupChanged });
+    } catch (error) {
+        console.error('Discord next-meeting roles post failed:', error);
+        return {
+            success: true,
+            warning: 'The roles were saved, but updating #next-meeting-roles on Discord failed — please post them there yourself.'
+        };
+    }
+
     return { success: true };
 }
 

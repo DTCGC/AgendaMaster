@@ -12,6 +12,7 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
 - **Automated Generation**: One-click meeting agenda creation via Google Sheets integration.
 - **Tiptap Editor**: A rich-text interface for fine-tuning meeting themes and details before generation.
 - **Agenda Delivery (Gmail API)**: The designated Toastmaster sends the agenda email — with the generated Sheet link — from their **own Gmail account** via the Gmail API, BCC'd to all members and subscribers.
+- **Next-Meeting Roles on Discord**: Saving the next meeting's roles in Role Management posts them to the club Discord's `#next-meeting-roles` channel through its own webhook; later saves edit that same message. Members are pinged by the Discord user ID an admin enters on Member Management, and anyone without one is printed by name. Only the next meeting is announced. Optional: see [Discord Next-Meeting Roles](./docs/DEPLOYMENT.md#11-discord-next-meeting-roles).
 - **Discord Announcements**: The same agenda email (subject, body and sheet link) is posted to the club Discord through a channel webhook, pinging a members role. Only that role can ever be pinged, a long agenda is split across messages, and a failed post only warns the Toastmaster. Optional: set up as described in [Discord Agenda Announcements](./docs/DEPLOYMENT.md#10-discord-agenda-announcements).
 
 ### 👥 Member & Role Management
@@ -72,6 +73,7 @@ AgendaMaster is a comprehensive management platform designed to automate the ope
    GOOGLE_SERVICE_ACCOUNT_KEY=""             # optional — service-account JSON (or base64), enables admin sheet edits
    DISCORD_AGENDA_WEBHOOK_URL=""             # optional — posts each agenda email to Discord
    DISCORD_AGENDA_ROLE_ID=""                 # optional — the role that post pings
+   DISCORD_ROLES_WEBHOOK_URL=""              # optional — posts each next meeting's roles to #next-meeting-roles
    SEED_ADMIN_PASSWORD="choose-a-dev-admin-password"
    ```
 
@@ -130,6 +132,7 @@ What is covered (all of it invisible-when-broken behaviour, which is why it is p
 | `tests/request-auth.test.ts` | The cron endpoints accept only the exact `CRON_SECRET`. |
 | `tests/email-delivery.test.ts` | No member's address appears in an email's visible `To:` header, no header can be injected through a name, address or filename, and attachments survive the MIME encoding byte for byte. |
 | `tests/discord.test.ts` | The agenda email's HTML becomes readable Discord markdown (lists, links, escaped names), long agendas split under Discord's 2,000-character cap, and nothing typed into the email can ping anyone: only the configured role, once. Without a webhook URL nothing is posted. |
+| `tests/next-meeting-roles.test.ts` | The `#next-meeting-roles` post keeps the channel's layout (club-time date, last initials, escaped names), pings only members with a Discord ID, is posted once for the next meeting only and edited on later saves (reposted if deleted, never posted twice by two quick saves), and follows a Backup Speaker carried into the next meeting. |
 | `tests/email-limits.test.ts` | Attachment types Gmail refuses are stopped before sending, the total size stays under what every inbox accepts, and filenames lose path parts and header-breaking characters. |
 | `tests/link-preview.test.ts` | Link preview cards read Open Graph tags (even ~720 KB into a page), and the preview fetch never reaches loopback, private or cloud-metadata addresses, whether by IP or by hostname. |
 | `tests/meeting-schedule.test.ts` | The calendar offers only Fridays at 6:45 PM outside July and August, never in the past. |

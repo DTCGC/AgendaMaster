@@ -7,6 +7,7 @@
  *   - Guest mailing list subscription
  *   - User removal (soft-unlinking from roles, then hard delete)
  *   - Admin name correction
+ *   - Recording a member's Discord user ID (for the #next-meeting-roles post)
  *   - Connecting the club's Google account (used for members without Google)
  */
 'use server'
@@ -22,6 +23,7 @@ import { normalizeEmail, isValidEmail } from '@/lib/password-rules'
 import { validatePersonName } from '@/lib/name-rules'
 import { revalidateMeetingViews } from '@/lib/revalidate'
 import { fail, type ActionResult, type ActionFailure } from '@/lib/action-result'
+import { parseDiscordUserId } from '@/lib/discord'
 
 /** `emailError` means the account change went through but its notification didn't. */
 export type AccountDecisionResult =
@@ -209,6 +211,27 @@ export async function updateUserName(userId: string, firstName: string, lastName
 
   revalidatePath('/admin/accounts');
   revalidateMeetingViews();
+  return { success: true };
+}
+
+/**
+ * Records (or, given an empty value, clears) a member's Discord user ID, so
+ * the #next-meeting-roles post can mention them (lib/next-meeting-roles.ts).
+ * Admins enter it: members never have to.
+ */
+export async function updateDiscordId(userId: string, value: string): Promise<ActionResult> {
+  const denied = await checkAdmin();
+  if (denied) return denied;
+
+  const discordId = value.trim() ? parseDiscordUserId(value) : null;
+  if (value.trim() && !discordId) {
+    return fail('That is not a Discord user ID — it should be a long number like 123456789012345678.');
+  }
+
+  const { count } = await db.user.updateMany({ where: { id: userId }, data: { discordId } });
+  if (count === 0) return fail('That member no longer exists.');
+
+  revalidatePath('/admin/accounts');
   return { success: true };
 }
 

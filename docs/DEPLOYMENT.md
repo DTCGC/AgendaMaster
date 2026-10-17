@@ -276,6 +276,65 @@ goes out without a ping. If the post appears but nobody is notified, turn on **A
 
 ---
 
+## 11. Discord Next-Meeting Roles
+
+The next meeting's major roles are decided during the meeting before it (the agenda's "Roles For
+Next Meeting" slot) and saved in **Role Management**. That save posts them to the club Discord's
+`#next-meeting-roles` channel through a second webhook (a webhook serves exactly one channel):
+
+```
+# __Roles for Next Meeting 2026/10/23__
+**TM:** @Ada
+
+**Speaker 1:** @Sam
+**Speaker 2:** Jane S.
+**Speaker 3:**
+
+**Backup:**
+
+**TTM:**
+**QM:**
+```
+
+The code is in `lib/next-meeting-roles.ts`.
+
+One-time setup:
+
+1. **Webhook**: open `#next-meeting-roles`' settings → Integrations → Webhooks → **New Webhook**,
+   name it, and press **Copy Webhook URL**.
+2. Add it to the Droplet's `.env` and restart:
+
+   ```bash
+   nano /var/www/agendamaster/.env
+   # DISCORD_ROLES_WEBHOOK_URL="https://discord.com/api/webhooks/…"
+   pm2 restart AgendaMaster
+   ```
+
+3. **Discord IDs**: on **Member Management**, each member has an *Add Discord ID* link under their
+   email. To find an ID, turn on Discord's Settings → Advanced → **Developer Mode**, then
+   right-click the member → **Copy User ID**. A pasted `<@…>` mention works too. Members do
+   nothing themselves.
+
+How it behaves:
+
+- **Only the next meeting is announced**: the first scheduled meeting dated after today, club
+  time. Saving roles for a meeting further ahead posts nothing.
+- **One message per meeting.** The first save posts it. Every later save of that meeting edits
+  the same message, whatever its date. If someone deletes the message in Discord, the next save
+  posts it again.
+- **Edits don't ping.** Discord sends no notification for a mention added by an edit, so a member
+  swapped in after the first post sees the update but gets no ping.
+- **Who is pinged**: only the members named in the post who have a Discord ID. Everyone else is
+  printed by first name, with a last initial when two members share a first name. Nothing else
+  (no role, no `@everyone`) can ping.
+- A save with no roles at all posts nothing. Changing a meeting's Backup Speaker also updates the
+  following meeting's post, because the standby is carried into one of its speaker slots.
+- **A failed post never fails the save.** The roles are saved, and the admin sees a warning asking
+  them to post the roles themselves.
+- Without `DISCORD_ROLES_WEBHOOK_URL`, nothing is posted.
+
+---
+
 ## Related Documentation
 
 - [README](../README.md) — project overview, features, and local setup.

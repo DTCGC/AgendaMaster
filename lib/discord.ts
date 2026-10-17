@@ -3,7 +3,9 @@
  *
  * When the agenda email goes out, the same text is posted to the club's
  * Discord through a channel webhook, pinging the members role. A webhook is a
- * plain HTTPS POST: no bot, no gateway connection, no extra process.
+ * plain HTTPS POST: no bot, no gateway connection, no extra process. The
+ * delivery helpers at the bottom are shared with the #next-meeting-roles post
+ * (lib/next-meeting-roles.ts).
  *
  * Configured by two optional env vars (docs/DEPLOYMENT.md, "Discord Agenda
  * Announcements"):
@@ -215,8 +217,17 @@ export function splitForDiscord(text: string, limit = DISCORD_MESSAGE_LIMIT): st
 
 export type DiscordMessage = {
   content: string;
-  allowed_mentions: { parse: never[]; roles?: string[] };
+  allowed_mentions: { parse: never[]; roles?: string[]; users?: string[] };
 };
+
+/**
+ * A Discord user ID from what an admin pasted: the bare snowflake, or a
+ * mention (`<@123…>`, `<@!123…>`). Null when it is neither.
+ */
+export function parseDiscordUserId(input: string | null | undefined): string | null {
+  const match = /^(?:<@!?(\d{17,20})>|(\d{17,20}))$/.exec(input?.trim() ?? '');
+  return match ? (match[1] ?? match[2]) : null;
+}
 
 export type AgendaAnnouncement = {
   subject: string;
@@ -248,27 +259,70 @@ export function buildAgendaDiscordMessages(
 // Delivery
 // ---------------------------------------------------------------------------
 
-async function postMessage(webhookUrl: string, message: DiscordMessage, retried = false): Promise<void> {
-  const url = new URL(webhookUrl);
-  url.searchParams.set('wait', 'true');
+/** A webhook request Discord refused, with its HTTP status. */
+export class DiscordWebhookError extends Error {
+  constructor(readonly status: number, detail: string) {
+    super(`Discord webhook answered ${status}${detail ? `: ${detail}` : ''}`);
+    this.name = 'DiscordWebhookError';
+  }
+}
 
+/** The webhook's URL, checked: a configured value must be https://. */
+export function webhookUrlFrom(envName: string): string | null {
+  const webhookUrl = process.env[envName]?.trim();
+  if (!webhookUrl) return null;
+  if (!/^https:\/\//i.test(webhookUrl)) {
+    throw new Error(`${envName} is not an https:// URL.`);
+  }
+  return webhookUrl;
+}
+
+async function send(
+  method: 'POST' | 'PATCH',
+  url: URL,
+  message: DiscordMessage,
+  retried = false
+): Promise<{ id?: string } | null> {
   const response = await fetch(url, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(message),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
-  if (response.ok) return;
+  if (response.ok) return (await response.json().catch(() => null)) as { id?: string } | null;
 
   if (response.status === 429 && !retried) {
     const body = (await response.json().catch(() => ({}))) as { retry_after?: number };
     const seconds = Math.min(Math.max(Number(body.retry_after) || 1, 0), 10);
     await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
-    return postMessage(webhookUrl, message, true);
+    return send(method, url, message, true);
   }
 
   const detail = (await response.text().catch(() => '')).slice(0, 200);
-  throw new Error(`Discord webhook answered ${response.status}${detail ? `: ${detail}` : ''}`);
+  throw new DiscordWebhookError(response.status, detail);
+}
+
+/**
+ * Posts one message through a webhook.
+ *
+ * @returns The new message's ID, when Discord sent one back.
+ */
+export async function postWebhookMessage(webhookUrl: string, message: DiscordMessage): Promise<string | null> {
+  const url = new URL(webhookUrl);
+  url.searchParams.set('wait', 'true');
+  const body = await send('POST', url, message);
+  return body?.id ?? null;
+}
+
+/**
+ * Replaces a message the same webhook posted earlier.
+ *
+ * @throws DiscordWebhookError with status 404 when the message was deleted.
+ */
+export async function editWebhookMessage(webhookUrl: string, messageId: string, message: DiscordMessage): Promise<void> {
+  const url = new URL(webhookUrl);
+  url.pathname = `${url.pathname.replace(/\/+$/, '')}/messages/${encodeURIComponent(messageId)}`;
+  await send('PATCH', url, message);
 }
 
 /**
@@ -278,15 +332,12 @@ async function postMessage(webhookUrl: string, message: DiscordMessage, retried 
  * @throws When Discord refuses a message. Earlier messages stay posted.
  */
 export async function postAgendaToDiscord(announcement: AgendaAnnouncement): Promise<number> {
-  const webhookUrl = process.env.DISCORD_AGENDA_WEBHOOK_URL?.trim();
+  const webhookUrl = webhookUrlFrom('DISCORD_AGENDA_WEBHOOK_URL');
   if (!webhookUrl) return 0;
-  if (!/^https:\/\//i.test(webhookUrl)) {
-    throw new Error('DISCORD_AGENDA_WEBHOOK_URL is not an https:// URL.');
-  }
 
   const messages = buildAgendaDiscordMessages(announcement, process.env.DISCORD_AGENDA_ROLE_ID);
   for (const message of messages) {
-    await postMessage(webhookUrl, message);
+    await postWebhookMessage(webhookUrl, message);
   }
   return messages.length;
 }

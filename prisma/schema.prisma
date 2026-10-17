@@ -13,6 +13,10 @@ model User {
   email           String           @unique
   role            String           @default("PENDING")
   passwordHash    String?
+  // Discord user ID (a snowflake), entered by an admin on Member Management.
+  // Lets the #next-meeting-roles post mention the member; without it the
+  // post prints their name instead (lib/next-meeting-roles.ts).
+  discordId       String?
   createdAt       DateTime         @default(now())
   roleAssignments RoleAssignment[]
 }
@@ -48,6 +52,10 @@ model Meeting {
   // email. A failed send leaves it set, so the Toastmaster's retry sends the
   // email instead of only updating the (already created) sheet.
   agendaEmailPending Boolean @default(false)
+  // The #next-meeting-roles Discord message announcing this meeting's roles.
+  // Set by the first post; later Role Management saves edit that message
+  // rather than posting a second one.
+  discordRolesMessageId String?
   template       MeetingTemplate  @relation(fields: [typeId], references: [id])
   roleAssignments RoleAssignment[]
 }
