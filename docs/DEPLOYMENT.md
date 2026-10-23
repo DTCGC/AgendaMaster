@@ -165,11 +165,26 @@ This keeps the dashboard current.
 To automate this on the Droplet, set up a system cron job:
 
 1. Generate a secure secret and add it to `.env` as `CRON_SECRET`.
-2. Run `crontab -e`.
-3. Add the following entry (runs at 9:00 PM every Friday):
+2. Create `/usr/local/bin/agenda-archive.sh` (`chmod 700`). It reads the secret from `.env`, so
+   the secret never appears in the crontab, and passes it to curl on stdin, so it never appears in
+   the process list:
+   ```sh
+   #!/bin/sh
+   set -a
+   . /var/www/agendamaster/.env
+   set +a
+   printf 'header = "Authorization: Bearer %s"\n' "$CRON_SECRET" | curl -fsS --config - -X POST http://localhost:3000/api/cron/archive
    ```
-   0 21 * * 5 curl -X POST http://localhost:3000/api/cron/archive -H "Authorization: Bearer YOUR_SECRET"
+3. Run `crontab -e` and add the following entry (runs at 9:00 PM every Friday):
    ```
+   0 21 * * 5 /usr/local/bin/agenda-archive.sh
+   ```
+
+> [!IMPORTANT]
+> The cron scripts load `.env` with the shell, which is stricter than the app's own loader. A value
+> with an unbalanced quote (e.g. `KEY=https://…"`) still loads in the app but makes every cron
+> script fail. After editing `.env`, check it with
+> `sh -c '. /var/www/agendamaster/.env' && echo ok`.
 
 ---
 
@@ -184,14 +199,25 @@ today's sheet from the database at **6:30 PM Pacific** — 15 minutes before the
 - It authenticates as the service account (`GOOGLE_SERVICE_ACCOUNT_KEY` must be set).
 - Any manual edit made directly on the sheet before 6:30 PM is reverted. Make changes in the app.
 
-Add a second crontab entry (same `CRON_SECRET` as archival):
+Create `/usr/local/bin/agenda-refresh.sh` (`chmod 700`), the same as the archival script but
+posting to the refresh route (same `CRON_SECRET`):
+
+```sh
+#!/bin/sh
+set -a
+. /var/www/agendamaster/.env
+set +a
+printf 'header = "Authorization: Bearer %s"\n' "$CRON_SECRET" | curl -sS --fail --config - -X POST http://localhost:3000/api/cron/refresh-agenda
+```
+
+Then add a second crontab entry:
 
 ```
-30 18 * * 5 curl -sS --fail -X POST http://localhost:3000/api/cron/refresh-agenda -H "Authorization: Bearer YOUR_SECRET" >> /var/log/agendamaster-refresh.log 2>&1
+30 18 * * 5 /usr/local/bin/agenda-refresh.sh >> /var/log/agendamaster-refresh.log 2>&1
 ```
 
-Check it with `curl -X POST http://localhost:3000/api/cron/refresh-agenda -H "Authorization: Bearer YOUR_SECRET"`.
-The response lists each meeting's result; a `500` means at least one sheet failed.
+Check it by running `/usr/local/bin/agenda-refresh.sh`. The response lists each meeting's result;
+a `500` means at least one sheet failed.
 
 ---
 
